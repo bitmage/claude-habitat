@@ -142,8 +142,46 @@ parse_yaml() {
     fi
 }
 
-# Function to build Docker image if needed
-build_image() {
+# Function to calculate cache hash from configuration
+calculate_cache_hash() {
+    local config_file="$1"
+    shift
+    local extra_repos=("$@")
+    
+    # Components that affect the prepared image:
+    # 1. YAML file content (minus dynamic elements like GitHub keys)
+    # 2. Extra repositories from CLI
+    
+    local hash_input=""
+    
+    # Add YAML content (excluding environment variables that don't affect the build)
+    if command -v sha256sum &> /dev/null; then
+        # Use relevant parts of the config for hash
+        local yaml_content=$(cat "$config_file")
+        # Remove environment section since it doesn't affect the prepared image
+        local filtered_content=$(echo "$yaml_content" | sed '/^environment:/,/^[a-zA-Z]/{ /^[a-zA-Z]/!d; }' | grep -v '^environment:')
+        hash_input+="$filtered_content"
+    else
+        # Fallback: use file modification time and size
+        hash_input+="$(stat -c '%Y-%s' "$config_file" 2>/dev/null || echo "unknown")"
+    fi
+    
+    # Add extra repositories
+    for repo in "${extra_repos[@]}"; do
+        hash_input+="$repo"
+    done
+    
+    # Generate hash
+    if command -v sha256sum &> /dev/null; then
+        echo -n "$hash_input" | sha256sum | cut -d' ' -f1 | cut -c1-12
+    else
+        # Fallback: use a simple hash based on content length and some characters
+        echo -n "$hash_input" | wc -c | cut -c1-8
+    fi
+}
+
+# Function to build base Docker image if needed
+build_base_image() {
     local config_file="$1"
     
     # Parse image configuration
@@ -156,13 +194,13 @@ build_image() {
         dockerfile="$(dirname "$config_file")/$dockerfile"
     fi
     
-    # Check if image already exists
+    # Check if base image already exists
     if docker image inspect "$image_tag" &>/dev/null; then
-        echo "Using existing image: $image_tag"
+        echo "Using existing base image: $image_tag"
         return 0
     fi
     
-    echo "Building Docker image: $image_tag"
+    echo "Building base Docker image: $image_tag"
     echo "Using Dockerfile: $dockerfile"
     
     # Build the image
@@ -189,9 +227,169 @@ build_image() {
     eval "$build_cmd"
     
     if [ $? -ne 0 ]; then
-        echo -e "${RED}Failed to build Docker image${NC}"
+        echo -e "${RED}Failed to build base Docker image${NC}"
         exit 1
     fi
+}
+
+# Function to build prepared image with everything pre-installed
+build_prepared_image() {
+    local config_file="$1"
+    local prepared_tag="$2"
+    shift 2
+    local extra_repos=("$@")
+    
+    # Parse configuration
+    local base_tag=$(parse_yaml "$config_file" ".image.tag")
+    local name=$(parse_yaml "$config_file" ".name")
+    local init_command=$(parse_yaml "$config_file" ".container.init_command")
+    local work_dir=$(parse_yaml "$config_file" ".container.work_dir")
+    local instructions_file=$(parse_yaml "$config_file" ".claude.instructions_file")
+    
+    # Set defaults
+    init_command=${init_command:-/sbin/boot}
+    work_dir=${work_dir:-/src}
+    
+    echo "Building prepared image: $prepared_tag"
+    echo "This may take several minutes for the first build..."
+    
+    # Create temporary container for preparation
+    local temp_container="${name}_prepare_$(date +%s)_$$"
+    
+    # Collect environment variables as arrays (similar to main function)
+    local docker_args=()
+    local env_list=$(parse_yaml "$config_file" ".environment")
+    if [ -n "$env_list" ]; then
+        while IFS= read -r env; do
+            if [ -n "$env" ] && [ "$env" != "---" ]; then
+                # Remove leading "- " if present
+                env="${env#- }"
+                # Special handling for GITHUB_APP_PRIVATE_KEY_FILE
+                if [[ "$env" == "GITHUB_APP_PRIVATE_KEY_FILE="* ]]; then
+                    # Extract the file path
+                    local key_file="${env#GITHUB_APP_PRIVATE_KEY_FILE=}"
+                    # Expand the path relative to config directory
+                    if [[ ! "$key_file" = /* ]]; then
+                        key_file="$(dirname "$config_file")/$key_file"
+                    fi
+                    # Mount the key file if it exists
+                    if [ -f "$key_file" ]; then
+                        docker_args+=("-v" "$key_file:/tmp/github-app-key.pem:ro")
+                        docker_args+=("-e" "GITHUB_APP_PRIVATE_KEY_FILE=/tmp/github-app-key.pem")
+                    else
+                        echo -e "${YELLOW}Warning: GitHub App private key file not found: $key_file${NC}"
+                    fi
+                else
+                    # Add environment variable
+                    docker_args+=("-e" "$env")
+                fi
+            fi
+        done <<< "$env_list"
+    fi
+    
+    # Create temporary container for preparation
+    echo "Creating temporary container for preparation..."
+    docker run -d \
+        --name "$temp_container" \
+        "${docker_args[@]}" \
+        "$base_tag" \
+        $init_command
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to create temporary container${NC}"
+        exit 1
+    fi
+    
+    # Set up cleanup for temporary container
+    cleanup_temp() {
+        echo "Cleaning up temporary container..."
+        docker stop "$temp_container" 2>/dev/null || true
+        docker rm "$temp_container" 2>/dev/null || true
+    }
+    trap cleanup_temp EXIT
+    
+    # Wait for container to start
+    echo "Waiting for services to initialize..."
+    sleep 10
+    
+    # Check if container is still running
+    if ! docker ps -q -f name="$temp_container" | grep -q .; then
+        echo -e "${RED}Temporary container exited unexpectedly. Checking logs:${NC}"
+        docker logs "$temp_container" | tail -20
+        exit 1
+    fi
+    
+    # Clone repositories from config
+    echo "Cloning repositories into prepared image..."
+    local repos=$(parse_yaml "$config_file" ".repositories")
+    if [ -n "$repos" ]; then
+        local repo_idx=0
+        while true; do
+            local repo_url=$(parse_yaml "$config_file" ".repositories.[$repo_idx].url")
+            local repo_path=$(parse_yaml "$config_file" ".repositories.[$repo_idx].path")
+            local repo_branch=$(parse_yaml "$config_file" ".repositories.[$repo_idx].branch")
+            
+            if [ -z "$repo_url" ]; then
+                break
+            fi
+            
+            echo "Processing repository $repo_idx: $repo_url"
+            
+            if ! clone_repository "$repo_url:$repo_path:$repo_branch" "$temp_container"; then
+                echo -e "${RED}Failed to clone repository: $repo_url${NC}"
+                echo "Continuing without this repository..."
+            fi
+            repo_idx=$((repo_idx + 1))
+        done
+    fi
+    
+    # Clone extra repositories from command line
+    if [ ${#extra_repos[@]} -gt 0 ]; then
+        echo "Cloning additional repositories..."
+        for repo in "${extra_repos[@]}"; do
+            if ! clone_repository "$repo" "$temp_container"; then
+                echo -e "${RED}Failed to clone extra repository: $repo${NC}"
+                echo "Continuing without this repository..."
+            fi
+        done
+    fi
+    
+    # Look for instructions file in the main repository
+    if [ -n "$instructions_file" ]; then
+        echo "Looking for instructions file: $instructions_file"
+        docker exec "$temp_container" bash -c "
+            if [ -f $work_dir/$instructions_file ]; then
+                echo 'Found $instructions_file, copying to CLAUDE.md'
+                cp $work_dir/$instructions_file $work_dir/CLAUDE.md
+            else
+                echo 'Instructions file not found: $work_dir/$instructions_file'
+            fi
+        "
+    fi
+    
+    # Run setup commands to prepare the environment
+    echo "Running setup commands..."
+    run_setup_commands "$config_file" "$temp_container"
+    
+    # Check if container is still running after setup
+    if ! docker ps -q -f name="$temp_container" | grep -q .; then
+        echo -e "${RED}Container exited during setup. Checking logs:${NC}"
+        docker logs "$temp_container" | tail -30
+        exit 1
+    fi
+    
+    # Commit the prepared container to a new image
+    echo "Committing prepared container to image: $prepared_tag"
+    docker commit "$temp_container" "$prepared_tag"
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to commit prepared image${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Successfully built prepared image: $prepared_tag${NC}"
+    
+    # Cleanup will be handled by the trap
 }
 
 # Function to clone repository
@@ -337,13 +535,11 @@ main() {
     
     # Parse configuration
     local name=$(parse_yaml "$config_file" ".name")
-    local image_tag=$(parse_yaml "$config_file" ".image.tag")
     local init_command=$(parse_yaml "$config_file" ".container.init_command")
     local work_dir=$(parse_yaml "$config_file" ".container.work_dir")
     local container_user=$(parse_yaml "$config_file" ".container.user")
     local startup_delay=$(parse_yaml "$config_file" ".container.startup_delay")
     local claude_command=$(parse_yaml "$config_file" ".claude.command")
-    local instructions_file=$(parse_yaml "$config_file" ".claude.instructions_file")
     
     # Set defaults
     init_command=${init_command:-/sbin/boot}
@@ -352,15 +548,34 @@ main() {
     startup_delay=${startup_delay:-5}
     claude_command=${claude_command:-claude}
     
-    # Build image if needed
-    build_image "$config_file"
+    # Calculate cache hash from config and extra repositories
+    local cache_hash=$(calculate_cache_hash "$config_file" "${EXTRA_REPOS[@]}")
+    local prepared_tag="claude-habitat-${name}-${cache_hash}:latest"
+    
+    echo "Cache hash: $cache_hash"
+    echo "Prepared image tag: $prepared_tag"
+    
+    # Check if prepared image exists
+    if docker image inspect "$prepared_tag" &>/dev/null; then
+        echo -e "${GREEN}Using cached prepared image: $prepared_tag${NC}"
+        echo "This should start quickly since everything is pre-installed!"
+    else
+        echo "No cached image found, building prepared environment..."
+        echo "This will take several minutes but subsequent runs will be instant."
+        
+        # Build base image if needed
+        build_base_image "$config_file"
+        
+        # Build prepared image with everything set up
+        build_prepared_image "$config_file" "$prepared_tag" "${EXTRA_REPOS[@]}"
+    fi
     
     # Create container name
     local container_name="${name}_$(date +%s)_$$"
     
-    echo "Creating container: $container_name"
+    echo "Creating container from prepared image: $container_name"
     
-    # Collect environment variables and volumes as arrays
+    # Collect environment variables (runtime-only, not build-time)
     local docker_args=()
     local env_list=$(parse_yaml "$config_file" ".environment")
     if [ -n "$env_list" ]; then
@@ -391,11 +606,11 @@ main() {
         done <<< "$env_list"
     fi
     
-    # Create container
+    # Create container from prepared image
     docker run -d \
         --name "$container_name" \
         "${docker_args[@]}" \
-        "$image_tag" \
+        "$prepared_tag" \
         $init_command
     
     if [ $? -ne 0 ]; then
@@ -412,7 +627,7 @@ main() {
     }
     trap cleanup EXIT
     
-    # Wait for container to start
+    # Wait for container to start (should be fast since everything is pre-installed)
     echo "Waiting for container to initialize..."
     sleep "$startup_delay"
     
@@ -423,60 +638,13 @@ main() {
         exit 1
     fi
     
-    # Clone repositories from config
-    local repos=$(parse_yaml "$config_file" ".repositories")
-    if [ -n "$repos" ]; then
-        echo "Cloning repositories from configuration..."
-        local repo_idx=0
-        while true; do
-            local repo_url=$(parse_yaml "$config_file" ".repositories.[$repo_idx].url")
-            local repo_path=$(parse_yaml "$config_file" ".repositories.[$repo_idx].path")
-            local repo_branch=$(parse_yaml "$config_file" ".repositories.[$repo_idx].branch")
-            
-            if [ -z "$repo_url" ]; then
-                break
-            fi
-            
-            echo "Processing repository $repo_idx: $repo_url"
-            
-            if ! clone_repository "$repo_url:$repo_path:$repo_branch" "$container_name"; then
-                echo -e "${RED}Failed to clone repository: $repo_url${NC}"
-                echo "Continuing without this repository..."
-                # Don't exit, just skip this repo
-            fi
-            repo_idx=$((repo_idx + 1))
-        done
-    fi
+    # Since this is a prepared image, everything should already be set up
+    # Just verify the environment is ready
+    echo "Verifying prepared environment..."
     
-    # Clone extra repositories from command line
-    if [ ${#EXTRA_REPOS[@]} -gt 0 ]; then
-        echo "Cloning additional repositories from command line..."
-        for repo in "${EXTRA_REPOS[@]}"; do
-            clone_repository "$repo" "$container_name"
-        done
-    fi
-    
-    # Look for instructions file in the main repository
-    if [ -n "$instructions_file" ]; then
-        echo "Looking for instructions file: $instructions_file"
-        docker exec "$container_name" bash -c "
-            if [ -f $work_dir/$instructions_file ]; then
-                echo 'Found $instructions_file, copying to CLAUDE.md'
-                cp $work_dir/$instructions_file $work_dir/CLAUDE.md
-            else
-                echo 'Instructions file not found: $work_dir/$instructions_file'
-            fi
-        "
-    fi
-    
-    # Run setup commands
-    echo "Running setup commands..."
-    run_setup_commands "$config_file" "$container_name"
-    
-    # Check if container is still running after setup
-    if ! docker ps -q -f name="$container_name" | grep -q .; then
-        echo -e "${RED}Container exited during setup. Checking logs:${NC}"
-        docker logs "$container_name" | tail -30
+    # Quick health check
+    if ! docker exec "$container_name" test -d "$work_dir"; then
+        echo -e "${RED}Work directory $work_dir not found in prepared image${NC}"
         exit 1
     fi
     

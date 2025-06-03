@@ -7,10 +7,11 @@ Create completely isolated development environments for Claude Code. Each enviro
 - 🐳 **Complete Isolation**: Each session runs in its own Docker container
 - 🔧 **Service Orchestration**: Built-in PostgreSQL, Redis, and other services
 - 📦 **Multi-Repository Support**: Clone main project + plugins/extensions
-- 🚀 **Fast Startup**: Pre-built images with all tools installed
+- ⚡ **Instant Startup**: Smart caching makes subsequent runs start in seconds
 - 🔐 **GitHub Integration**: Create PRs directly from Claude
 - 📝 **Configuration-Driven**: YAML files define environments
 - 🎯 **Project Agnostic**: Works with any project type
+- 🧠 **Smart Caching**: Automatically builds optimized images for lightning-fast restarts
 
 ## Quick Start
 
@@ -36,11 +37,43 @@ Create completely isolated development environments for Claude Code. Each enviro
 # List available configurations
 ./claude-habitat.sh --list-configs
 
-# Clean up Docker images
+# Clean up Docker images (including cached prepared images)
 ./claude-habitat.sh --clean
 
 # Show help
 ./claude-habitat.sh --help
+```
+
+## Performance & Caching
+
+Claude Habitat uses intelligent caching to optimize your development experience:
+
+### First Run (Build Phase)
+- **Duration**: 5-10 minutes
+- **What happens**: Downloads repositories, installs dependencies, migrates database
+- **Output**: Creates an optimized "prepared image" for instant future use
+
+### Subsequent Runs (Cached)
+- **Duration**: 10-30 seconds
+- **What happens**: Boots pre-configured container directly
+- **Benefits**: Everything already installed and ready to go
+
+### Cache Invalidation
+The cache automatically rebuilds when you change:
+- Configuration file content (repositories, setup commands, etc.)
+- Command-line repository overrides (`--repo` flags)
+- Base Docker image updates
+
+### Cache Management
+```bash
+# View current images (including cached ones)
+docker images | grep claude-habitat
+
+# Remove all cached images to force rebuild
+./claude-habitat.sh --clean
+
+# See cache hash for current config
+./claude-habitat.sh --config discourse.yaml | head -10
 ```
 
 ## Configuration
