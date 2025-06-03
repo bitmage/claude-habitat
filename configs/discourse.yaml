@@ -1,0 +1,87 @@
+name: discourse
+description: Discourse plugin development environment
+
+# Docker image configuration
+image:
+  dockerfile: ../dockerfiles/Dockerfile.discourse
+  tag: claude-habitat-discourse:latest
+  build_args:
+    - "DISCOURSE_IMAGE=discourse/discourse_dev:release"
+
+# Environment variables
+environment:
+  - RAILS_ENV=test
+  - RUBY_GLOBAL_METHOD_CACHE_SIZE=131072
+  - LD_PRELOAD=/usr/lib/libjemalloc.so
+  - CI
+  - NO_EMBER_CLI
+  - QUNIT_RAILS_ENV
+  # GitHub App authentication
+  - GITHUB_APP_ID=1357221
+  - GITHUB_APP_NAME=Behold the power of Claude
+  - GITHUB_APP_PRIVATE_KEY_FILE=../behold-the-power-of-claude.2025-06-02.private-key.pem
+
+# Git repositories to clone
+repositories:
+  - url: https://github.com/discourse/discourse
+    path: /src
+    branch: main
+    shallow: true
+    
+  # Plugins (commented out for testing)
+  # - url: https://github.com/tlsft/county-fence
+  #   path: /src/plugins/county-fence
+  #   branch: main
+  #   shallow: true
+    
+  # - url: https://github.com/discourse/discourse-calendar
+  #   path: /src/plugins/discourse-calendar
+  #   branch: main
+  #   shallow: true
+
+# Setup commands
+setup:
+  root:
+    - |
+      # Wait for PostgreSQL
+      echo "Waiting for PostgreSQL to be ready..."
+      timeout 30 bash -c "while ! pg_isready -U postgres -q; do sleep 1; done"
+      
+      # Create test database
+      sudo -u postgres createuser discourse 2>/dev/null || true
+      sudo -u postgres createdb discourse_test -O discourse 2>/dev/null || true
+      
+      # Git safe directory
+      git config --global --add safe.directory /src
+      
+      # Export GitHub App private key if file is mounted
+      if [ -f /tmp/github-app-key.pem ]; then
+        echo "export GITHUB_APP_PRIVATE_KEY=\"\$(cat /tmp/github-app-key.pem)\"" >> /etc/profile.d/github-app.sh
+        chmod +x /etc/profile.d/github-app.sh
+      fi
+
+  user:
+    run_as: discourse
+    commands:
+      - |
+        cd /src
+        echo "Installing Ruby dependencies..."
+        bundle install
+        
+        echo "Installing JavaScript dependencies..."
+        pnpm install
+        
+        echo "Setting up test database..."
+        RAILS_ENV=test bin/rails db:create db:migrate
+
+# Container configuration
+container:
+  work_dir: /src
+  user: discourse
+  init_command: /sbin/boot
+  startup_delay: 10
+
+# Claude configuration
+claude:
+  instructions_file: CLAUDE-docker.md
+  command: claude --dangerously-skip-permissions
