@@ -3,7 +3,7 @@ description: Discourse plugin development environment
 
 # Docker image configuration
 image:
-  dockerfile: ../dockerfiles/Dockerfile.discourse
+  dockerfile: Dockerfile
   tag: claude-habitat-discourse:latest
   build_args:
     - "DISCOURSE_IMAGE=discourse/discourse_dev:release"
@@ -19,7 +19,7 @@ environment:
   # GitHub App authentication
   - GITHUB_APP_ID=1357221
   - GITHUB_APP_NAME=Behold the power of Claude
-  - GITHUB_APP_PRIVATE_KEY_FILE=../behold-the-power-of-claude.2025-06-02.private-key.pem
+  - GITHUB_APP_PRIVATE_KEY_FILE=../shared/behold-the-power-of-claude.2025-06-02.private-key.pem
 
 # Git repositories to clone
 repositories:
@@ -27,17 +27,20 @@ repositories:
     path: /src
     branch: main
     shallow: true
-    
-  # Plugins (commented out for testing)
-  # - url: https://github.com/tlsft/county-fence
-  #   path: /src/plugins/county-fence
-  #   branch: main
-  #   shallow: true
-    
-  # - url: https://github.com/discourse/discourse-calendar
-  #   path: /src/plugins/discourse-calendar
-  #   branch: main
-  #   shallow: true
+    access: read  # Read-only dependency, not for active development
+
+  # Plugins for active development
+  - url: https://github.com/bitmage/county-fence-plugin
+    path: /src/plugins/county-fence
+    branch: main
+    shallow: true
+    # access: write (default) - Active development with PRs
+
+  - url: https://github.com/bitmage/discourse-calendar
+    path: /src/plugins/discourse-calendar
+    branch: main
+    shallow: true
+    # access: write (default) - Active development with PRs
 
 # Setup commands
 setup:
@@ -46,14 +49,14 @@ setup:
       # Wait for PostgreSQL
       echo "Waiting for PostgreSQL to be ready..."
       timeout 30 bash -c "while ! pg_isready -U postgres -q; do sleep 1; done"
-      
+
       # Create test database
       sudo -u postgres createuser discourse 2>/dev/null || true
       sudo -u postgres createdb discourse_test -O discourse 2>/dev/null || true
-      
+
       # Git safe directory
       git config --global --add safe.directory /src
-      
+
       # Export GitHub App private key if file is mounted
       if [ -f /tmp/github-app-key.pem ]; then
         echo "export GITHUB_APP_PRIVATE_KEY=\"\$(cat /tmp/github-app-key.pem)\"" >> /etc/profile.d/github-app.sh
@@ -67,10 +70,10 @@ setup:
         cd /src
         echo "Installing Ruby dependencies..."
         bundle install
-        
+
         echo "Installing JavaScript dependencies..."
         pnpm install
-        
+
         echo "Setting up test database..."
         RAILS_ENV=test bin/rails db:create db:migrate
 
@@ -81,7 +84,10 @@ container:
   init_command: /sbin/boot
   startup_delay: 10
 
+# Git configuration
+git:
+  config_file: "gitconfig"
+
 # Claude configuration
 claude:
-  instructions_file: CLAUDE-docker.md
   command: claude --dangerously-skip-permissions

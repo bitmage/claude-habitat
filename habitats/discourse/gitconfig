@@ -1,0 +1,44 @@
+[user]
+	name = Claude Torchlight
+	email = contact@torchlightsoftware.com
+
+[core]
+	editor = nano
+	autocrlf = input
+	safecrlf = warn
+
+[push]
+	default = simple
+
+[pull]
+	rebase = false
+
+[init]
+	defaultBranch = main
+
+[merge]
+	tool = vimdiff
+
+[alias]
+	st = status
+	co = checkout
+	br = branch
+	ci = commit
+	unstage = reset HEAD --
+	last = log -1 HEAD
+	visual = !gitk
+
+[color]
+	ui = auto
+	status = auto
+	branch = auto
+	diff = auto
+
+[transfer]
+	fsckobjects = true
+
+[fetch]
+	fsckobjects = true
+
+[receive]
+	fsckObjects = true

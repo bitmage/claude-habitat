@@ -550,7 +550,7 @@ main() {
     
     # Calculate cache hash from config and extra repositories
     local cache_hash=$(calculate_cache_hash "$config_file" "${EXTRA_REPOS[@]}")
-    local prepared_tag="claude-habitat-${name}-${cache_hash}:latest"
+    local prepared_tag="claude-habitat-${name}:${cache_hash}"
     
     echo "Cache hash: $cache_hash"
     echo "Prepared image tag: $prepared_tag"

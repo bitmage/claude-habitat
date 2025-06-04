@@ -1,185 +1,334 @@
 # Claude Habitat
 
-Create completely isolated development environments for Claude Code. Each environment gets its own Docker container with dedicated services, cloned repositories, and no access to your local filesystem.
+AI-powered development environments that are isolated, reproducible, and ready for Claude Code.
 
-## Features
+## What is Claude Habitat?
 
-- 🐳 **Complete Isolation**: Each session runs in its own Docker container
-- 🔧 **Service Orchestration**: Built-in PostgreSQL, Redis, and other services
-- 📦 **Multi-Repository Support**: Clone main project + plugins/extensions
-- ⚡ **Instant Startup**: Smart caching makes subsequent runs start in seconds
-- 🔐 **GitHub Integration**: Create PRs directly from Claude
-- 📝 **Configuration-Driven**: YAML files define environments
-- 🎯 **Project Agnostic**: Works with any project type
-- 🧠 **Smart Caching**: Automatically builds optimized images for lightning-fast restarts
+Claude Habitat creates isolated Docker containers where Claude Code can work on your projects safely. Each "habitat" is a complete development environment with:
+
+- Your project's code and dependencies
+- Required services (databases, caches, etc.)
+- Development tools and configuration
+- Helper files and utilities organized in a dedicated space
+- No access to your host filesystem
+
+Perfect for:
+- Working on unfamiliar codebases
+- Testing experimental changes
+- Plugin/module development
+- AI pair programming without risk
+
+## Directory Structure
+
+### Host Structure
+```
+claude-habitat/
+├── habitats/              # Individual habitat configurations
+│   ├── discourse/         # Example: Discourse development
+│   │   ├── config.yaml    # Required: Main configuration
+│   │   ├── Dockerfile     # Required: Container definition
+│   │   ├── CLAUDE.md      # Optional: Claude instructions
+│   │   └── files/         # Optional: Additional files
+│   └── my-project/        # Your custom habitats
+├── shared/                # Files shared across ALL habitats
+│   ├── github-key.pem     # GitHub App private key
+│   ├── common-script.sh   # Shared utilities
+│   └── ssh-keys/          # SSH keys for git access
+└── claude-habitat.js      # Main launcher script
+```
+
+### Container Structure (Example: Discourse)
+```
+/src/                          # Working directory (where Claude starts)
+├── app/                       # Discourse source code
+├── plugins/
+│   ├── county-fence/         # Cloned plugin repositories
+│   └── discourse-calendar/
+├── claude-habitat/           # Helper files (organized, non-intrusive)
+│   ├── shared/              # From ../shared/ directory
+│   │   ├── github-key.pem   # GitHub authentication
+│   │   └── setup-tools.sh   # Common utilities
+│   ├── config-template.json # From habitat files/
+│   └── deployment.yaml      # Habitat-specific files
+├── bin/rails                 # Project tooling
+└── ...                       # Rest of project structure
+```
 
 ## Quick Start
 
-### Discourse Development
-
+### 1. Clone and Setup
 ```bash
-# Basic usage
-./claude-habitat.sh --config discourse.yaml
-
-# With custom plugin
-./claude-habitat.sh --config discourse.yaml \
-  --repo "https://github.com/myuser/my-plugin:/src/plugins/my-plugin"
-
-# With multiple plugins
-./claude-habitat.sh --config discourse.yaml \
-  --repo "https://github.com/myuser/plugin1:/src/plugins/plugin1" \
-  --repo "https://github.com/myuser/plugin2:/src/plugins/plugin2"
+git clone <repo-url>
+cd claude-habitat
+npm install  # Install dependencies
 ```
 
-### Other Commands
+### 2. Authentication Setup (Optional but Recommended)
 
+For private repositories and GitHub integration:
+
+#### GitHub App Setup
+1. Create a GitHub App (see `github-app.md` for detailed instructions)
+2. Download the private key (.pem file)
+3. Place it in `shared/your-app-name.pem`
+
+#### SSH Keys Setup
 ```bash
-# List available configurations
-./claude-habitat.sh --list-configs
+# Generate SSH key for repository access
+ssh-keygen -t ed25519 -f shared/github_deploy_key -N ""
 
-# Clean up Docker images (including cached prepared images)
-./claude-habitat.sh --clean
-
-# Show help
-./claude-habitat.sh --help
+# Add the public key to your GitHub repositories as a deploy key
+cat shared/github_deploy_key.pub
+# Copy this and add to GitHub repo Settings > Deploy keys
 ```
 
-## Performance & Caching
-
-Claude Habitat uses intelligent caching to optimize your development experience:
-
-### First Run (Build Phase)
-- **Duration**: 5-10 minutes
-- **What happens**: Downloads repositories, installs dependencies, migrates database
-- **Output**: Creates an optimized "prepared image" for instant future use
-
-### Subsequent Runs (Cached)
-- **Duration**: 10-30 seconds
-- **What happens**: Boots pre-configured container directly
-- **Benefits**: Everything already installed and ready to go
-
-### Cache Invalidation
-The cache automatically rebuilds when you change:
-- Configuration file content (repositories, setup commands, etc.)
-- Command-line repository overrides (`--repo` flags)
-- Base Docker image updates
-
-### Cache Management
+### 3. Run Your First Habitat
 ```bash
-# View current images (including cached ones)
-docker images | grep claude-habitat
+# Try the included example
+./claude-habitat discourse
 
-# Remove all cached images to force rebuild
-./claude-habitat.sh --clean
+# Or see all available habitats
+./claude-habitat --list-configs
 
-# See cache hash for current config
-./claude-habitat.sh --config discourse.yaml | head -10
+# Interactive menu
+./claude-habitat
 ```
 
-## Configuration
+## Usage
 
-Configuration files use YAML format and define:
-- Base Docker image
-- Environment variables
-- Repositories to clone
-- Setup commands
-- Container settings
+### Starting a Habitat
+```bash
+# Start by name
+./claude-habitat discourse
 
-See `configs/discourse.yaml` for a complete example.
+# Interactive selection
+./claude-habitat
 
-### Minimal Configuration Example
+# With additional repositories
+./claude-habitat discourse --repo "https://github.com/user/plugin:/src/plugins/plugin"
+```
 
+### Inside the Habitat
+When Claude starts, he's in the project's working directory with:
+
+- **All project code** cloned and ready
+- **Helper files** at `./claude-habitat/`
+- **Shared utilities** at `./claude-habitat/shared/`
+- **Project tools** available in PATH
+- **Services running** (databases, etc.)
+
+Claude can:
+- Edit code and run tests
+- Access helper scripts: `./claude-habitat/shared/deploy.sh`
+- Use GitHub keys: `./claude-habitat/shared/github-key.pem`
+- Create scratch files: `./claude-habitat/notes.txt`
+- Make commits and create PRs
+
+### Common Workflows
+
+#### Development Workflow
+```bash
+# Claude starts in project directory
+cd /src  # (or whatever work_dir is configured)
+
+# Project is ready to go
+./bin/rails test  # Run tests
+git status        # See project status
+
+# Use helper files
+source ./claude-habitat/shared/aliases.sh
+./claude-habitat/shared/setup-env.sh
+
+# Create scratch space
+mkdir ./claude-habitat/scratch
+echo "Notes..." > ./claude-habitat/scratch/ideas.txt
+```
+
+#### Creating Pull Requests
+```bash
+# Work on a feature
+git checkout -b feature/new-feature
+# ... make changes ...
+git commit -m "Add new feature"
+
+# Use GitHub CLI (if GitHub App is configured)
+gh pr create --title "Add new feature"
+```
+
+## Creating New Habitats
+
+### Method 1: AI-Assisted (Recommended)
+```bash
+./claude-habitat add
+# Follow the prompts to describe your project
+# Claude will analyze the repository and create the configuration
+```
+
+### Method 2: Manual Creation
+
+1. **Create habitat directory**
+```bash
+mkdir habitats/my-project
+```
+
+2. **Create config.yaml**
 ```yaml
-name: myproject
-description: My project development environment
+name: my-project
+description: My awesome project development environment
 
 image:
-  dockerfile: ./Dockerfile
-  tag: claude-habitat-myproject:latest
+  dockerfile: Dockerfile
+  tag: claude-habitat-my-project:latest
 
 repositories:
-  - url: https://github.com/myorg/myproject
-    path: /app
+  - url: https://github.com/user/my-project
+    path: /workspace
     branch: main
 
 container:
-  work_dir: /app
-  user: root
+  work_dir: /workspace
+  user: developer
   
+setup:
+  root:
+    - apt-get update && apt-get install -y build-essential
+  user:
+    run_as: developer
+    commands:
+      - npm install
+      - npm run build
+
 claude:
   command: claude --dangerously-skip-permissions
 ```
 
-## Repository Specification
-
-Repositories can be specified in the config file or via command line:
-
-```bash
-# Format: URL:PATH[:BRANCH]
---repo "https://github.com/user/repo:/path/in/container"
---repo "https://github.com/user/repo:/path/in/container:develop"
+3. **Create Dockerfile**
+```dockerfile
+FROM node:18
+RUN useradd -m developer
+CMD ["/sbin/init"]
 ```
 
-## Claude Authentication
+4. **Optional: Add Claude instructions**
+Create `habitats/my-project/CLAUDE.md` with project-specific guidance.
 
-Claude Code uses session-based authentication through your claude.ai account (not API keys). 
+## Advanced Configuration
 
-**First time in each container:**
-1. Claude will prompt: "Please visit the following URL to authenticate"
-2. Copy and open the URL in your browser
-3. Authenticate with your claude.ai account
-4. Copy the token from the browser
-5. Paste it back into Claude
+### Environment Variables
+```yaml
+environment:
+  - NODE_ENV=development
+  - API_KEY=your-key
+  - GITHUB_APP_ID=123456
+  - GITHUB_APP_PRIVATE_KEY_FILE=../your-app.pem
+```
 
-This auth process happens once per container session. Your Claude Pro/Team subscription at claude.ai includes Claude Code access.
+### File Copying
+Files are automatically copied to containers:
 
-## GitHub Authentication
+- **Shared files**: `shared/` → `${work_dir}/claude-habitat/shared/`
+- **Habitat files**: `habitats/name/files/` → `${work_dir}/claude-habitat/`
+- **Additional files**: Any non-config files in habitat directory
 
-For creating PRs, you can use either:
-- `GITHUB_TOKEN` - Personal access token
-- `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` - GitHub App authentication (recommended)
+### Services
+Habitats can include any services via Docker:
+```yaml
+# In your Dockerfile
+RUN apt-get install -y postgresql redis-server
 
-## How It Works
+# In setup commands
+setup:
+  root:
+    - service postgresql start
+    - service redis-server start
+```
 
-1. **Build/Load Image**: Checks if the configured Docker image exists, builds if needed
-2. **Create Container**: Starts an isolated container with its own services
-3. **Clone Repositories**: Clones all configured repositories into the container
-4. **Run Setup**: Executes setup commands (install dependencies, create databases, etc.)
-5. **Launch Claude**: Starts Claude Code in the prepared environment
-6. **Cleanup**: Automatically removes the container when you exit
+## Available Commands
 
-## Creating New Environments
+```bash
+# Basic usage
+./claude-habitat <habitat-name>     # Start specific habitat
+./claude-habitat                    # Interactive menu
+./claude-habitat --list-configs     # List available habitats
 
-1. Create a Dockerfile in `dockerfiles/`
-2. Create a YAML config in `configs/`
-3. Run with `--config your-config.yaml`
+# Management
+./claude-habitat add                # Create new habitat with AI
+./claude-habitat maintain           # Maintenance mode
+./claude-habitat --clean            # Remove old Docker images
 
-## Dependencies
+# Advanced
+./claude-habitat <name> --repo "url:path:branch"  # Add extra repositories
+./claude-habitat --config /path/to/config.yaml    # Use external config
+```
 
-- Docker
-- Git
-- Python3 (with PyYAML) or yq for YAML parsing
+## GitHub Integration
 
-## Tips
+### GitHub App Authentication
+1. Create GitHub App following `github-app.md`
+2. Place `.pem` file in `shared/`
+3. Add to habitat config:
+```yaml
+environment:
+  - GITHUB_APP_ID=your-app-id
+  - GITHUB_APP_PRIVATE_KEY_FILE=../your-app.pem
+```
 
-- Each session is completely isolated - perfect for parallel development
-- Changes only leave the container via git commits and PRs
-- Pre-built images make subsequent runs very fast
-- Use `--repo` to override repository URLs for testing forks
+### SSH Key Authentication
+1. Generate deploy key: `ssh-keygen -t ed25519 -f shared/deploy_key`
+2. Add public key to GitHub repo settings
+3. Keys are automatically available in containers
+
+### Both Together
+- **SSH keys**: For git operations (clone, push, pull)
+- **GitHub App**: For API operations (creating PRs, issues)
+
+This gives Claude full GitHub capabilities without manual authentication.
+
+## Security
+
+- **Complete isolation**: Containers cannot access host filesystem
+- **Temporary environments**: Destroyed when you exit
+- **No persistent state**: Each run gets fresh environment
+- **Network isolation**: Limited external network access
+- **Credential isolation**: Keys/tokens only exist in container
 
 ## Troubleshooting
 
-### Build Failures
-- Check Docker is running
-- Ensure base images are accessible
-- Review Dockerfile syntax
+### Common Issues
+- **Permission errors**: Check file permissions on SSH keys (`chmod 600`)
+- **Build failures**: Run `./claude-habitat --clean` to remove cached images
+- **Authentication errors**: Verify GitHub App/SSH key setup
 
-### Clone Failures
-- Verify repository URLs
-- Check GitHub authentication for private repos
-- Ensure network connectivity
+### Maintenance Mode
+```bash
+./claude-habitat maintain
+```
+Provides menu for:
+- Testing configurations
+- Debugging builds
+- Updating dependencies
+- Creating pull requests for improvements
 
-### Service Issues
-- Allow enough startup_delay for services
-- Check service logs with `docker logs <container>`
-- Verify service configurations in setup commands
+### Getting Help
+- Check `troubleshooting.md` for specific error solutions
+- Run maintenance mode for interactive debugging
+- Review habitat logs during build process
+
+## Requirements
+
+- **Docker**: For containerization
+- **Node.js**: For the launcher script
+- **Claude Code CLI**: For AI development
+- **Git**: For repository management
+- **Optional**: GitHub CLI (`gh`) for PR creation
+
+## Examples
+
+The `habitats/discourse/` directory contains a complete example for Discourse plugin development, including:
+- PostgreSQL and Redis setup
+- Ruby and Node.js environment
+- Plugin repository cloning
+- Test database configuration
+- GitHub integration
+
+Use it as a template for creating your own habitats!

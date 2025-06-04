@@ -1,1 +1,7 @@
 behold-the-power-of-claude.2025-06-02.private-key.pem
+node_modules/
+*.log
+.DS_Store
+.last-config
+temp-*.yaml
+.maintenance-session.md

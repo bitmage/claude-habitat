@@ -1,0 +1,28 @@
+# GitHub App private keys
+*.pem
+
+# SSH keys
+id_rsa
+id_rsa.*
+*.key
+*.priv
+
+# API tokens and secrets
+*token*
+*secret*
+*password*
+
+# Certificates
+*.crt
+*.cert
+*.p12
+*.pfx
+
+# Environment files with secrets
+.env
+.env.*
+
+# But allow example/template files
+!*.example
+!*.template
+!README.md
