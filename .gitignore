@@ -1,7 +1,6 @@
 # Security - never commit private keys or secrets
 *.pem
-shared/github_deploy_key
-shared/github_deploy_key.pub
+shared/github_deploy_key*
 shared/*.private-key.*
 
 node_modules/

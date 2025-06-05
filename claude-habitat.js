@@ -9,7 +9,7 @@ const execAsync = promisify(exec);
 const yaml = require('js-yaml');
 
 // Import modules
-const { colors, sleep, fileExists, findPemFiles, calculateCacheHash, parseRepoSpec, parseCommands } = require('./src/utils');
+const { colors, sleep, fileExists, findPemFiles, calculateCacheHash, parseRepoSpec, parseCommands, getSSHKeyForRepository } = require('./src/utils');
 const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('./src/docker');
 const { loadConfig } = require('./src/config');
 const { askToContinue, askQuestion } = require('./src/cli');
@@ -110,10 +110,18 @@ async function buildBaseImage(config) {
 async function cloneRepository(container, repoInfo) {
   const { url, path: repoPath, branch = 'main' } = repoInfo;
   
-  // Convert HTTPS URLs to SSH for authentication
+  // Convert HTTPS URLs to SSH for authentication with repository-specific host
   let cloneUrl = url;
   if (url.startsWith('https://github.com/')) {
-    cloneUrl = url.replace('https://github.com/', 'git@github.com:');
+    // Map repositories to specific SSH hosts
+    if (url.includes('bitmage/county-fence-plugin')) {
+      cloneUrl = url.replace('https://github.com/', 'git@github-county-fence:');
+    } else if (url.includes('bitmage/discourse-calendar')) {
+      cloneUrl = url.replace('https://github.com/', 'git@github-discourse-calendar:');
+    } else {
+      cloneUrl = url.replace('https://github.com/', 'git@github.com:');
+    }
+    
     if (!cloneUrl.endsWith('.git')) {
       cloneUrl += '.git';
     }
@@ -128,8 +136,8 @@ async function cloneRepository(container, repoInfo) {
 
     # Test SSH key setup in container
     echo "=== SSH Setup Verification ==="
-    echo "SSH key exists: $(test -f ~/.ssh/id_rsa && echo 'YES' || echo 'NO')"
-    echo "SSH key permissions: $(ls -la ~/.ssh/id_rsa 2>/dev/null || echo 'MISSING')"
+    echo "SSH config exists: $(test -f ~/.ssh/config && echo 'YES' || echo 'NO')"
+    echo "SSH keys available: $(ls ~/.ssh/github_deploy_key* 2>/dev/null | wc -l)"
     echo "Known hosts: $(test -f ~/.ssh/known_hosts && echo 'YES' || echo 'NO')"
 
     # Test SSH connection to GitHub
@@ -342,13 +350,30 @@ async function buildPreparedImage(config, tag, extraRepos) {
     }
 
     // Setup SSH authentication BEFORE cloning repositories
-    const sshKeyPath = path.join(__dirname, 'shared/github_deploy_key');
-    if (await fileExists(sshKeyPath)) {
-      console.log('Setting up SSH authentication...');
+    console.log('Setting up SSH authentication...');
+    
+    // Find all available SSH keys
+    const sharedDir = path.join(__dirname, 'shared');
+    const sshKeys = ['github_deploy_key', 'github_deploy_key_county_fence', 'github_deploy_key_discourse_calendar'];
+    const availableKeys = [];
+    
+    for (const keyName of sshKeys) {
+      const keyPath = path.join(sharedDir, keyName);
+      if (await fileExists(keyPath)) {
+        availableKeys.push(keyName);
+        // Copy SSH key to container
+        await copyFileToContainer(tempContainer, keyPath, `/tmp/${keyName}`, 'root');
+        await copyFileToContainer(tempContainer, `${keyPath}.pub`, `/tmp/${keyName}.pub`, 'root');
+      }
+    }
+    
+    if (availableKeys.length > 0) {
+      // Create SSH config mapping repositories to specific keys
+      let sshConfig = 'Host github.com\n  HostName github.com\n  User git\n  StrictHostKeyChecking no\n\n';
       
-      // Copy SSH key to container
-      await copyFileToContainer(tempContainer, sshKeyPath, '/tmp/github_deploy_key', 'root');
-      await copyFileToContainer(tempContainer, `${sshKeyPath}.pub`, '/tmp/github_deploy_key.pub', 'root');
+      sshConfig += 'Host github-county-fence\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/github_deploy_key_county_fence\n  StrictHostKeyChecking no\n\n';
+      
+      sshConfig += 'Host github-discourse-calendar\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/github_deploy_key_discourse_calendar\n  StrictHostKeyChecking no\n\n';
       
       // Setup SSH for both root and container user
       const sshSetup = `
@@ -356,8 +381,14 @@ async function buildPreparedImage(config, tag, extraRepos) {
         
         # Setup SSH for root
         mkdir -p /root/.ssh
-        cp /tmp/github_deploy_key /root/.ssh/id_rsa
-        chmod 600 /root/.ssh/id_rsa
+        
+        # Copy all available SSH keys
+        ${availableKeys.map(key => `cp /tmp/${key} /root/.ssh/${key} && chmod 600 /root/.ssh/${key}`).join('\n        ')}
+        
+        # Create SSH config
+        cat > /root/.ssh/config << 'SSH_CONFIG_EOF'
+${sshConfig}SSH_CONFIG_EOF
+        chmod 600 /root/.ssh/config
         
         echo "Getting GitHub host keys..."
         ssh-keyscan -t rsa,ecdsa,ed25519 github.com > /root/.ssh/known_hosts 2>/dev/null || {
@@ -372,13 +403,17 @@ async function buildPreparedImage(config, tag, extraRepos) {
         if [ "discourse" != "root" ]; then
           echo "Setting up SSH for discourse user..."
           mkdir -p /home/discourse/.ssh
-          cp /tmp/github_deploy_key /home/discourse/.ssh/id_rsa
+          
+          # Copy all SSH keys and config to user
+          ${availableKeys.map(key => `cp /root/.ssh/${key} /home/discourse/.ssh/${key}`).join('\n          ')}
+          cp /root/.ssh/config /home/discourse/.ssh/config
           cp /root/.ssh/known_hosts /home/discourse/.ssh/known_hosts
           chown -R discourse:discourse /home/discourse/.ssh
-          chmod 600 /home/discourse/.ssh/id_rsa
+          ${availableKeys.map(key => `chmod 600 /home/discourse/.ssh/${key}`).join('\n          ')}
+          chmod 600 /home/discourse/.ssh/config
         fi
         
-        # Test SSH connection
+        # Test SSH connections
         echo "Testing SSH connection to GitHub as root..."
         ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -T git@github.com 2>&1 || echo "Root SSH test exit code: $?"
         
@@ -401,6 +436,8 @@ async function buildPreparedImage(config, tag, extraRepos) {
         console.error('SSH setup failed:', sshError.message);
         throw sshError;
       }
+    } else {
+      console.warn('No SSH keys found - repository access may fail');
     }
 
     // Clone repositories from config
@@ -439,7 +476,6 @@ async function buildPreparedImage(config, tag, extraRepos) {
     }
 
     // Copy shared files (user preferences)
-    const sharedDir = path.join(__dirname, 'shared');
     const sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/claude-habitat/shared`, true);
     if (sharedFiles.length > 0) {
       console.log('Copying shared files to container...');

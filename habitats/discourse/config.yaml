@@ -19,7 +19,7 @@ environment:
   # GitHub App authentication
   - GITHUB_APP_ID=1357221
   - GITHUB_APP_NAME=Behold the power of Claude
-  - GITHUB_APP_PRIVATE_KEY_FILE=../shared/behold-the-power-of-claude.2025-06-02.private-key.pem
+  - GITHUB_APP_PRIVATE_KEY_FILE=../shared/behold-the-power-of-claude.2025-06-04.private-key.pem
 
 # Git repositories to clone
 repositories:
