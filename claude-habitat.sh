@@ -130,14 +130,11 @@ check_dependencies() {
 parse_yaml() {
     local yaml_file="$1"
     local query="$2"
-    local script_dir="$(dirname "$0")"
     
-    if [ -f "$script_dir/yaml_parser.py" ] && command -v python3 &> /dev/null; then
-        python3 "$script_dir/yaml_parser.py" "$yaml_file" "$query"
-    elif command -v yq &> /dev/null; then
+    if command -v yq &> /dev/null; then
         yq eval "$query" "$yaml_file"
     else
-        echo -e "${RED}No YAML parser found. Install yq or ensure python3 is available.${NC}"
+        echo -e "${RED}No YAML parser found. Please install yq: https://github.com/mikefarah/yq${NC}"
         exit 1
     fi
 }

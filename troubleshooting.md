@@ -209,7 +209,7 @@ docker history <image_name>
 ### YAML Parsing Debug
 Test YAML parsing independently:
 ```bash
-python3 ./yaml_parser.py ./configs/discourse.yaml ".setup.root"
+yq eval '.setup.root' ./habitats/discourse/config.yaml
 ```
 
 ### Manual Testing

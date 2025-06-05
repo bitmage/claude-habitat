@@ -115,12 +115,14 @@ test('Tool installation simulation', async (t) => {
     assert(curlVersion.includes('curl'), 'curl should be installed and working');
     
     // Test directory creation (like claude-habitat structure)
+    await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/system');
     await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/shared');
     await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/scratch');
     
     // Verify directory structure
     const lsResult = await dockerExec(containerName, 'find /workspace -type d');
     assert(lsResult.includes('/workspace/claude-habitat'), 'Claude habitat directory should exist');
+    assert(lsResult.includes('/workspace/claude-habitat/system'), 'System directory should exist');
     assert(lsResult.includes('/workspace/claude-habitat/shared'), 'Shared directory should exist');
     assert(lsResult.includes('/workspace/claude-habitat/scratch'), 'Scratch directory should exist');
     
@@ -195,6 +197,65 @@ test('Error handling in Docker operations', async (t) => {
   // Test error when checking non-existent container status
   const badContainerRunning = await dockerIsRunning('definitely-not-running-container');
   assert.strictEqual(badContainerRunning, false, 'Non-existent container should not be running');
+});
+
+test('System and shared directory separation', async (t) => {
+  const dockerAvailable = await isDockerAvailable();
+  
+  if (!dockerAvailable) {
+    t.skip('Docker not available, skipping system/shared separation test');
+    return;
+  }
+  
+  const { containerName } = await createTestContainer();
+  
+  try {
+    // Simulate system files (infrastructure)
+    await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/system/tools');
+    await dockerExec(containerName, 'echo "# System CLAUDE Instructions" > /workspace/claude-habitat/system/CLAUDE.md');
+    await dockerExec(containerName, 'echo "#!/bin/bash\necho system-tool" > /workspace/claude-habitat/system/tools/system-tool.sh');
+    await dockerExec(containerName, 'chmod +x /workspace/claude-habitat/system/tools/system-tool.sh');
+    
+    // Simulate shared files (user preferences)
+    await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/shared/tools');
+    await dockerExec(containerName, 'echo "# User Preferences" > /workspace/claude-habitat/shared/CLAUDE.md');
+    await dockerExec(containerName, 'echo "#!/bin/bash\necho user-tool" > /workspace/claude-habitat/shared/tools/user-tool.sh');
+    await dockerExec(containerName, 'chmod +x /workspace/claude-habitat/shared/tools/user-tool.sh');
+    
+    // Test that both directories exist and are separate
+    const systemExists = await dockerExec(containerName, 'test -d /workspace/claude-habitat/system && echo "exists"');
+    const sharedExists = await dockerExec(containerName, 'test -d /workspace/claude-habitat/shared && echo "exists"');
+    
+    assert.strictEqual(systemExists, 'exists', 'System directory should exist');
+    assert.strictEqual(sharedExists, 'exists', 'Shared directory should exist');
+    
+    // Test that files are in correct locations
+    const systemClaude = await dockerExec(containerName, 'cat /workspace/claude-habitat/system/CLAUDE.md');
+    const sharedClaude = await dockerExec(containerName, 'cat /workspace/claude-habitat/shared/CLAUDE.md');
+    
+    assert(systemClaude.includes('System CLAUDE'), 'System CLAUDE.md should contain system content');
+    assert(sharedClaude.includes('User Preferences'), 'Shared CLAUDE.md should contain user content');
+    
+    // Test that tools from both locations work
+    const systemTool = await dockerExec(containerName, '/workspace/claude-habitat/system/tools/system-tool.sh');
+    const userTool = await dockerExec(containerName, '/workspace/claude-habitat/shared/tools/user-tool.sh');
+    
+    assert.strictEqual(systemTool, 'system-tool', 'System tool should work');
+    assert.strictEqual(userTool, 'user-tool', 'User tool should work');
+    
+    // Test composition (simulate what claude-habitat.js does)
+    await dockerExec(containerName, `cat /workspace/claude-habitat/system/CLAUDE.md > /workspace/CLAUDE.md`);
+    await dockerExec(containerName, `echo "\\n\\n---\\n\\n# User Preferences\\n" >> /workspace/CLAUDE.md`);
+    await dockerExec(containerName, `cat /workspace/claude-habitat/shared/CLAUDE.md >> /workspace/CLAUDE.md`);
+    
+    const composedClaude = await dockerExec(containerName, 'cat /workspace/CLAUDE.md');
+    assert(composedClaude.includes('System CLAUDE'), 'Composed CLAUDE.md should include system content');
+    assert(composedClaude.includes('User Preferences'), 'Composed CLAUDE.md should include section header');
+    assert(composedClaude.includes('User Preferences'), 'Composed CLAUDE.md should include user content');
+    
+  } finally {
+    await cleanupContainer(containerName);
+  }
 });
 
 // Simple performance test
