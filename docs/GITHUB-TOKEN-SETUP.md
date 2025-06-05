@@ -1,6 +1,6 @@
-# GitHub Token Authentication Setup
+# GitHub Token Authentication
 
-Claude Habitat now uses GitHub Personal Access Tokens instead of SSH deploy keys for repository authentication. This is much simpler and more secure.
+Claude Habitat uses GitHub Personal Access Tokens for repository authentication. **Authentication happens automatically when needed** - no manual setup required!
 
 ## Why Token-Based Authentication?
 
@@ -10,58 +10,73 @@ Claude Habitat now uses GitHub Personal Access Tokens instead of SSH deploy keys
 - Key management becomes exponential (N repos × M habitats = lots of keys)
 - Deploy keys can only be used on one repository each
 
-### Benefits of Tokens:
+### Benefits of Automatic Token Auth:
+- ✅ **Automatic authentication** when needed
 - ✅ One token works for all repositories you have access to
-- ✅ Fine-grained permissions per repository
-- ✅ Easy to rotate and manage
+- ✅ Zero manual setup - just follow the prompts
+- ✅ Uses GitHub's secure device flow
 - ✅ Works automatically with HTTPS Git URLs
-- ✅ No manual deploy key setup needed
-
-## Setup Instructions
-
-### Step 1: Create a Fine-Grained Personal Access Token
-
-1. Go to https://github.com/settings/tokens?type=beta
-2. Click "Generate new token"
-3. Configure the token:
-   - **Name**: "Claude Habitat Development"
-   - **Expiration**: Choose appropriate duration (90 days recommended)
-   - **Repository access**: Select repositories you want Claude to access
-   - **Permissions**:
-     - Contents: **Read and Write**
-     - Pull requests: **Read and Write** 
-     - Metadata: **Read**
-
-4. Click "Generate token"
-5. **Copy the token immediately** (starts with `github_pat_`)
-
-### Step 2: Set Environment Variable
-
-Add the token to your shell environment:
-
-```bash
-# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
-export GITHUB_TOKEN="github_pat_your_token_here"
-
-# Or set for current session only
-export GITHUB_TOKEN="github_pat_your_token_here"
-```
-
-### Step 3: Verify Setup
-
-Run claude-habitat initialization:
-
-```bash
-./claude-habitat
-# Select [i]nitialize to verify token is detected
-```
-
-You should see:
-```
-✅ GitHub Token: Set
-```
+- ✅ Easy to rotate and manage
 
 ## How It Works
+
+### Automatic Authentication Flow
+
+When you try to use a habitat that needs private repository access:
+
+1. **Claude Habitat detects the need** for GitHub authentication
+2. **Prompts you**: "Authenticate with GitHub now? [Y/n]"
+3. **Shows you a code** (e.g., "AB12-CD34")
+4. **Opens GitHub** in your browser automatically
+5. **You paste the code** and authorize "GitHub CLI"
+6. **Authentication completes** automatically
+7. **Claude Habitat continues** with full repository access
+
+### When Authentication Happens
+
+Authentication is triggered when:
+- ✅ Accessing private repositories
+- ✅ Repositories requiring write access (for PRs)
+- ✅ Any repository operation that needs authentication
+
+Public repositories (like `discourse/discourse`) work without authentication.
+
+### Example Flow
+
+```bash
+$ ./claude-habitat
+[1] discourse
+
+# You select discourse habitat
+Pre-flight check...
+🔐 GitHub authentication required for repository access
+Authenticate with GitHub now? [Y/n]: y
+
+=== GitHub Authentication ===
+1. Copy this code: AB12-CD34
+2. Visit: https://github.com/login/device
+3. Paste the code and authorize "GitHub CLI"
+
+Waiting for authorization...........
+✅ Authentication successful!
+
+# Habitat starts normally with full access
+```
+
+## Manual Setup (Optional)
+
+If you prefer to set up authentication ahead of time:
+
+```bash
+# Run initialization
+./claude-habitat
+# Select [i]nitialize
+
+# Or set GITHUB_TOKEN environment variable manually
+export GITHUB_TOKEN="your_token_here"
+```
+
+## Technical Details
 
 ### Repository Cloning
 - Claude Habitat automatically detects your `GITHUB_TOKEN`
@@ -75,54 +90,49 @@ You should see:
 
 ### Security
 - Token is never stored in files or committed to git
-- Token permissions are scoped to only the repositories you choose
+- Uses GitHub's secure OAuth device flow
+- Token permissions are scoped to only the repositories you authorize
 - Easy to revoke and regenerate if needed
 
 ## Troubleshooting
 
-### "No GITHUB_TOKEN found"
-```bash
-# Check if token is set
-echo $GITHUB_TOKEN
+### "Authentication failed"
+- Check your internet connection
+- Ensure you completed the browser authorization
+- Try the authentication flow again
 
-# If empty, set it:
-export GITHUB_TOKEN="your_token_here"
-```
-
-### "Repository access denied"
-- Ensure your token has access to the repository
-- Check token permissions (Contents: Read and Write)
-- Verify token hasn't expired
+### "Repository access denied" 
+- The token may not have access to that specific repository
+- Re-run authentication to get fresh permissions
+- For organization repositories, ensure you have proper access
 
 ### "API rate limit exceeded"
 - Personal tokens have higher rate limits than anonymous access
-- Fine-grained tokens have the highest limits
+- Wait for the rate limit to reset (usually 1 hour)
 
 ## Migration from SSH Keys
 
 If you were previously using SSH deploy keys:
 
-1. ✅ Generate your GitHub token (follow steps above)
-2. ✅ Set `GITHUB_TOKEN` environment variable  
-3. ✅ Remove old deploy keys from repository settings
-4. ✅ Run `./claude-habitat` - it will automatically use token auth
+1. ✅ Remove old deploy keys from repository settings
+2. ✅ Run `./claude-habitat` - it will prompt for authentication automatically
+3. ✅ Follow the automatic authentication flow
 
-No other changes needed! Your habitat configurations will work the same way.
+No configuration changes needed! Your habitat configurations work the same way.
 
-## Token Management Best Practices
+## Advanced Usage
 
-### Security
-- Use fine-grained tokens (not classic tokens)
-- Set appropriate expiration dates
-- Only grant access to repositories you need
-- Rotate tokens regularly
+### Pre-authenticate
+```bash
+# Set token manually (optional)
+export GITHUB_TOKEN="your_token_here"
 
-### Organization
-- Use descriptive token names ("Claude Habitat - Dev Machine")
-- Document token purpose and expiration
-- Set calendar reminders for renewal
+# Or use the initialization flow
+./claude-habitat
+# Select [i]nitialize
+```
 
-### Backup
-- Keep tokens in a secure password manager
-- Have a backup token ready before the current one expires
-- Test new tokens before old ones expire
+### Token Management
+- Tokens are stored in your environment for the session
+- Add to shell profile (`~/.bashrc`, `~/.zshrc`) for persistence
+- Use GitHub's token management page to revoke if needed
