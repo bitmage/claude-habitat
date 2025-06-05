@@ -129,6 +129,50 @@ chown -R 1000:1000 $path
    docker exec container gh auth status
    ```
 
+### 8. Development Tools Issues
+
+**Symptom**: Tools like `rg`, `fd`, `jq`, `yq`, or `gh` are not available or not working.
+
+**Cause**: Tools installation failed during container build or PATH is not configured.
+
+**Solutions**:
+
+1. **Check if tools are installed**:
+   ```bash
+   # In the habitat container
+   ls -la /claude-habitat/shared/tools/bin/
+   which rg fd jq yq gh
+   ```
+
+2. **Check PATH configuration**:
+   ```bash
+   echo $PATH | grep claude-habitat
+   # Should see: /claude-habitat/shared/tools/bin
+   ```
+
+3. **Reinstall tools manually**:
+   ```bash
+   cd /claude-habitat/shared/tools
+   ./install-tools.sh clean
+   ./install-tools.sh install
+   ```
+
+4. **Install optional tools**:
+   ```bash
+   cd /claude-habitat/shared/tools
+   ./install-tools.sh install-optional
+   ```
+
+5. **Debug tool installation**:
+   ```bash
+   DEBUG=1 ./install-tools.sh install
+   ```
+
+**Common tool-specific issues**:
+- **GitHub CLI (`gh`)**: Check if authentication is configured
+- **jq/yq**: Verify JSON/YAML syntax in files being processed
+- **rg/fd**: Check file permissions and search patterns
+
 ## Debugging Techniques
 
 ### Enable Debug Mode

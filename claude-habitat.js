@@ -466,6 +466,52 @@ async function buildPreparedImage(config, tag, extraRepos) {
       }
     }
 
+    // Create concatenated CLAUDE.md instructions
+    console.log('Setting up Claude instructions...');
+    try {
+      const sharedClaudePath = path.join(__dirname, 'shared/CLAUDE.md');
+      const habitatDir = path.dirname(config._configPath);
+      const habitatClaudePath = path.join(habitatDir, 'CLAUDE.md');
+      
+      let claudeContent = '';
+      
+      // Add shared base instructions if they exist
+      if (await fileExists(sharedClaudePath)) {
+        const sharedContent = await fs.readFile(sharedClaudePath, 'utf8');
+        claudeContent += sharedContent;
+      }
+      
+      // Add habitat-specific instructions if they exist
+      if (await fileExists(habitatClaudePath)) {
+        const habitatContent = await fs.readFile(habitatClaudePath, 'utf8');
+        if (claudeContent.length > 0) {
+          claudeContent += '\n\n---\n\n';
+        }
+        claudeContent += habitatContent;
+      }
+      
+      // Only create the file if we have content
+      if (claudeContent.length > 0) {
+        // Write to temporary file first
+        const tempClaudePath = '/tmp/CLAUDE.md';
+        await dockerExec(tempContainer, `cat > ${tempClaudePath} << 'CLAUDE_EOF'\n${claudeContent}\nCLAUDE_EOF`);
+        
+        // Move to working directory (not in claude-habitat subdirectory)
+        await dockerExec(tempContainer, `mv ${tempClaudePath} ${workDir}/CLAUDE.md`);
+        
+        // Set ownership to container user
+        if (containerUser && containerUser !== 'root') {
+          await dockerExec(tempContainer, `chown ${containerUser}:${containerUser} ${workDir}/CLAUDE.md`);
+        }
+        
+        console.log('✅ Claude instructions configured');
+      } else {
+        console.log('ℹ️  No Claude instructions found');
+      }
+    } catch (err) {
+      console.warn(`Warning: Failed to setup Claude instructions: ${err.message}`);
+    }
+
     // Configure git settings if specified in config
     if (config.git?.config_file) {
       const habitatDir = path.dirname(config._configPath);

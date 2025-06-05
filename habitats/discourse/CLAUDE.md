@@ -1,85 +1,141 @@
-# Claude Code Instructions for Discourse Development
+# Discourse Development Environment
 
-You are running in a completely isolated Docker container with a full copy of the Discourse codebase. This container is completely sandboxed from the host system.
+## Project Structure
 
-## Environment
+- **Main application**: `/src/app/` - Discourse core
+- **Plugins**: `/src/plugins/` - Plugin development area  
+- **Admin**: `/src/app/assets/javascripts/admin/` - Admin interface
+- **Tests**: `/src/spec/` (Ruby), `/src/test/javascripts/` (JS)
+- **Database**: PostgreSQL with Redis for caching
+- **Working Directory**: `/src` - Main Discourse codebase
 
-- **Working Directory**: `/src` (isolated copy of Discourse codebase)
-- **Ruby**: Available via `ruby` and `rails`
-- **Node/NPM**: Available for JavaScript development  
-- **PostgreSQL**: Dedicated database instance for this container only
-- **Redis**: Dedicated Redis instance for this container only
-- **Git**: Configured and ready for commits
-- **GitHub CLI**: Available as `gh` for creating PRs
-- **Complete Isolation**: No access to host files, other containers, or shared resources
+## Discourse-Specific Tools
 
-## Development Workflow
-
-1. **Make Changes**: Edit files as needed, they're isolated from the host
-2. **Run Tests**: Use `bin/rspec` for Ruby tests, `yarn test` for JS tests
-3. **Commit Changes**: Use meaningful commit messages
-4. **Create PR**: Use `gh pr create` to submit your changes
-
-## Discourse-Specific Guidelines
-
-### Running Tests
+### Rails Commands
 ```bash
-# Run all tests for a specific file
-bin/rspec spec/models/user_spec.rb
-
-# Run a specific test
-bin/rspec spec/models/user_spec.rb:123
-
-# Run JavaScript tests
-yarn test
-```
-
-### Common Rails Commands
-```bash
-# Run Rails console
+# Rails console (most important for debugging)
 bin/rails c
 
 # Run migrations
 bin/rails db:migrate
 
-# Start Rails server (if needed)
+# Generate migration
+bin/rails generate migration AddFieldToModel field:type
+
+# Start Rails server (usually not needed in development container)
 bin/rails s
 ```
 
-### Code Style
-- Follow existing patterns in the codebase
-- Use RuboCop for Ruby: `bin/rubocop`
-- Use ESLint for JavaScript: `yarn eslint`
-- Ensure all tests pass before creating PR
-
-### Creating Pull Requests
-
-Always create PRs from feature branches:
+### Testing
 ```bash
-# Create and switch to a new branch
-git checkout -b feature/your-feature-name
+# Run all tests for a file
+bin/rspec spec/models/user_spec.rb
 
-# Make your changes and commit
-git add .
-git commit -m "Clear description of changes"
+# Run specific test by line number
+bin/rspec spec/models/user_spec.rb:123
 
-# Create PR
-gh pr create --title "Feature: Your feature" --body "Description of changes"
+# Run plugin tests
+bin/rspec plugins/plugin-name/spec/
+
+# JavaScript tests
+yarn test
+
+# Run specific JS test file
+yarn test test/javascripts/acceptance/login-test.js
 ```
 
-## Important Notes
+### Code Quality
+```bash
+# Ruby linting
+bin/rubocop
 
-- You're working in a completely isolated container with dedicated database/Redis
-- Changes do NOT affect the host filesystem or other containers
-- All changes should be submitted via GitHub PRs
-- The container is ephemeral - it's destroyed when you exit
-- GitHub authentication is configured via environment variables
-- Each Claude session gets its own unique, isolated environment
+# JavaScript linting  
+yarn eslint
 
-## Available Tools
+# Fix Ruby style issues automatically
+bin/rubocop --auto-correct
+```
 
-- **Rails**: Full Rails environment with all gems installed
-- **PostgreSQL**: Database is accessible
-- **Redis**: Cache and background jobs
-- **Node/Yarn**: For JavaScript development
-- **Git/GitHub CLI**: For version control and PR creation
+## Plugin Development
+
+### Plugin Structure
+```
+plugins/your-plugin/
+├── plugin.rb              # Main plugin file
+├── config/
+│   └── locales/           # Translations
+├── app/
+│   ├── controllers/       # Controllers
+│   ├── models/           # Models
+│   └── serializers/      # API serializers
+├── assets/
+│   └── javascripts/      # Frontend code
+└── spec/                 # Tests
+```
+
+### Common Plugin Tasks
+```bash
+# Create new plugin
+bin/rails generate plugin plugin_name
+
+# Enable plugin in development
+echo "plugin_name" >> config/discourse.conf
+
+# Plugin console access
+bin/rails c
+# Then: Plugin.find('plugin-name')
+
+# Run plugin-specific tests
+bin/rspec plugins/plugin-name/spec/
+```
+
+## Database Operations
+
+### Common Queries
+```bash
+# Access PostgreSQL directly
+psql discourse_development
+
+# In Rails console
+bin/rails c
+User.count
+Topic.where(created_at: 1.day.ago..).count
+```
+
+### Migrations
+```bash
+# Check migration status
+bin/rails db:migrate:status
+
+# Rollback last migration
+bin/rails db:rollback
+
+# Reset database (careful!)
+bin/rails db:drop db:create db:migrate
+```
+
+## Development Tips
+
+### Finding Code
+```bash
+# Find specific functionality (examples)
+rg "def.*login" --type rb
+rg "class.*Controller" app/controllers/
+fd ".*user.*" app/models/
+
+# Find frontend components
+rg "@Component" assets/javascripts/
+fd ".*component.*" assets/javascripts/
+```
+
+### Debugging
+- Use `binding.pry` in Ruby code for breakpoints
+- Check `log/development.log` for Rails logs
+- Use browser dev tools for JavaScript debugging
+- Rails console is your best friend: `bin/rails c`
+
+### Common Patterns
+- Controllers inherit from `ApplicationController`
+- Models often use `ActiveRecord::Base`
+- Use `current_user` for authentication context
+- Check `app/serializers/` for API response formats
