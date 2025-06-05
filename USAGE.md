@@ -132,6 +132,8 @@ ssh-keygen -t ed25519 -f shared/github_deploy_key -N ""
 # Place your GitHub App .pem file in shared/
 ```
 
+**Note**: Sensitive files are automatically git-ignored via `shared/.gitignore`
+
 ## Running Your Habitat
 
 ```bash

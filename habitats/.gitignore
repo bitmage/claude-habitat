@@ -1,0 +1,58 @@
+# Habitats Directory - Development Environments
+# Most habitat configurations should be committed, but sensitive files should be ignored
+
+# Authentication files
+*.pem
+*.key
+*_key
+*_rsa*
+*.p12
+*.pfx
+id_*
+*.pub
+
+# Environment files with secrets
+.env
+.env.*
+!.env.example
+!.env.template
+
+# API keys and tokens
+*.token
+*.api
+*secret*
+*password*
+
+# Personal/local files
+*.local
+*.personal
+config.local.*
+notes.*
+
+# Build artifacts and temporary files
+.tmp/
+tmp/
+*.cache
+*.log
+
+# User-specific IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker build context (can be large)
+docker-build-context/
+
+# Allow template and example files
+!*.example
+!*.template
+!README.md
+
+# Allow this .gitignore
+!.gitignore

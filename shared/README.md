@@ -52,9 +52,10 @@ shared/
 
 ## Security
 
-- Sensitive files (`.pem`, `*_key*`) are automatically git-ignored
-- Use proper file permissions: `chmod 600` for private keys
-- Never commit secrets to version control
+- **Automatic protection**: The `shared/.gitignore` file protects sensitive files
+- **Sensitive files ignored**: `.pem`, `*_key*`, personal configs, API keys, etc.
+- **Use proper permissions**: `chmod 600` for private keys
+- **Safe by default**: Most personal files are automatically excluded from git
 
 ## Composition
 

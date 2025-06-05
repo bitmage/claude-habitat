@@ -1,28 +1,63 @@
-# GitHub App private keys
+# Shared Directory - Personal Preferences
+# This directory contains your personal configurations and should largely be git-ignored
+
+# Authentication files (always ignore)
 *.pem
-
-# SSH keys
-id_rsa
-id_rsa.*
 *.key
-*.priv
-
-# API tokens and secrets
-*token*
-*secret*
-*password*
-
-# Certificates
-*.crt
-*.cert
+*_key
+*_rsa*
 *.p12
 *.pfx
+id_*
+github_deploy_key*
+*.pub
 
-# Environment files with secrets
-.env
-.env.*
+# Personal configuration files
+gitconfig
+.gitconfig
+config
+.ssh/
+.gnupg/
 
-# But allow example/template files
+# Personal scripts and tools
+aliases.sh
+*.local
+*.personal
+
+# API keys and tokens
+*.token
+*.api
+.env.local
+.env.personal
+secrets.*
+
+# Personal tool binaries and caches
+tools/bin/
+tools/.tmp/
+tools/user-tools.yaml
+*.cache
+
+# Personal notes and documentation
+notes.*
+todo.*
+scratch.*
+README.personal*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Allow certain files that might be shareable
+!CLAUDE.md.example
+!README.md
+!*.md.example
 !*.example
 !*.template
-!README.md
+
+# But keep this .gitignore file
+!.gitignore

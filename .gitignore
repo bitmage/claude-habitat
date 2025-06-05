@@ -6,7 +6,6 @@ node_modules/
 temp-*.yaml
 .maintenance-session.md
 
-# Tools
-shared/tools/bin/
-shared/tools/.tmp/
-shared/tools/user-tools.yaml
+# Tools (system tools are committed, user tools in shared/ are ignored via shared/.gitignore)
+system/tools/bin/
+system/tools/.tmp/
