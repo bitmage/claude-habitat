@@ -7,13 +7,16 @@ FROM $DISCOURSE_IMAGE
 # Install Claude Code globally as root
 RUN npm install -g @anthropic-ai/claude-code
 
-# Install GitHub CLI
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null && \
-    apt update && \
-    apt install -y gh && \
-    apt clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install basic tools needed for downloading and extracting static binaries
+RUN apt update && apt install -y curl wget unzip && \
+    apt clean && rm -rf /var/lib/apt/lists/*
+
+# Set up Claude Habitat tools directory structure
+RUN mkdir -p /claude-habitat/shared/tools/bin
+
+# Add tools to PATH for all users
+RUN echo 'export PATH="/claude-habitat/shared/tools/bin:$PATH"' >> /etc/profile && \
+    echo 'export PATH="/claude-habitat/shared/tools/bin:$PATH"' >> /etc/bash.bashrc
 
 # Pre-configure git to trust /src directory
 RUN git config --global --add safe.directory /src

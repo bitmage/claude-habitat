@@ -448,6 +448,23 @@ async function buildPreparedImage(config, tag, extraRepos) {
       }
     }
 
+    // Install Claude Habitat tools
+    const toolsInstallScript = `${workDir}/claude-habitat/shared/tools/install-tools.sh`;
+    if (sharedFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
+      console.log('Installing Claude Habitat tools...');
+      try {
+        // Make the script executable
+        await dockerExec(tempContainer, `chmod +x ${toolsInstallScript}`);
+        
+        // Install core tools
+        await dockerExec(tempContainer, `cd ${workDir}/claude-habitat/shared/tools && ./install-tools.sh install`);
+        
+        console.log('✅ Claude Habitat tools installed successfully');
+      } catch (err) {
+        console.warn(`Warning: Failed to install tools: ${err.message}`);
+        console.warn('Container will still work, but some development tools may be missing');
+      }
+    }
 
     // Configure git settings if specified in config
     if (config.git?.config_file) {

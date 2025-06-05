@@ -5,3 +5,8 @@ node_modules/
 .last-config
 temp-*.yaml
 .maintenance-session.md
+
+# Tools
+shared/tools/bin/
+shared/tools/.tmp/
+shared/tools/user-tools.yaml
