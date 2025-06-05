@@ -1,4 +1,9 @@
-behold-the-power-of-claude.2025-06-02.private-key.pem
+# Security - never commit private keys or secrets
+*.pem
+shared/github_deploy_key
+shared/github_deploy_key.pub
+shared/*.private-key.*
+
 node_modules/
 *.log
 .DS_Store
