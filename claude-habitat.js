@@ -13,7 +13,7 @@ const { colors, sleep, fileExists, findPemFiles, calculateCacheHash, parseRepoSp
 const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('./src/docker');
 const { loadConfig } = require('./src/config');
 const { askToContinue, askQuestion } = require('./src/cli');
-const { generateGitHubAppToken, testRepositoryAccess } = require('./src/github');
+const { testRepositoryAccess } = require('./src/github');
 
 const returnToMainMenu = async () => {
   console.log('\nReturning to main menu...\n');
@@ -1346,7 +1346,7 @@ EXAMPLES:
                 url: repo.url, 
                 reason: result.reason, 
                 needsDeployKey: result.needsDeployKey,
-                needsGitHubApp: result.needsGitHubApp,
+                needsGitHubCli: result.needsGitHubCli,
                 repoPath: result.repoPath,
                 accessMode: result.accessMode,
                 issues: result.issues 
@@ -1403,13 +1403,13 @@ EXAMPLES:
           console.log('6. Click "Add key"\n');
         }
         
-        // Show GitHub App instructions if needed
-        const needsGitHubApp = problemRepos.some(repo => repo.needsGitHubApp);
-        if (needsGitHubApp) {
-          console.log(colors.green('\nGitHub App Setup:'));
-          console.log('1. Go to your GitHub App settings');
-          console.log('2. Install the app on repositories that need API access');
-          console.log('3. Ensure the app has write permissions for development repos\n');
+        // Show GitHub CLI instructions if needed
+        const needsGitHubCli = problemRepos.some(repo => repo.needsGitHubCli);
+        if (needsGitHubCli) {
+          console.log(colors.green('\nGitHub CLI Setup:'));
+          console.log('1. Run: gh auth login');
+          console.log('2. Follow the prompts to authenticate');
+          console.log('3. GitHub CLI will handle API access for PR creation\n');
         }
         
         const readline = require('readline');

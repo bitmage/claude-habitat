@@ -38,7 +38,7 @@ repositories:
 
   - url: https://github.com/bitmage/discourse-calendar
     path: /src/plugins/discourse-calendar
-    branch: main
+    branch: filter-by-tags
     shallow: true
     # access: write (default) - Active development with PRs
 
