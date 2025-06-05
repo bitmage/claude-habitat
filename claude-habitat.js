@@ -428,7 +428,17 @@ async function buildPreparedImage(config, tag, extraRepos) {
     const workDir = config.container?.work_dir || '/src';
     const containerUser = config.container?.user || 'root';
     
-    // Copy shared files first
+    // Copy system files (infrastructure)
+    const systemDir = path.join(__dirname, 'system');
+    const systemFiles = await findFilesToCopy(systemDir, `${workDir}/claude-habitat/system`, true);
+    if (systemFiles.length > 0) {
+      console.log('Copying system files to container...');
+      for (const file of systemFiles) {
+        await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
+      }
+    }
+
+    // Copy shared files (user preferences)
     const sharedDir = path.join(__dirname, 'shared');
     const sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/claude-habitat/shared`, true);
     if (sharedFiles.length > 0) {
@@ -449,43 +459,65 @@ async function buildPreparedImage(config, tag, extraRepos) {
     }
 
     // Install Claude Habitat tools
-    const toolsInstallScript = `${workDir}/claude-habitat/shared/tools/install-tools.sh`;
-    if (sharedFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
-      console.log('Installing Claude Habitat tools...');
+    const systemToolsScript = `${workDir}/claude-habitat/system/tools/install-tools.sh`;
+    const sharedToolsScript = `${workDir}/claude-habitat/shared/tools/install-tools.sh`;
+    
+    // Install system tools (core infrastructure)
+    if (systemFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
+      console.log('Installing system tools...');
       try {
-        // Make the script executable
-        await dockerExec(tempContainer, `chmod +x ${toolsInstallScript}`);
-        
-        // Install core tools
-        await dockerExec(tempContainer, `cd ${workDir}/claude-habitat/shared/tools && ./install-tools.sh install`);
-        
-        console.log('✅ Claude Habitat tools installed successfully');
+        await dockerExec(tempContainer, `chmod +x ${systemToolsScript}`);
+        await dockerExec(tempContainer, `cd ${workDir}/claude-habitat/system/tools && ./install-tools.sh install`);
+        console.log('✅ System tools installed successfully');
       } catch (err) {
-        console.warn(`Warning: Failed to install tools: ${err.message}`);
+        console.warn(`Warning: Failed to install system tools: ${err.message}`);
         console.warn('Container will still work, but some development tools may be missing');
+      }
+    }
+    
+    // Install shared tools (user's personal tools)
+    if (sharedFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
+      console.log('Installing user tools...');
+      try {
+        await dockerExec(tempContainer, `chmod +x ${sharedToolsScript}`);
+        await dockerExec(tempContainer, `cd ${workDir}/claude-habitat/shared/tools && ./install-tools.sh install`);
+        console.log('✅ User tools installed successfully');
+      } catch (err) {
+        console.warn(`Warning: Failed to install user tools: ${err.message}`);
+        console.warn('User tools not available, but system tools should work');
       }
     }
 
     // Create concatenated CLAUDE.md instructions
     console.log('Setting up Claude instructions...');
     try {
+      const systemClaudePath = path.join(__dirname, 'system/CLAUDE.md');
       const sharedClaudePath = path.join(__dirname, 'shared/CLAUDE.md');
       const habitatDir = path.dirname(config._configPath);
       const habitatClaudePath = path.join(habitatDir, 'CLAUDE.md');
       
       let claudeContent = '';
       
-      // Add shared base instructions if they exist
+      // Add system base instructions (infrastructure)
+      if (await fileExists(systemClaudePath)) {
+        const systemContent = await fs.readFile(systemClaudePath, 'utf8');
+        claudeContent += systemContent;
+      }
+      
+      // Add shared user preferences
       if (await fileExists(sharedClaudePath)) {
         const sharedContent = await fs.readFile(sharedClaudePath, 'utf8');
+        if (claudeContent.length > 0) {
+          claudeContent += '\n\n---\n\n# User Preferences\n\n';
+        }
         claudeContent += sharedContent;
       }
       
-      // Add habitat-specific instructions if they exist
+      // Add habitat-specific instructions
       if (await fileExists(habitatClaudePath)) {
         const habitatContent = await fs.readFile(habitatClaudePath, 'utf8');
         if (claudeContent.length > 0) {
-          claudeContent += '\n\n---\n\n';
+          claudeContent += '\n\n---\n\n# Project-Specific Instructions\n\n';
         }
         claudeContent += habitatContent;
       }

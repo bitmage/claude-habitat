@@ -40,7 +40,8 @@ When Claude runs in a habitat:
 - **All development tools** pre-installed (`rg`, `fd`, `jq`, `yq`, `gh`, etc.)
 - **Project code** cloned and ready
 - **Services running** (databases, caches as needed)
-- **Helper files** in `./claude-habitat/shared/`
+- **System infrastructure** in `./claude-habitat/system/` (managed)
+- **Your preferences** in `./claude-habitat/shared/` (your configs, keys, tools)
 - **Scratch space** for Claude's notes and experiments
 
 ## Requirements

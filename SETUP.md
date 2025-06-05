@@ -36,7 +36,7 @@ ssh-keygen -t ed25519 -f shared/github_deploy_key -N ""
 
 ## Development Tools
 
-All habitats automatically include these tools:
+All habitats automatically include these system tools:
 - **rg** (ripgrep) - Fast text search
 - **fd** - Fast file finder  
 - **jq** - JSON processor
@@ -44,10 +44,14 @@ All habitats automatically include these tools:
 - **gh** - GitHub CLI
 - **bat**, **tree**, **delta**, **fzf** (optional tools)
 
-Optional tools can be installed with:
+The tools are organized as:
+- **System tools**: `system/tools/` (managed by Claude Habitat)
+- **User tools**: `shared/tools/` (your personal additions)
+
+Optional system tools can be installed with:
 ```bash
 # Inside any habitat
-cd claude-habitat/shared/tools && ./install-tools.sh install-optional
+cd claude-habitat/system/tools && ./install-tools.sh install-optional
 ```
 
 That's it! Now you can:

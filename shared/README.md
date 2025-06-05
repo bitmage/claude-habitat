@@ -1,75 +1,66 @@
-# Shared Directory
+# Shared Directory - Your Personal Preferences
 
-This directory contains files that are shared across all Claude Habitat environments. These files are automatically copied to `/tmp/claude-habitat-files/` in every container during build.
+This directory contains your personal preferences and configurations that extend across all your Claude Habitat projects.
 
-## Common Use Cases
+## What Goes Here
 
-### GitHub Authentication
-Place your GitHub App private key here:
+### Personal Configuration
+- **`CLAUDE.md`** - Your personal Claude preferences and instructions
+- **`gitconfig`** - Your git configuration (name, email, aliases)
+- **`aliases.sh`** - Your personal shell aliases and functions
+- **Custom scripts** - Your personal utility scripts
+
+### Authentication
+- **`github_deploy_key*`** - Your SSH keys for GitHub access
+- **`*.pem`** - Your GitHub App private keys
+- **Other credentials** - API keys, tokens (ensure they're git-ignored)
+
+### Personal Tools
+- **`tools/`** - Your additional development tools
+- **`templates/`** - Your project templates and boilerplates
+
+## How It Works
+
+Files in this directory are:
+- **Copied to every habitat** at `./claude-habitat/shared/`
+- **Git-ignored by default** (for sensitive files)
+- **Combined with system infrastructure** to create your complete environment
+- **Persistent across Claude Habitat updates**
+
+## Getting Started
+
+1. **Copy the example**: `cp CLAUDE.md.example CLAUDE.md`
+2. **Edit your preferences**: Customize `CLAUDE.md` with your workflow preferences
+3. **Add your git config**: Create `gitconfig` with your settings
+4. **Add authentication**: Place SSH keys or GitHub App files here
+
+## Example Structure
+
 ```
 shared/
-└── github-app-private-key.pem
+├── CLAUDE.md              # Your Claude preferences
+├── gitconfig              # Your git settings
+├── aliases.sh             # Your shell aliases
+├── github_deploy_key      # Your SSH key
+├── my-github-app.pem      # Your GitHub App key
+├── tools/                 # Your personal tools
+│   ├── install-tools.sh   # Your tool installer
+│   └── tools.yaml         # Your tool definitions
+└── scripts/               # Your utility scripts
+    └── my-helper.sh
 ```
 
-### SSH Keys  
-Place SSH keys for repository access:
-```
-shared/
-├── id_rsa
-├── id_rsa.pub
-└── known_hosts
-```
+## Security
 
-### Shared Scripts
-Common setup or utility scripts used across environments:
-```
-shared/
-├── setup-github-auth.sh
-├── install-tools.sh
-└── common-aliases.sh
-```
+- Sensitive files (`.pem`, `*_key*`) are automatically git-ignored
+- Use proper file permissions: `chmod 600` for private keys
+- Never commit secrets to version control
 
-### Configuration Templates
-Shared configuration files or templates:
-```
-shared/
-├── .gitconfig
-├── .bashrc
-└── tool-configs/
-    ├── prettier.json
-    └── eslint.json
-```
+## Composition
 
-## Copy Behavior
+Your preferences are layered as:
+1. **System** (`system/CLAUDE.md`) - Base environment + tools
+2. **Your preferences** (`shared/CLAUDE.md`) - Your workflow style
+3. **Project-specific** (`habitats/*/CLAUDE.md`) - Project instructions
 
-- **All files** in the shared directory are copied to `${work_dir}/claude-habitat/shared/` in every container
-- **Directory structure** is preserved (subdirectories are copied recursively)
-- **No exclusions** - unlike habitat directories, all files in shared/ are copied
-- **Shared files are copied first**, then habitat-specific files (which can override shared files)
-
-## Security Considerations
-
-- Don't commit sensitive files like private keys to git
-- Use `.gitignore` to exclude sensitive files
-- Consider using environment variables for secrets when possible
-- Set appropriate file permissions on sensitive files (e.g., `chmod 600` for private keys)
-
-## Access from Containers
-
-All shared files are available at `${work_dir}/claude-habitat/shared/` in containers:
-
-```bash
-# In a container (e.g., discourse with work_dir=/src):
-ls ./claude-habitat/shared/
-# Shows shared files
-
-ls ./claude-habitat/
-# Shows habitat-specific files
-
-# Example: Use shared SSH key
-cp ./claude-habitat/shared/id_rsa ~/.ssh/
-chmod 600 ~/.ssh/id_rsa
-
-# Example: Source shared aliases
-source ./claude-habitat/shared/common-aliases.sh
-```
+This gives you consistent personal preferences across all projects while allowing project-specific customization.

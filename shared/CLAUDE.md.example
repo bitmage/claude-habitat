@@ -1,0 +1,38 @@
+# Personal Claude Preferences
+
+This is an example of how you can customize Claude's behavior with your personal preferences.
+
+## My Development Style
+
+I prefer:
+- Detailed commit messages with context
+- Test-driven development approach
+- Verbose debugging when investigating issues
+- Creating documentation as I go
+
+## My Aliases and Tools
+
+You'll find my personal aliases in `./claude-habitat/shared/aliases.sh`:
+- `gs` = git status
+- `gc` = git commit
+- `gp` = git push
+- `groot` = cd to git root
+
+## My Git Configuration
+
+My personal git config is in `./claude-habitat/shared/gitconfig` with:
+- My name and email
+- My preferred merge strategy
+- My custom aliases
+
+## Project Workflow Preferences
+
+When working on projects, I like to:
+1. Always run tests before committing
+2. Create feature branches with descriptive names
+3. Use conventional commit messages
+4. Add inline comments for complex logic
+
+## Custom Tools
+
+I've added some personal development tools in `./claude-habitat/shared/tools/` that complement the system tools.
