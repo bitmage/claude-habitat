@@ -1317,58 +1317,41 @@ EXAMPLES:
     
     if (habitats.length > 0) {
       console.log('Habitats:\n');
-      // Show first 9 habitats with number keys, rest need to be typed by name
+      // Show all habitats with appropriate hotkeys
       habitats.forEach((habitat, index) => {
+        let key;
         if (index < 9) {
-          const key = (index + 1).toString();
-          
-          // Check if this habitat has repository issues
-          const habitatStatus = habitatRepoStatus.find(h => h.name === habitat.name);
-          const statusWarning = habitatStatus?.hasIssues ? ' ⚠️' : '';
-          
-          try {
-            const content = require('fs').readFileSync(habitat.path, 'utf8');
-            const parsed = yaml.load(content);
-            console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}`);
-            if (parsed.description) {
-              console.log(`      ${parsed.description}`);
-            }
-            if (habitatStatus?.hasIssues) {
-              console.log('      (may not be able to access remote repositories)');
-            }
-            console.log('');
-          } catch (err) {
-            console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}`);
-            console.log(`      (configuration error: ${err.message})`);
-            console.log('');
-          }
+          // Direct number keys for first 9
+          key = (index + 1).toString();
         } else {
-          // Just list without a key
-          const habitatStatus = habitatRepoStatus.find(h => h.name === habitat.name);
-          const statusWarning = habitatStatus?.hasIssues ? ' ⚠️' : '';
-          
-          try {
-            const content = require('fs').readFileSync(habitat.path, 'utf8');
-            const parsed = yaml.load(content);
-            console.log(`      ${habitat.name}${statusWarning}`);
-            if (parsed.description) {
-              console.log(`      ${parsed.description}`);
-            }
-            if (habitatStatus?.hasIssues) {
-              console.log('      (may not be able to access remote repositories)');
-            }
-            console.log('');
-          } catch (err) {
-            console.log(`      ${habitat.name}${statusWarning}`);
-            console.log(`      (configuration error: ${err.message})`);
-            console.log('');
+          // Tilde prefix system for 10+
+          const adjusted = index - 9; // 0-based for items 10+
+          const tildeCount = Math.floor(adjusted / 9) + 1;
+          const digit = (adjusted % 9) + 1;
+          key = '~'.repeat(tildeCount) + digit;
+        }
+        
+        // Check if this habitat has repository issues
+        const habitatStatus = habitatRepoStatus.find(h => h.name === habitat.name);
+        const statusWarning = habitatStatus?.hasIssues ? ' ⚠️' : '';
+        
+        try {
+          const content = require('fs').readFileSync(habitat.path, 'utf8');
+          const parsed = yaml.load(content);
+          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}`);
+          if (parsed.description) {
+            console.log(`      ${parsed.description}`);
           }
+          if (habitatStatus?.hasIssues) {
+            console.log('      (may not be able to access remote repositories)');
+          }
+          console.log('');
+        } catch (err) {
+          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}`);
+          console.log(`      (configuration error: ${err.message})`);
+          console.log('');
         }
       });
-      
-      if (habitats.length > 9) {
-        console.log(`  ${colors.yellow('Type habitat name to select 10+')}\n`);
-      }
     }
     
     // Add action options with clear categories
@@ -1384,18 +1367,45 @@ EXAMPLES:
     console.log(`  ${colors.yellow('[h]')}elp    - Show usage information`);
     console.log(`  ${colors.yellow('[q]')}uit    - Exit\n`);
     
-    // Get user choice
-    const readline = require('readline');
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    
+    // Get user choice with single keypress or tilde sequences
     const choice = await new Promise(resolve => {
-      rl.question('Enter your choice: ', answer => {
-        rl.close();
-        resolve(answer.trim().toLowerCase());
-      });
+      let tildeBuffer = '';
+      
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.setEncoding('utf8');
+      
+      const onKeypress = (key) => {
+        // Handle Ctrl+C
+        if (key === '\u0003') {
+          console.log('\n');
+          process.exit(0);
+        }
+        
+        // Handle tilde sequences
+        if (key === '~') {
+          tildeBuffer += '~';
+          return; // Wait for more input
+        }
+        
+        // If we have tildes, append the digit and resolve
+        if (tildeBuffer.length > 0) {
+          const finalChoice = tildeBuffer + key;
+          process.stdin.setRawMode(false);
+          process.stdin.pause();
+          process.stdin.removeListener('data', onKeypress);
+          resolve(finalChoice);
+          return;
+        }
+        
+        // Regular single keypress
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeListener('data', onKeypress);
+        resolve(key.toLowerCase());
+      };
+      
+      process.stdin.on('data', onKeypress);
     });
     
     // Handle choice
@@ -1436,29 +1446,45 @@ EXAMPLES:
       await runMaintenanceMode();
       process.exit(0);
     } else {
-      // Check if it's a number
-      const index = parseInt(choice) - 1;
-      if (!isNaN(index) && index >= 0 && index < 9 && index < habitats.length) {
-        options.configPath = habitats[index].path;
-        console.log(`\nSelected: ${habitats[index].name}\n`);
-      } else {
-        // Check if it's a habitat name (for 10+)
-        const matchingHabitat = habitats.find(h => 
-          h.name.toLowerCase() === choice.toLowerCase() || 
-          h.name.toLowerCase().startsWith(choice.toLowerCase())
-        );
+      // Check if it's a direct number (1-9)
+      const directIndex = parseInt(choice) - 1;
+      if (!isNaN(directIndex) && directIndex >= 0 && directIndex < 9 && directIndex < habitats.length) {
+        options.configPath = habitats[directIndex].path;
+        console.log(`\nSelected: ${habitats[directIndex].name}\n`);
+      } else if (choice.startsWith('~')) {
+        // Handle tilde prefix sequences (~1, ~~2, etc.)
+        const tildeCount = choice.match(/^~+/)[0].length;
+        const digit = choice.slice(tildeCount);
+        const digitNum = parseInt(digit);
         
-        if (matchingHabitat) {
-          options.configPath = matchingHabitat.path;
-          console.log(`\nSelected: ${matchingHabitat.name}\n`);
+        if (!isNaN(digitNum) && digitNum >= 1 && digitNum <= 9) {
+          // Calculate actual index: 9 + (tildeCount-1)*9 + (digitNum-1)
+          const habitatIndex = 9 + (tildeCount - 1) * 9 + (digitNum - 1);
+          
+          if (habitatIndex < habitats.length) {
+            options.configPath = habitats[habitatIndex].path;
+            console.log(`\nSelected: ${habitats[habitatIndex].name}\n`);
+          } else {
+            console.error(colors.red('\n❌ Invalid habitat selection'));
+            console.log('Returning to main menu...\n');
+            await sleep(2000);
+            await returnToMainMenu();
+            return;
+          }
         } else {
-          console.error(colors.red('\n❌ Invalid choice'));
-          console.log('Hint: Type the full habitat name or use number keys 1-9');
+          console.error(colors.red('\n❌ Invalid tilde sequence - use ~1-9, ~~1-9, etc.'));
           console.log('Returning to main menu...\n');
           await sleep(2000);
           await returnToMainMenu();
           return;
         }
+      } else {
+        console.error(colors.red('\n❌ Invalid choice'));
+        console.log('Use number keys 1-9, tilde sequences (~1, ~~2), or letter commands');
+        console.log('Returning to main menu...\n');
+        await sleep(2000);
+        await returnToMainMenu();
+        return;
       }
     }
   }
