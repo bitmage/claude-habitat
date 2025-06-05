@@ -64,6 +64,17 @@ Reference `claude/TROUBLESHOOTING.md` for:
 
 ## Important Guidelines
 
+### Change Management
+- **ALWAYS propose changes first** - State your intention and wait for user acknowledgement before implementing
+- **Get explicit approval** for any modifications to system files or configurations
+- **Ask clarifying questions** if requirements are unclear before starting work
+
+### Best Practices
+- **Reference `claude/BEST_PRACTICES.md`** for development standards and lessons learned
+- **Follow functional programming principles** with pure functions and dependency injection
+- **Create tests immediately** when discovering issues through manual testing
+- **Always run tests** before reporting success or completion
+
 ### System Integration
 - **Use system tools** when available for portability
 - **Reference `system/tools/TOOLS.md`** for available development tools

@@ -141,6 +141,17 @@ fd ".*\.(rb|js|py)$" --exec wc -l | sort -nr > ./claude-habitat/scratch/file-siz
 
 ## Important Guidelines
 
+### Development Approach
+- **Code autonomously** - Make changes and improvements without asking for permission
+- **Be proactive** - Identify and fix issues as you discover them
+- **Work efficiently** - You're isolated and safe to experiment and iterate quickly
+
+### Best Practices
+- **Reference `./claude-habitat/shared/BEST_PRACTICES.md`** for development standards and lessons learned
+- **Follow functional programming principles** - Write pure functions and use dependency injection
+- **Create tests for discoveries** - If you find bugs through manual testing, write regression tests immediately
+- **Always run tests** - Execute test suites before and after changes
+
 ### Code Quality
 - **Always run existing tests** before and after changes
 - **Follow project conventions**: Check existing code style, naming patterns

@@ -61,6 +61,7 @@ When "Habitat" Claude runs in a container:
 - **`INSTRUCTIONS.md`** - Instructions for "Meta" Claude (maintenance, habitat creation)
 - **`MAINTENANCE.md`** - Maintenance mode procedures
 - **`TROUBLESHOOTING.md`** - "Meta" Claude troubleshooting guide
+- **`BEST_PRACTICES.md`** - Development standards and lessons learned
 - **Never copied to containers** - Local execution only
 
 ### `system/` - Infrastructure (Managed)
@@ -72,6 +73,7 @@ When "Habitat" Claude runs in a container:
 ### `shared/` - Your Personal Preferences  
 - **`claude.md.example`** - Template for personal "Habitat" Claude preferences
 - **`README.md`** - Guide for personal customization
+- **`BEST_PRACTICES.md`** - Symlink to development standards (accessible in containers)
 - **Personal configs** - Git settings, SSH keys, aliases, tools
 - **Copied to containers** at `./claude-habitat/shared/`
 

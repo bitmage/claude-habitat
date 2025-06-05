@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const os = require('os');
 
-const { parseRepoPath, testGitAccess, testGitHubCliAccess, testRepositoryAccess } = require('../src/github');
+const { parseRepoPath, testGitAccess, testGitHubCliAccess, testRepositoryAccess } = require('../../src/github');
 
 // Pure function tests (already covered in pure-functions.test.js, but adding a few more)
 test('parseRepoPath handles complex repository names', () => {

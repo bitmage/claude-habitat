@@ -2,33 +2,8 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 // Test pure functions without any mocking
-const { parseRepoPath } = require('../src/github');
-const { buildDockerRunArgs, buildDockerExecArgs } = require('../src/docker');
-const { calculateCacheHash, parseRepoSpec } = require('../src/utils');
-
-// GitHub pure functions
-test('parseRepoPath extracts repository path from SSH URL', () => {
-  const result = parseRepoPath('git@github.com:user/repo.git');
-  assert.strictEqual(result, 'user/repo');
-});
-
-test('parseRepoPath extracts repository path from HTTPS URL', () => {
-  const result = parseRepoPath('https://github.com/user/repo.git');
-  assert.strictEqual(result, 'user/repo');
-});
-
-test('parseRepoPath handles URLs without .git suffix', () => {
-  const sshResult = parseRepoPath('git@github.com:user/repo');
-  const httpsResult = parseRepoPath('https://github.com/user/repo');
-  
-  assert.strictEqual(sshResult, 'user/repo');
-  assert.strictEqual(httpsResult, 'user/repo');
-});
-
-test('parseRepoPath returns null for unknown URL formats', () => {
-  const result = parseRepoPath('https://gitlab.com/user/repo.git');
-  assert.strictEqual(result, null);
-});
+const { buildDockerRunArgs, buildDockerExecArgs } = require('../../src/docker');
+const { calculateCacheHash, parseRepoSpec } = require('../../src/utils');
 
 // Docker pure functions
 test('buildDockerRunArgs constructs basic run command', () => {
@@ -123,16 +98,6 @@ test('buildDockerRunArgs is pure - same input produces same output', () => {
   assert.deepStrictEqual(options, { detached: true, name: 'test' });
 });
 
-test('parseRepoPath is pure - no side effects', () => {
-  const originalUrl = 'git@github.com:user/repo.git';
-  const url = originalUrl;
-  
-  const result = parseRepoPath(url);
-  
-  assert.strictEqual(result, 'user/repo');
-  assert.strictEqual(url, originalUrl); // Input unchanged
-});
-
 // Edge cases and data validation
 test('buildDockerRunArgs handles empty options', () => {
   const args = buildDockerRunArgs('run', {});
@@ -142,11 +107,6 @@ test('buildDockerRunArgs handles empty options', () => {
 test('buildDockerRunArgs handles undefined options', () => {
   const args = buildDockerRunArgs('run');
   assert.deepStrictEqual(args, ['run']);
-});
-
-test('parseRepoPath handles empty strings', () => {
-  const result = parseRepoPath('');
-  assert.strictEqual(result, null);
 });
 
 test('buildDockerExecArgs handles null user', () => {

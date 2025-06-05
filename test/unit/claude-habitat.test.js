@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs').promises;
-const habitat = require('../claude-habitat.js');
+const habitat = require('../../claude-habitat.js');
 
 // Helper to create a temporary config file for testing
 async function createTempConfig(config) {
