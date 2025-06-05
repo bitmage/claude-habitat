@@ -5,7 +5,7 @@ This directory contains your personal preferences and configurations that extend
 ## What Goes Here
 
 ### Personal Configuration
-- **`CLAUDE.md`** - Your personal Claude preferences and instructions
+- **`claude.md`** - Your personal Claude preferences and instructions
 - **`gitconfig`** - Your git configuration (name, email, aliases)
 - **`aliases.sh`** - Your personal shell aliases and functions
 - **Custom scripts** - Your personal utility scripts
@@ -29,8 +29,8 @@ Files in this directory are:
 
 ## Getting Started
 
-1. **Copy the example**: `cp CLAUDE.md.example CLAUDE.md`
-2. **Edit your preferences**: Customize `CLAUDE.md` with your workflow preferences
+1. **Copy the example**: `cp claude.md.example claude.md`
+2. **Edit your preferences**: Customize `claude.md` with your workflow preferences
 3. **Add your git config**: Create `gitconfig` with your settings
 4. **Add authentication**: Place SSH keys or GitHub App files here
 
@@ -38,7 +38,7 @@ Files in this directory are:
 
 ```
 shared/
-├── CLAUDE.md              # Your Claude preferences
+├── claude.md              # Your Claude preferences
 ├── gitconfig              # Your git settings
 ├── aliases.sh             # Your shell aliases
 ├── github_deploy_key      # Your SSH key
@@ -61,7 +61,7 @@ shared/
 
 Your preferences are layered as:
 1. **System** (`system/CLAUDE.md`) - Base environment + tools
-2. **Your preferences** (`shared/CLAUDE.md`) - Your workflow style
-3. **Project-specific** (`habitats/*/CLAUDE.md`) - Project instructions
+2. **Your preferences** (`shared/claude.md`) - Your workflow style
+3. **Project-specific** (`habitats/*/claude.md`) - Project instructions
 
 This gives you consistent personal preferences across all projects while allowing project-specific customization.

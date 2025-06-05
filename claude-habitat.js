@@ -492,9 +492,9 @@ async function buildPreparedImage(config, tag, extraRepos) {
     console.log('Setting up Claude instructions...');
     try {
       const systemClaudePath = path.join(__dirname, 'system/CLAUDE.md');
-      const sharedClaudePath = path.join(__dirname, 'shared/CLAUDE.md');
+      const sharedClaudePath = path.join(__dirname, 'shared/claude.md');
       const habitatDir = path.dirname(config._configPath);
-      const habitatClaudePath = path.join(habitatDir, 'CLAUDE.md');
+      const habitatClaudePath = path.join(habitatDir, 'claude.md');
       
       let claudeContent = '';
       
@@ -791,9 +791,9 @@ The configuration should be complete and ready to use.
     // It's ok if example doesn't exist
   }
   
-  // Copy CLAUDE.md for instructions
+  // Copy "Meta" Claude instructions for add mode
   await fs.copyFile(
-    path.join(__dirname, 'CLAUDE.md'),
+    path.join(__dirname, 'claude/INSTRUCTIONS.md'),
     path.join(workspace, 'CLAUDE.md')
   );
   
@@ -858,7 +858,7 @@ async function runMaintenanceMode() {
 
 You are now in Claude Habitat maintenance mode. 
 
-IMPORTANT: First, read and present the options from MAINTENANCE_MENU.md to the user.
+IMPORTANT: First, read and present the options from claude/MAINTENANCE.md to the user.
 
 When the user says "menu", "options", "help", or similar, show the maintenance menu again.
 

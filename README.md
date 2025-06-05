@@ -2,10 +2,6 @@
 
 AI-powered development environments that are isolated, reproducible, and ready for Claude Code.
 
-Claude Habitat creates isolated Docker containers where Claude Code can work on your projects safely. Each habitat includes your code, required services, and development tools with no access to your host filesystem.
-
-Perfect for AI pair programming without risk.
-
 ## Quick Start
 
 ```bash
@@ -15,46 +11,37 @@ git clone <repo-url> && cd claude-habitat && npm install
 # Try the example  
 ./claude-habitat discourse
 
-# Or create your own
+# Or create your own (with AI assistance)
 ./claude-habitat add
-```
-
-## Setup (Optional)
-
-For private repositories, add SSH keys or GitHub App authentication to `shared/`. The tool will guide you through this when needed.
-
-## Available Commands
-
-```bash
-./claude-habitat <habitat-name>     # Start specific habitat
-./claude-habitat                    # Interactive menu
-./claude-habitat add                # Create new habitat
-./claude-habitat maintain           # Maintenance mode
-./claude-habitat --list-configs     # List available habitats
 ```
 
 ## What You Get
 
-When Claude runs in a habitat:
+When "Habitat" Claude runs in a container:
 - **Complete isolation** from your host system
 - **All development tools** pre-installed (`rg`, `fd`, `jq`, `yq`, `gh`, etc.)
 - **Project code** cloned and ready
 - **Services running** (databases, caches as needed)
-- **System infrastructure** in `./claude-habitat/system/` (managed)
-- **Your preferences** in `./claude-habitat/shared/` (your configs, keys, tools)
-- **Scratch space** for Claude's notes and experiments
-
-## Requirements
-
-- Docker
-- Node.js  
-- Claude Code CLI
+- **Your personal preferences** from `shared/` directory
 
 ## Documentation
 
-- `SETUP.md` - Setup details
-- `USAGE.md` - Usage examples
-- `github-app.md` - GitHub authentication
-- `troubleshooting.md` - Common issues
+📖 **[Complete Documentation →](docs/README.md)**
 
-The tool will guide you through what you need!
+- **[Setup Guide](docs/SETUP.md)** - Get started quickly
+- **[Usage Guide](docs/USAGE.md)** - Create and run environments  
+- **[Terminology](docs/TERMINOLOGY.md)** - Complete domain model and concepts
+- **[GitHub Authentication](docs/GITHUB-AUTH.md)** - SSH keys and GitHub Apps
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+
+## Directory Structure
+
+- **`docs/`** - User documentation and guides
+- **`claude/`** - "Meta" Claude instructions (maintenance, habitat creation)
+- **`system/`** - Infrastructure managed by Claude Habitat (tools, base config)
+- **`shared/`** - Your personal preferences across all projects
+- **`habitats/`** - Individual project development environments
+
+Perfect for AI pair programming without risk! 🚀
+
+See **[TERMINOLOGY.md](docs/TERMINOLOGY.md)** for complete domain concepts including "Meta" Claude vs "Habitat" Claude.

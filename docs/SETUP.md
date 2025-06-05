@@ -1,5 +1,7 @@
 # Setup
 
+📖 **See [TERMINOLOGY.md](TERMINOLOGY.md) for domain concepts** including habitats, composition layers, authentication scopes, etc.
+
 ## Prerequisites
 
 - Docker (running)

@@ -2,6 +2,8 @@
 
 This guide walks through creating a GitHub App that Claude can use to create pull requests and interact with repositories.
 
+📖 **See [TERMINOLOGY.md](TERMINOLOGY.md)** for authentication scope concepts and "Meta" vs "Habitat" Claude contexts.
+
 ## Create a GitHub App
 
 1. **Navigate to GitHub Settings**

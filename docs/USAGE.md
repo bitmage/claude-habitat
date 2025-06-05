@@ -1,5 +1,7 @@
 # Usage
 
+📖 **See [TERMINOLOGY.md](TERMINOLOGY.md) for domain concepts** including habitats, sessions, composition layers, etc.
+
 ## Basic Commands
 
 ```bash
@@ -71,7 +73,7 @@ CMD ["/sbin/init"]
 ```
 
 #### 4. Add Project Instructions (Optional)
-Create `habitats/my-project/CLAUDE.md` with project-specific guidance.
+Create `habitats/my-project/claude.md` with project-specific guidance.
 
 ## Customizing Your Environment
 
@@ -82,7 +84,7 @@ Add your personal configurations that apply to all projects:
 #### Personal Claude Instructions
 ```bash
 # Copy the template
-cp shared/CLAUDE.md.example shared/CLAUDE.md
+cp shared/claude.md.example shared/claude.md
 
 # Edit your preferences
 # - Your development workflow
