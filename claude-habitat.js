@@ -1793,11 +1793,10 @@ EXAMPLES:
 async function checkInitializationStatus() {
   const status = {
     githubApp: false,
-    githubToken: false,
     docker: false,
     claude: false,
     completedSteps: 0,
-    totalSteps: 4
+    totalSteps: 3  // Reduced from 4 - GitHub token is now automatic
   };
 
   try {
@@ -1806,9 +1805,8 @@ async function checkInitializationStatus() {
     status.githubApp = pemFiles.length > 0;
     if (status.githubApp) status.completedSteps++;
 
-    // Check for GitHub Token
-    status.githubToken = !!process.env.GITHUB_TOKEN;
-    if (status.githubToken) status.completedSteps++;
+    // GitHub Token is now automatic/on-demand - not a required setup step
+    status.githubToken = !!process.env.GITHUB_TOKEN; // Still track it but don't count
 
     // Check Docker
     try {
@@ -2053,7 +2051,7 @@ async function runInitialization() {
   console.log(`${status.docker ? '✅' : '❌'} Docker: ${status.docker ? 'Working' : 'Not accessible'}`);
   console.log(`${status.claude ? '✅' : '❌'} Claude Code: ${status.claude ? 'Installed' : 'Not found'}`);
   console.log(`${status.githubApp ? '✅' : '❌'} GitHub App: ${status.githubApp ? 'Configured' : 'Not configured'}`);
-  console.log(`${status.githubToken ? '✅' : '❌'} GitHub Token: ${status.githubToken ? 'Set' : 'Not set'}`);
+  console.log('\nGitHub Token: Automatic authentication when needed');
   console.log('');
   
   if (!status.docker || !status.claude) {
@@ -2064,8 +2062,9 @@ async function runInitialization() {
     return;
   }
   
-  if (status.githubApp && status.githubToken) {
+  if (status.githubApp) {
     console.log(colors.green('✅ All setup complete! You\'re ready to use Claude Habitat.'));
+    console.log('\nGitHub authentication will happen automatically when needed.');
     return;
   }
   
@@ -2144,33 +2143,12 @@ async function runInitialization() {
       console.log('');
     }
     
-    // GitHub Token setup  
-    if (!status.githubToken) {
-      console.log(colors.yellow('=== Step 2: GitHub Token Setup ==='));
-      console.log('This enables Claude to clone and push to private repositories.\n');
-      
-      const proceed = await ask('Ready to authenticate with GitHub? [Y/n]: ');
-      if (proceed.toLowerCase() !== 'n' && proceed.toLowerCase() !== 'no') {
-        try {
-          const token = await generateGitHubTokenAutomatically();
-          if (token) {
-            // Store token in a secure location for this session
-            process.env.GITHUB_TOKEN = token;
-            console.log(colors.green('✅ GitHub authentication successful!'));
-            console.log('\nTo make this permanent, add to your shell profile:');
-            console.log(colors.yellow(`export GITHUB_TOKEN="${token}"`));
-          } else {
-            console.log(colors.red('❌ GitHub authentication failed'));
-            console.log('You can manually set GITHUB_TOKEN environment variable');
-          }
-        } catch (err) {
-          console.log(colors.red(`❌ Authentication error: ${err.message}`));
-          console.log('Falling back to manual token setup...');
-          await manualTokenSetupInstructions();
-        }
-      }
-      console.log('');
-    }
+    // GitHub Token is now automatic - no manual setup needed
+    console.log(colors.yellow('=== GitHub Authentication ==='));
+    console.log('GitHub authentication is now automatic!');
+    console.log('When you select a habitat that needs private repository access,');
+    console.log('you\'ll be prompted to authenticate with GitHub.');
+    console.log('');
     
     // Final status check
     const finalStatus = await checkInitializationStatus();
