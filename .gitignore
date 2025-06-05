@@ -1,7 +1,7 @@
 # Security - never commit private keys or secrets
 *.pem
-shared/github_deploy_key*
 shared/*.private-key.*
+# Note: We now use GITHUB_TOKEN environment variable instead of SSH keys
 
 node_modules/
 *.log

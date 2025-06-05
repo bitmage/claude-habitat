@@ -9,7 +9,7 @@ const execAsync = promisify(exec);
 const yaml = require('js-yaml');
 
 // Import modules
-const { colors, sleep, fileExists, findPemFiles, calculateCacheHash, parseRepoSpec, parseCommands, getSSHKeyForRepository } = require('./src/utils');
+const { colors, sleep, fileExists, findPemFiles, calculateCacheHash, parseRepoSpec, parseCommands } = require('./src/utils');
 const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('./src/docker');
 const { loadConfig } = require('./src/config');
 const { askToContinue, askQuestion } = require('./src/cli');
@@ -44,7 +44,7 @@ async function runHabitat(configPath, extraRepos = []) {
     await buildPreparedImage(config, preparedTag, extraRepos);
   }
 
-  // Parse environment variables (simplified)
+  // Parse environment variables and add GITHUB_TOKEN if available
   const envVars = [];
   if (config.environment && Array.isArray(config.environment)) {
     for (const env of config.environment) {
@@ -53,6 +53,14 @@ async function runHabitat(configPath, extraRepos = []) {
         envVars.push(cleanEnv);
       }
     }
+  }
+  
+  // Add GITHUB_TOKEN if available in environment
+  if (process.env.GITHUB_TOKEN) {
+    envVars.push(`GITHUB_TOKEN=${process.env.GITHUB_TOKEN}`);
+    console.log('GitHub token detected and will be passed to container');
+  } else {
+    console.log('No GITHUB_TOKEN found - private repositories may not be accessible');
   }
 
   // Run the container
@@ -110,22 +118,16 @@ async function buildBaseImage(config) {
 async function cloneRepository(container, repoInfo) {
   const { url, path: repoPath, branch = 'main' } = repoInfo;
   
-  // Convert HTTPS URLs to SSH for authentication with repository-specific host
+  // Ensure we're using HTTPS URLs for token authentication
   let cloneUrl = url;
-  if (url.startsWith('https://github.com/')) {
-    // Map repositories to specific SSH hosts
-    if (url.includes('bitmage/county-fence-plugin')) {
-      cloneUrl = url.replace('https://github.com/', 'git@github-county-fence:');
-    } else if (url.includes('bitmage/discourse-calendar')) {
-      cloneUrl = url.replace('https://github.com/', 'git@github-discourse-calendar:');
-    } else {
-      cloneUrl = url.replace('https://github.com/', 'git@github.com:');
-    }
-    
+  if (url.startsWith('git@github.com:')) {
+    cloneUrl = url.replace('git@github.com:', 'https://github.com/');
     if (!cloneUrl.endsWith('.git')) {
       cloneUrl += '.git';
     }
-    console.log(`Converting HTTPS to SSH: ${url} -> ${cloneUrl}`);
+    console.log(`Converting SSH to HTTPS: ${url} -> ${cloneUrl}`);
+  } else if (!cloneUrl.endsWith('.git') && cloneUrl.includes('github.com')) {
+    cloneUrl += '.git';
   }
   
   console.log(`Cloning ${cloneUrl} to ${repoPath} (branch: ${branch})`);
@@ -134,25 +136,22 @@ async function cloneRepository(container, repoInfo) {
     # Ensure parent directory exists
     mkdir -p $(dirname ${repoPath})
 
-    # Test SSH key setup in container
-    echo "=== SSH Setup Verification ==="
-    echo "SSH config exists: $(test -f ~/.ssh/config && echo 'YES' || echo 'NO')"
-    echo "SSH keys available: $(ls ~/.ssh/github_deploy_key* 2>/dev/null | wc -l)"
-    echo "Known hosts: $(test -f ~/.ssh/known_hosts && echo 'YES' || echo 'NO')"
+    # Test GitHub token authentication
+    echo "=== GitHub Token Authentication Verification ==="
+    if [ -n "\$GITHUB_TOKEN" ]; then
+      echo "GitHub token: Available (length: \${#GITHUB_TOKEN})"
+      
+      # Test token access to repository
+      echo "Testing repository access with token..."
+      curl -s -H "Authorization: token \$GITHUB_TOKEN" https://api.github.com/repos/\$(echo ${cloneUrl} | sed 's|https://github.com/||' | sed 's|\.git||') | head -10
+      echo "API test completed"
+    else
+      echo "GitHub token: NOT SET - will try anonymous access"
+    fi
 
-    # Test SSH connection to GitHub
-    echo "Testing SSH connection to GitHub..."
-    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -T git@github.com
-    echo "SSH general test exit code: $?"
-
-    # Test repository-specific access
-    echo "Testing repository access..."
-    GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git ls-remote --heads ${cloneUrl} 2>&1 | head -3
-    echo "Repository access test exit code: $?"
-
-    # Clone the repository using SSH
+    # Clone the repository using HTTPS
     echo "Starting clone operation..."
-    GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" git clone --depth 1 --branch ${branch} ${cloneUrl} ${repoPath}
+    git clone --depth 1 --branch ${branch} ${cloneUrl} ${repoPath}
 
     # Add safe directory
     git config --global --add safe.directory ${repoPath}
@@ -162,7 +161,7 @@ async function cloneRepository(container, repoInfo) {
   `;
 
   try {
-    // Run as root to ensure SSH key access
+    // Run as root to ensure directory creation permissions
     await dockerExec(container, cloneScript, 'root');
     console.log(`Successfully cloned ${cloneUrl}`);
   } catch (err) {
@@ -349,95 +348,46 @@ async function buildPreparedImage(config, tag, extraRepos) {
       throw new Error(`Container exited unexpectedly:\n${logs}`);
     }
 
-    // Setup SSH authentication BEFORE cloning repositories
-    console.log('Setting up SSH authentication...');
+    // Setup Git credential authentication BEFORE cloning repositories
+    console.log('Setting up Git authentication...');
     
-    // Find all available SSH keys
-    const sharedDir = path.join(__dirname, 'shared');
-    const sshKeys = ['github_deploy_key', 'github_deploy_key_county_fence', 'github_deploy_key_discourse_calendar'];
-    const availableKeys = [];
-    
-    for (const keyName of sshKeys) {
-      const keyPath = path.join(sharedDir, keyName);
-      if (await fileExists(keyPath)) {
-        availableKeys.push(keyName);
-        // Copy SSH key to container
-        await copyFileToContainer(tempContainer, keyPath, `/tmp/${keyName}`, 'root');
-        await copyFileToContainer(tempContainer, `${keyPath}.pub`, `/tmp/${keyName}.pub`, 'root');
-      }
-    }
-    
-    if (availableKeys.length > 0) {
-      // Create SSH config mapping repositories to specific keys
-      let sshConfig = 'Host github.com\n  HostName github.com\n  User git\n  StrictHostKeyChecking no\n\n';
+    const gitAuthSetup = `
+      echo "Setting up Git credential authentication..."
       
-      sshConfig += 'Host github-county-fence\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/github_deploy_key_county_fence\n  StrictHostKeyChecking no\n\n';
-      
-      sshConfig += 'Host github-discourse-calendar\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/github_deploy_key_discourse_calendar\n  StrictHostKeyChecking no\n\n';
-      
-      // Setup SSH for both root and container user
-      const sshSetup = `
-        echo "Setting up SSH for GitHub access..."
+      # Configure git credential helper to use environment token
+      if [ -n "\$GITHUB_TOKEN" ]; then
+        echo "GitHub token detected, configuring Git credentials..."
         
-        # Setup SSH for root
-        mkdir -p /root/.ssh
+        # Set up credential helper for GitHub
+        git config --global credential.helper store
         
-        # Copy all available SSH keys
-        ${availableKeys.map(key => `cp /tmp/${key} /root/.ssh/${key} && chmod 600 /root/.ssh/${key}`).join('\n        ')}
+        # Create credentials file with token
+        mkdir -p /root/.config/git
+        echo "https://token:\$GITHUB_TOKEN@github.com" > /root/.config/git/credentials
+        chmod 600 /root/.config/git/credentials
         
-        # Create SSH config
-        cat > /root/.ssh/config << 'SSH_CONFIG_EOF'
-${sshConfig}SSH_CONFIG_EOF
-        chmod 600 /root/.ssh/config
-        
-        echo "Getting GitHub host keys..."
-        ssh-keyscan -t rsa,ecdsa,ed25519 github.com > /root/.ssh/known_hosts 2>/dev/null || {
-          echo "ssh-keyscan failed, using manual known_hosts entry"
-          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > /root/.ssh/known_hosts
-        }
-        
-        # Configure git to prefer SSH
-        git config --global url."git@github.com:".insteadOf "https://github.com/"
-        
-        # Setup for container user if different
+        # Also set up for container user if different
         if [ "discourse" != "root" ]; then
-          echo "Setting up SSH for discourse user..."
-          mkdir -p /home/discourse/.ssh
-          
-          # Copy all SSH keys and config to user
-          ${availableKeys.map(key => `cp /root/.ssh/${key} /home/discourse/.ssh/${key}`).join('\n          ')}
-          cp /root/.ssh/config /home/discourse/.ssh/config
-          cp /root/.ssh/known_hosts /home/discourse/.ssh/known_hosts
-          chown -R discourse:discourse /home/discourse/.ssh
-          ${availableKeys.map(key => `chmod 600 /home/discourse/.ssh/${key}`).join('\n          ')}
-          chmod 600 /home/discourse/.ssh/config
+          echo "Setting up Git credentials for discourse user..."
+          mkdir -p /home/discourse/.config/git
+          echo "https://token:\$GITHUB_TOKEN@github.com" > /home/discourse/.config/git/credentials
+          chown -R discourse:discourse /home/discourse/.config
+          chmod 600 /home/discourse/.config/git/credentials
         fi
         
-        # Test SSH connections
-        echo "Testing SSH connection to GitHub as root..."
-        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -T git@github.com 2>&1 || echo "Root SSH test exit code: $?"
-        
-        # Test as discourse user if different
-        if [ "discourse" != "root" ]; then
-          echo "Testing SSH connection to GitHub as discourse..."
-          sudo -u discourse ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -T git@github.com 2>&1 || echo "Discourse SSH test exit code: $?"
-        fi
-        
-        # Clean up temp files
-        rm -f /tmp/github_deploy_key*
-        
-        echo "SSH setup completed successfully"
-      `;
-      
-      try {
-        const sshResult = await dockerExec(tempContainer, sshSetup);
-        console.log('SSH setup completed:', sshResult);
-      } catch (sshError) {
-        console.error('SSH setup failed:', sshError.message);
-        throw sshError;
-      }
-    } else {
-      console.warn('No SSH keys found - repository access may fail');
+        echo "Git authentication configured successfully"
+      else
+        echo "No GITHUB_TOKEN found - will attempt anonymous access"
+        echo "For private repositories, set GITHUB_TOKEN environment variable"
+      fi
+    `;
+    
+    try {
+      const authResult = await dockerExec(tempContainer, gitAuthSetup);
+      console.log('Git authentication setup completed');
+    } catch (authError) {
+      console.error('Git authentication setup failed:', authError.message);
+      // Don't throw - we can still try anonymous access
     }
 
     // Clone repositories from config
@@ -1794,7 +1744,7 @@ EXAMPLES:
 async function checkInitializationStatus() {
   const status = {
     githubApp: false,
-    sshKey: false,
+    githubToken: false,
     docker: false,
     claude: false,
     completedSteps: 0,
@@ -1807,10 +1757,9 @@ async function checkInitializationStatus() {
     status.githubApp = pemFiles.length > 0;
     if (status.githubApp) status.completedSteps++;
 
-    // Check for SSH keys
-    const sshKeyPath = path.join(__dirname, 'shared/github_deploy_key');
-    status.sshKey = await fileExists(sshKeyPath);
-    if (status.sshKey) status.completedSteps++;
+    // Check for GitHub Token
+    status.githubToken = !!process.env.GITHUB_TOKEN;
+    if (status.githubToken) status.completedSteps++;
 
     // Check Docker
     try {
@@ -1894,7 +1843,7 @@ async function runInitialization() {
   console.log(`${status.docker ? '✅' : '❌'} Docker: ${status.docker ? 'Working' : 'Not accessible'}`);
   console.log(`${status.claude ? '✅' : '❌'} Claude Code: ${status.claude ? 'Installed' : 'Not found'}`);
   console.log(`${status.githubApp ? '✅' : '❌'} GitHub App: ${status.githubApp ? 'Configured' : 'Not configured'}`);
-  console.log(`${status.sshKey ? '✅' : '❌'} SSH Keys: ${status.sshKey ? 'Found' : 'Not found'}`);
+  console.log(`${status.githubToken ? '✅' : '❌'} GitHub Token: ${status.githubToken ? 'Set' : 'Not set'}`);
   console.log('');
   
   if (!status.docker || !status.claude) {
@@ -1905,7 +1854,7 @@ async function runInitialization() {
     return;
   }
   
-  if (status.githubApp && status.sshKey) {
+  if (status.githubApp && status.githubToken) {
     console.log(colors.green('✅ All setup complete! You\'re ready to use Claude Habitat.'));
     return;
   }
@@ -1985,40 +1934,54 @@ async function runInitialization() {
       console.log('');
     }
     
-    // SSH Key setup  
-    if (!status.sshKey) {
-      console.log(colors.yellow('=== Step 2: SSH Key Setup ==='));
+    // GitHub Token setup  
+    if (!status.githubToken) {
+      console.log(colors.yellow('=== Step 2: GitHub Token Setup ==='));
       console.log('This enables Claude to clone and push to private repositories.\n');
       
-      const proceed = await ask('Ready to set up SSH keys? [Y/n]: ');
+      const proceed = await ask('Ready to set up GitHub token? [Y/n]: ');
       if (proceed.toLowerCase() !== 'n' && proceed.toLowerCase() !== 'no') {
-        console.log('Generating SSH key...');
+        console.log('Setting up GitHub Personal Access Token...\n');
         
-        const keyPath = path.join(__dirname, 'shared/github_deploy_key');
+        console.log('Creating a GitHub Personal Access Token:');
+        console.log('1. Go to https://github.com/settings/tokens');
+        console.log('2. Click "Generate new token" → "Fine-grained personal access token"');
+        console.log('3. Set expiration and select repositories you want access to');
+        console.log('4. Set permissions:');
+        console.log('   - Contents: Read and Write');
+        console.log('   - Pull requests: Read and Write');
+        console.log('   - Metadata: Read');
+        console.log('5. Click "Generate token"');
+        console.log('6. Copy the token (it starts with "github_pat_")');
+        console.log('');
+        
         try {
-          await execAsync(`ssh-keygen -t ed25519 -f "${keyPath}" -N "" -C "claude-habitat"`);
-          await execAsync(`chmod 600 "${keyPath}"`);
-          await execAsync(`chmod 644 "${keyPath}.pub"`);
+          const { spawn } = require('child_process');
+          const url = 'https://github.com/settings/tokens?type=beta';
           
-          console.log(colors.green('✅ SSH key generated successfully!'));
-          console.log('\nPublic key to add to GitHub repositories:');
-          console.log(colors.yellow('━'.repeat(60)));
-          
-          const publicKey = await fs.readFile(`${keyPath}.pub`, 'utf8');
-          console.log(publicKey.trim());
-          
-          console.log(colors.yellow('━'.repeat(60)));
-          console.log('\nFor each repository you want to access:');
-          console.log('1. Go to Repository Settings → Deploy keys');
-          console.log('2. Click "Add deploy key"');
-          console.log('3. Paste the public key above');
-          console.log('4. Check "Allow write access" if Claude needs to push');
-          console.log('5. Click "Add key"');
-          console.log('\nThis gives access to that specific repository.');
-          
-        } catch (err) {
-          console.log(colors.red(`❌ Failed to generate SSH key: ${err.message}`));
+          if (process.platform === 'darwin') {
+            spawn('open', [url]);
+          } else if (process.platform === 'win32') {
+            spawn('start', [url], { shell: true });
+          } else {
+            spawn('xdg-open', [url]);
+          }
+          console.log(`Opening: ${url}`);
+        } catch {
+          console.log(`Please visit: https://github.com/settings/tokens?type=beta`);
         }
+        
+        console.log('\nAfter creating the token:');
+        console.log('Set the GITHUB_TOKEN environment variable:');
+        console.log('');
+        console.log(colors.green('# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)'));
+        console.log(colors.yellow('export GITHUB_TOKEN="your_token_here"'));
+        console.log('');
+        console.log(colors.green('# Or set for current session'));
+        console.log(colors.yellow('export GITHUB_TOKEN="your_token_here"'));
+        console.log('');
+        console.log('Then restart this initialization process.');
+        
       }
       console.log('');
     }

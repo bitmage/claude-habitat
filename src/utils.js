@@ -99,20 +99,6 @@ const parseCommands = (commandList) => {
   return commandList.filter(cmd => cmd && typeof cmd === 'string').map(cmd => cmd.replace(/^- /, ''));
 };
 
-// Repository to SSH key mapping
-const getSSHKeyForRepository = (repoUrl) => {
-  const keyMappings = {
-    'github.com/bitmage/county-fence-plugin': 'github_deploy_key_county_fence',
-    'github.com/bitmage/discourse-calendar': 'github_deploy_key_discourse_calendar'
-  };
-  
-  // Extract repository path from URL
-  const repoPath = repoUrl.replace(/^https?:\/\//, '').replace(/^git@/, '').replace(/\.git$/, '').replace(/:/, '/');
-  
-  // Return specific key or fallback to default
-  return keyMappings[repoPath] || 'github_deploy_key';
-};
-
 module.exports = {
   colors,
   omit,
@@ -121,6 +107,5 @@ module.exports = {
   findPemFiles,
   calculateCacheHash,
   parseRepoSpec,
-  getSSHKeyForRepository,
   parseCommands
 };
