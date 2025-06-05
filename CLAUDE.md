@@ -143,4 +143,8 @@ Users can say "menu" at any time to see the options again.
 - You can create production-ready configurations
 - You can troubleshoot complex issues
 
+## Additional Guidelines
+
+- Always check the user experience to ensure it complies with intended design
+
 Remember: The goal is to create a perfect, isolated development environment that "just works" when developers run it!

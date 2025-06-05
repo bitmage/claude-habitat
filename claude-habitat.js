@@ -8,51 +8,6 @@ const { exec } = require('child_process');
 const execAsync = promisify(exec);
 const yaml = require('js-yaml');
 
-// Polyfill fetch for older Node.js versions
-let fetch;
-try {
-  fetch = globalThis.fetch;
-} catch {
-  // Fallback for Node.js < 18
-  fetch = async (url, options) => {
-    const https = require('https');
-    const http = require('http');
-    const urlModule = require('url');
-    
-    return new Promise((resolve, reject) => {
-      const parsedUrl = urlModule.parse(url);
-      const lib = parsedUrl.protocol === 'https:' ? https : http;
-      
-      const requestOptions = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port,
-        path: parsedUrl.path,
-        method: options?.method || 'GET',
-        headers: options?.headers || {}
-      };
-      
-      const req = lib.request(requestOptions, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          resolve({
-            ok: res.statusCode >= 200 && res.statusCode < 300,
-            status: res.statusCode,
-            json: () => Promise.resolve(JSON.parse(data))
-          });
-        });
-      });
-      
-      req.on('error', reject);
-      
-      if (options?.body) {
-        req.write(options.body);
-      }
-      
-      req.end();
-    });
-  };
-}
 
 // Import modules
 const { colors, sleep, fileExists, findPemFiles, calculateCacheHash, parseRepoSpec, parseCommands } = require('./src/utils');
@@ -90,7 +45,7 @@ async function runHabitat(configPath, extraRepos = []) {
     await buildPreparedImage(config, preparedTag, extraRepos);
   }
 
-  // Parse environment variables and add GITHUB_TOKEN if available
+  // Parse environment variables
   const envVars = [];
   if (config.environment && Array.isArray(config.environment)) {
     for (const env of config.environment) {
@@ -99,14 +54,6 @@ async function runHabitat(configPath, extraRepos = []) {
         envVars.push(cleanEnv);
       }
     }
-  }
-  
-  // Add GITHUB_TOKEN if available in environment
-  if (process.env.GITHUB_TOKEN) {
-    envVars.push(`GITHUB_TOKEN=${process.env.GITHUB_TOKEN}`);
-    console.log('GitHub token detected and will be passed to container');
-  } else {
-    console.log('No GITHUB_TOKEN found - private repositories may not be accessible');
   }
 
   // Run the container
@@ -182,17 +129,13 @@ async function cloneRepository(container, repoInfo) {
     # Ensure parent directory exists
     mkdir -p $(dirname ${repoPath})
 
-    # Test GitHub token authentication
-    echo "=== GitHub Token Authentication Verification ==="
-    if [ -n "\$GITHUB_TOKEN" ]; then
-      echo "GitHub token: Available (length: \${#GITHUB_TOKEN})"
-      
-      # Test token access to repository
-      echo "Testing repository access with token..."
-      curl -s -H "Authorization: token \$GITHUB_TOKEN" https://api.github.com/repos/\$(echo ${cloneUrl} | sed 's|https://github.com/||' | sed 's|\.git||') | head -10
-      echo "API test completed"
+    # Test GitHub App authentication
+    echo "=== GitHub App Authentication Verification ==="
+    if [ -f /tmp/github-app-key.pem ]; then
+      echo "GitHub App: Available"
+      echo "GitHub App authentication will be used for repository access"
     else
-      echo "GitHub token: NOT SET - will try anonymous access"
+      echo "GitHub App: NOT CONFIGURED - will try anonymous access"
     fi
 
     # Clone the repository using HTTPS
@@ -394,46 +337,29 @@ async function buildPreparedImage(config, tag, extraRepos) {
       throw new Error(`Container exited unexpectedly:\n${logs}`);
     }
 
-    // Setup Git credential authentication BEFORE cloning repositories
+    // Setup Git authentication using GitHub App BEFORE cloning repositories
     console.log('Setting up Git authentication...');
     
-    const gitAuthSetup = `
-      echo "Setting up Git credential authentication..."
+    if (await hasGitHubAppAuth()) {
+      console.log('Configuring GitHub App authentication...');
       
-      # Configure git credential helper to use environment token
-      if [ -n "\$GITHUB_TOKEN" ]; then
-        echo "GitHub token detected, configuring Git credentials..."
+      const gitAuthSetup = `
+        echo "Setting up GitHub App authentication..."
         
-        # Set up credential helper for GitHub
-        git config --global credential.helper store
-        
-        # Create credentials file with token
-        mkdir -p /root/.config/git
-        echo "https://token:\$GITHUB_TOKEN@github.com" > /root/.config/git/credentials
-        chmod 600 /root/.config/git/credentials
-        
-        # Also set up for container user if different
-        if [ "discourse" != "root" ]; then
-          echo "Setting up Git credentials for discourse user..."
-          mkdir -p /home/discourse/.config/git
-          echo "https://token:\$GITHUB_TOKEN@github.com" > /home/discourse/.config/git/credentials
-          chown -R discourse:discourse /home/discourse/.config
-          chmod 600 /home/discourse/.config/git/credentials
-        fi
-        
-        echo "Git authentication configured successfully"
-      else
-        echo "No GITHUB_TOKEN found - will attempt anonymous access"
-        echo "For private repositories, set GITHUB_TOKEN environment variable"
-      fi
-    `;
-    
-    try {
-      const authResult = await dockerExec(tempContainer, gitAuthSetup);
-      console.log('Git authentication setup completed');
-    } catch (authError) {
-      console.error('Git authentication setup failed:', authError.message);
-      // Don't throw - we can still try anonymous access
+        # GitHub App authentication will be handled by the app itself
+        # No additional git credential setup needed for app-based auth
+        echo "GitHub App authentication configured"
+      `;
+      
+      try {
+        await dockerExec(tempContainer, gitAuthSetup);
+        console.log('Git authentication setup completed');
+      } catch (authError) {
+        console.error('Git authentication setup failed:', authError.message);
+        // Don't throw - continue with the build
+      }
+    } else {
+      console.log('No GitHub App configured - public repositories only');
     }
 
     // Clone repositories from config
@@ -1544,9 +1470,6 @@ EXAMPLES:
       // Pre-flight repository access check
       console.log('Pre-flight check...');
       const config = await loadConfig(options.configPath);
-      
-      // Ensure GitHub authentication for repository operations
-      await ensureGitHubAuthentication(config.repositories);
       const problemRepos = [];
       
       if (config.repositories && Array.isArray(config.repositories)) {
@@ -1574,55 +1497,23 @@ EXAMPLES:
         const writeRepos = problemRepos.filter(repo => repo.accessMode === 'write');
         const readRepos = problemRepos.filter(repo => repo.accessMode === 'read');
         
-        // Show write repository issues (more important)
-        if (writeRepos.length > 0) {
-          console.log(colors.yellow('⚠️ Write access issues for development repositories:'));
+        // Show repository access issues
+        if (problemRepos.length > 0) {
+          console.log(colors.yellow('⚠️ Repository access issues:'));
           
-          writeRepos.forEach(repo => {
-            console.log(colors.yellow(`\n   ${repo.url}:`));
-            if (repo.issues) {
-              repo.issues.forEach(issue => {
-                console.log(colors.red(`     - ${issue.type === 'git' ? 'Git' : 'GitHub API'}: ${issue.error}`));
-                console.log(colors.green(`       → ${issue.resolution}`));
-              });
-            }
+          problemRepos.forEach(repo => {
+            console.log(colors.yellow(`\n   ${repo.url}: ${repo.reason}`));
           });
         }
         
-        // Show read repository issues
-        if (readRepos.length > 0) {
-          console.log(colors.yellow('\n⚠️ Read access issues for dependency repositories:'));
-          readRepos.forEach(repo => {
-            console.log(colors.yellow(`   - ${repo.url}: ${repo.reason}`));
-          });
-        }
-        
-        // Show deploy key if any repos need it
-        const needsDeployKey = problemRepos.some(repo => repo.needsDeployKey);
-        if (needsDeployKey) {
-          console.log('\n' + colors.green('SSH Deploy Key (add to repositories that need it):'));
-          console.log(colors.yellow('━'.repeat(80)));
-          
-          const sshPublicKey = await fs.readFile(path.join(__dirname, 'shared/github_deploy_key.pub'), 'utf8');
-          console.log(sshPublicKey.trim());
-          
-          console.log(colors.yellow('━'.repeat(80)));
-          console.log('\nTo add deploy key:');
-          console.log('1. Go to GitHub repository → Settings → Deploy keys');
-          console.log('2. Click "Add deploy key"');
-          console.log('3. Title: "Claude Habitat Deploy Key"');
-          console.log('4. Paste the key above');
-          console.log('5. ☑️ Check "Allow write access" (for development repos)');
-          console.log('6. Click "Add key"\n');
-        }
-        
-        // Show GitHub CLI instructions if needed
-        const needsGitHubCli = problemRepos.some(repo => repo.needsGitHubCli);
-        if (needsGitHubCli) {
-          console.log(colors.green('\nGitHub CLI Setup:'));
-          console.log('1. Run: gh auth login');
-          console.log('2. Follow the prompts to authenticate');
-          console.log('3. GitHub CLI will handle API access for PR creation\n');
+        // Show GitHub App setup if repos need it
+        const needsGitHubApp = problemRepos.some(repo => repo.needsGitHubApp);
+        if (needsGitHubApp) {
+          console.log('\n' + colors.green('GitHub App Configuration Required:'));
+          console.log('1. Run: ./claude-habitat --init');
+          console.log('2. Follow GitHub App setup instructions');
+          console.log('3. Install the app on your repositories');
+          console.log('4. Repository access will be provided by the GitHub App\n');
         }
         
         const readline = require('readline');
@@ -1635,7 +1526,7 @@ EXAMPLES:
         const readOnlyPrompt = writeRepoCount > 0 ? `\n[s] Set failing write repositories to read-only` : '';
         
         const choice = await new Promise(resolve => {
-          rl.question(`Would you like to:\n[c] Continue anyway (may fail during build)\n[f] Fix authentication setup${readOnlyPrompt}\n[m] Go back to main menu\nChoice: `, answer => {
+          rl.question(`Would you like to:\n[c] Continue anyway (may fail during build)\n[f] Fix GitHub App setup\n[m] Go back to main menu\nChoice: `, answer => {
             rl.close();
             resolve(answer.trim().toLowerCase());
           });
@@ -1679,59 +1570,9 @@ EXAMPLES:
           // Continue with habitat launch
         } else if (choice === 'f') {
           await runInitialization();
-          
-          // After initialization, offer next steps
-          const readline2 = require('readline');
-          const rl2 = readline2.createInterface({
-            input: process.stdin,
-            output: process.stdout
-          });
-          
-          const nextChoice = await new Promise(resolve => {
-            rl2.question('\nWould you like to:\n[r] Run this habitat now\n[t] Try the repository check again\n[m] Go back to main menu\nChoice: ', answer => {
-              rl2.close();
-              resolve(answer.trim().toLowerCase());
-            });
-          });
-          
-          if (nextChoice === 'r') {
-            console.log('Continuing with habitat startup...\n');
-            // Continue with habitat launch
-          } else if (nextChoice === 't') {
-            console.log('Retrying repository access check...\n');
-            // Re-run the pre-flight check
-            const retryProblemRepos = [];
-            if (config.repositories && Array.isArray(config.repositories)) {
-              for (const repo of config.repositories) {
-                if (repo.url) {
-                  const accessMode = repo.access || 'write';
-                  const result = await testRepositoryAccess(repo.url, accessMode);
-                  if (!result.accessible) {
-                    retryProblemRepos.push({ url: repo.url, reason: result.reason, accessMode: accessMode });
-                  }
-                }
-              }
-            }
-            
-            if (retryProblemRepos.length > 0) {
-              console.log(colors.red('⚠️ Still having repository access issues:'));
-              retryProblemRepos.forEach(repo => {
-                console.log(colors.red(`   - ${repo.url} (${repo.reason})`));
-              });
-              console.log('\nContinuing anyway...\n');
-            } else {
-              console.log(colors.green('✅ All repositories now accessible!'));
-              console.log('Continuing with habitat startup...\n');
-            }
-            // Continue with habitat launch
-          } else {
-            console.log('Returning to main menu...');
-            // Return to main menu by restarting
-            const originalArgv = process.argv;
-            process.argv = [process.argv[0], process.argv[1]]; // Reset to just script name
-            await main();
-            return;
-          }
+          console.log('Returning to main menu after initialization...');
+          await returnToMainMenu();
+          return;
         } else if (choice === 'm') {
           console.log('Returning to main menu...');
           // Return to main menu by restarting
@@ -1796,7 +1637,7 @@ async function checkInitializationStatus() {
     docker: false,
     claude: false,
     completedSteps: 0,
-    totalSteps: 3  // Reduced from 4 - GitHub token is now automatic
+    totalSteps: 3
   };
 
   try {
@@ -1804,9 +1645,6 @@ async function checkInitializationStatus() {
     const pemFiles = await findPemFiles(path.join(__dirname, 'shared'));
     status.githubApp = pemFiles.length > 0;
     if (status.githubApp) status.completedSteps++;
-
-    // GitHub Token is now automatic/on-demand - not a required setup step
-    status.githubToken = !!process.env.GITHUB_TOKEN; // Still track it but don't count
 
     // Check Docker
     try {
@@ -1833,165 +1671,10 @@ async function checkInitializationStatus() {
   return status;
 }
 
-// Automatic GitHub token generation using device flow
-async function generateGitHubTokenAutomatically() {
-  console.log('\nStarting GitHub device authentication...');
-  
-  try {
-    // Step 1: Request device code
-    const deviceResponse = await fetch('https://github.com/login/device/code', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        client_id: 'Iv1.b507a08c87ecfe98', // GitHub CLI client ID - publicly available
-        scope: 'repo'
-      })
-    });
-    
-    if (!deviceResponse.ok) {
-      throw new Error(`Device code request failed: ${deviceResponse.status}`);
-    }
-    
-    const deviceData = await deviceResponse.json();
-    const { device_code, user_code, verification_uri, expires_in, interval } = deviceData;
-    
-    // Step 2: Show user code and open browser
-    console.log('\n' + colors.green('=== GitHub Authentication ==='));
-    console.log(`1. Copy this code: ${colors.yellow(user_code)}`);
-    console.log(`2. Visit: ${verification_uri}`);
-    console.log('3. Paste the code and authorize "GitHub CLI"');
-    console.log('\nWaiting for authorization...');
-    
-    // Open browser automatically
-    try {
-      const { spawn } = require('child_process');
-      if (process.platform === 'darwin') {
-        spawn('open', [verification_uri]);
-      } else if (process.platform === 'win32') {
-        spawn('start', [verification_uri], { shell: true });
-      } else {
-        spawn('xdg-open', [verification_uri]);
-      }
-    } catch {
-      // Browser opening failed, that's ok
-    }
-    
-    // Step 3: Poll for token
-    const startTime = Date.now();
-    const timeout = expires_in * 1000;
-    
-    while (Date.now() - startTime < timeout) {
-      await sleep(interval * 1000);
-      
-      try {
-        const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            client_id: 'Iv1.b507a08c87ecfe98',
-            device_code: device_code,
-            grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-          })
-        });
-        
-        if (!tokenResponse.ok) {
-          continue; // Keep polling
-        }
-        
-        const tokenData = await tokenResponse.json();
-        
-        if (tokenData.error) {
-          if (tokenData.error === 'authorization_pending') {
-            process.stdout.write('.');
-            continue; // Keep waiting
-          } else if (tokenData.error === 'slow_down') {
-            await sleep(5000); // Wait longer
-            continue;
-          } else {
-            throw new Error(`Authorization failed: ${tokenData.error_description || tokenData.error}`);
-          }
-        }
-        
-        if (tokenData.access_token) {
-          console.log('\n' + colors.green('✅ Authentication successful!'));
-          return tokenData.access_token;
-        }
-        
-      } catch (pollError) {
-        console.warn(`Poll error: ${pollError.message}`);
-        continue; // Keep trying
-      }
-    }
-    
-    throw new Error('Authentication timed out');
-    
-  } catch (error) {
-    throw new Error(`GitHub authentication failed: ${error.message}`);
-  }
-}
-
-async function manualTokenSetupInstructions() {
-  console.log('\nManual GitHub token setup:');
-  console.log('1. Go to https://github.com/settings/tokens');
-  console.log('2. Click "Generate new token" → "Fine-grained personal access token"');
-  console.log('3. Set permissions: Contents (Read/Write), Pull requests (Read/Write), Metadata (Read)');
-  console.log('4. Set GITHUB_TOKEN environment variable with the generated token');
-}
-
-// Check if we need to authenticate for repository operations
-async function ensureGitHubAuthentication(repositories) {
-  if (process.env.GITHUB_TOKEN) {
-    return true; // Already authenticated
-  }
-  
-  // Check if any repositories require authentication
-  const needsAuth = repositories && repositories.some(repo => {
-    return repo.access === 'write' || 
-           (repo.url && repo.url.includes('github.com') && !repo.url.includes('github.com/discourse/discourse'));
-  });
-  
-  if (!needsAuth) {
-    return true; // No authentication needed for public repos
-  }
-  
-  console.log(colors.yellow('\n🔐 GitHub authentication required for repository access'));
-  const readline = require('readline');
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  
-  const proceed = await new Promise(resolve => {
-    rl.question('Authenticate with GitHub now? [Y/n]: ', answer => {
-      rl.close();
-      resolve(answer.trim().toLowerCase());
-    });
-  });
-  
-  if (proceed === 'n' || proceed === 'no') {
-    console.log('Continuing without authentication - some repositories may not be accessible');
-    return false;
-  }
-  
-  try {
-    const token = await generateGitHubTokenAutomatically();
-    if (token) {
-      process.env.GITHUB_TOKEN = token;
-      console.log(colors.green('✅ Authentication successful!'));
-      return true;
-    }
-  } catch (err) {
-    console.error(colors.red(`Authentication failed: ${err.message}`));
-    console.log('Continuing without authentication...');
-  }
-  
-  return false;
+// GitHub App authentication check
+async function hasGitHubAppAuth() {
+  const pemFiles = await findPemFiles(path.join(__dirname, 'shared'));
+  return pemFiles.length > 0;
 }
 
 async function checkHabitatRepositories(habitatsDir) {
@@ -2051,7 +1734,6 @@ async function runInitialization() {
   console.log(`${status.docker ? '✅' : '❌'} Docker: ${status.docker ? 'Working' : 'Not accessible'}`);
   console.log(`${status.claude ? '✅' : '❌'} Claude Code: ${status.claude ? 'Installed' : 'Not found'}`);
   console.log(`${status.githubApp ? '✅' : '❌'} GitHub App: ${status.githubApp ? 'Configured' : 'Not configured'}`);
-  console.log('\nGitHub Token: Automatic authentication when needed');
   console.log('');
   
   if (!status.docker || !status.claude) {
@@ -2064,7 +1746,6 @@ async function runInitialization() {
   
   if (status.githubApp) {
     console.log(colors.green('✅ All setup complete! You\'re ready to use Claude Habitat.'));
-    console.log('\nGitHub authentication will happen automatically when needed.');
     return;
   }
   
@@ -2143,11 +1824,9 @@ async function runInitialization() {
       console.log('');
     }
     
-    // GitHub Token is now automatic - no manual setup needed
-    console.log(colors.yellow('=== GitHub Authentication ==='));
-    console.log('GitHub authentication is now automatic!');
-    console.log('When you select a habitat that needs private repository access,');
-    console.log('you\'ll be prompted to authenticate with GitHub.');
+    console.log(colors.yellow('=== GitHub App Setup Complete ==='));
+    console.log('GitHub App provides repository access for habitats.');
+    console.log('Private repositories will be accessible using the configured app.');
     console.log('');
     
     // Final status check
