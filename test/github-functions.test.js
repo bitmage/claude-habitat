@@ -45,14 +45,16 @@ test('testGitAccess with mock SSH key', async () => {
 });
 
 test('testGitHubCliAccess handles various scenarios', async () => {
-  // Test with likely non-existent repository
-  const result = await testGitHubCliAccess('definitely-not-a-real-user/definitely-not-a-real-repo');
+  // Test with likely non-existent repository using system gh
+  const ghPath = path.join(__dirname, '../system/tools/bin/gh');
+  const result = await testGitHubCliAccess('definitely-not-a-real-user/definitely-not-a-real-repo', ghPath);
   
   // Should fail, but gracefully
   assert.strictEqual(result.accessible, false);
   assert(result.error.includes('not logged into') || 
          result.error.includes('Could not resolve') || 
-         result.error.includes('GitHub CLI error'));
+         result.error.includes('GitHub CLI error') ||
+         result.error.includes('GitHub CLI not authenticated'));
 });
 
 test('testRepositoryAccess composition', async () => {

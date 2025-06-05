@@ -72,7 +72,20 @@ core_tools:
 1. **Static Binaries**: Tools are downloaded as pre-compiled static binaries
 2. **Version Resolution**: Automatically fetches latest versions from GitHub releases
 3. **Cross-Platform**: Works on any Linux distribution without package managers
-4. **Containerized**: Tools are available in the container's PATH at `/claude-habitat/shared/tools/bin`
+4. **Containerized**: Tools are available in the container's PATH at `/claude-habitat/system/tools/bin`
+5. **On-Demand**: Tools are downloaded during container build, not committed to git
+
+## Workflow for Updating System Tools
+
+### For Users
+- Tools are automatically installed during habitat creation
+- No manual intervention needed for basic usage
+
+### For Maintainers
+1. **Update tool versions**: Edit `tools.yaml` to change version or add new tools
+2. **Test locally**: Run `./install-tools.sh clean && ./install-tools.sh` to test
+3. **Commit configuration**: Only the YAML config files are committed, not binaries
+4. **CI/Integration**: Tools are downloaded fresh during each container build
 
 ## PATH Setup
 

@@ -55,6 +55,7 @@ When "Habitat" Claude runs in a container:
 - **`TERMINOLOGY.md`** - Complete domain model and concepts
 - **`GITHUB-AUTH.md`** - Authentication setup guide
 - **`TROUBLESHOOTING.md`** - Common issues and solutions
+- **`TOOLS-WORKFLOW.md`** - Managing system development tools
 
 ### `claude/` - "Meta" Claude Instructions
 - **`INSTRUCTIONS.md`** - Instructions for "Meta" Claude (maintenance, habitat creation)

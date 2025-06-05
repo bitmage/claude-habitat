@@ -336,47 +336,96 @@ list_tools() {
     echo
 }
 
+# Install specific tools by name
+install_specific_tools() {
+    local tools_to_install=("$@")
+    local installed_count=0
+    
+    for tool_name in "${tools_to_install[@]}"; do
+        log "Looking for tool: $tool_name"
+        
+        # Find tool in config and install it
+        local found=false
+        local current_tool=""
+        local tool_props=()
+        
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^TOOL_START:(.+)$ ]]; then
+                # Process previous tool if it matches
+                if [[ -n "$current_tool" && "$current_tool" == "$tool_name" ]]; then
+                    install_tool_from_props "$current_tool" "${tool_props[@]}"
+                    found=true
+                    ((installed_count++))
+                    break
+                fi
+                
+                # Start new tool
+                current_tool="${BASH_REMATCH[1]}"
+                tool_props=()
+            elif [[ "$line" =~ ^TOOL_PROP:([^:]+):([^:]+):(.*)$ ]]; then
+                local tool="${BASH_REMATCH[1]}"
+                local key="${BASH_REMATCH[2]}"
+                local value="${BASH_REMATCH[3]}"
+                
+                if [[ "$tool" == "$current_tool" ]]; then
+                    tool_props+=("$key:$value")
+                fi
+            fi
+        done < <(parse_yaml "$TOOLS_CONFIG" "tools")
+        
+        # Check last tool
+        if [[ -n "$current_tool" && "$current_tool" == "$tool_name" && "$found" == false ]]; then
+            install_tool_from_props "$current_tool" "${tool_props[@]}"
+            found=true
+            ((installed_count++))
+        fi
+        
+        if [[ "$found" == false ]]; then
+            error "Tool '$tool_name' not found in configuration"
+        fi
+    done
+    
+    log "Installed $installed_count of ${#tools_to_install[@]} requested tools"
+}
+
 # Main function
 main() {
     local command="${1:-install}"
     
     case "$command" in
         install)
-            log "Installing Claude Habitat tools..."
-            mkdir -p "$BIN_DIR"
-            
-            # Install core tools
-            log "Installing core tools..."
-            process_tools "core_tools" "$TOOLS_CONFIG"
-            
-            # Install user tools if config exists
-            if [[ -f "$USER_TOOLS_CONFIG" ]]; then
-                log "Installing user tools..."
-                process_tools "core_tools" "$USER_TOOLS_CONFIG"
-                process_tools "optional_tools" "$USER_TOOLS_CONFIG"
+            if [[ $# -eq 1 ]]; then
+                # Install all tools (only "install" command provided)
+                log "Installing all Claude Habitat tools..."
+                mkdir -p "$BIN_DIR"
+                process_tools "tools" "$TOOLS_CONFIG"
+                
+                # Install user tools if config exists
+                if [[ -f "$USER_TOOLS_CONFIG" ]]; then
+                    log "Installing user tools..."
+                    process_tools "tools" "$USER_TOOLS_CONFIG"
+                fi
+                
+                log "Tool installation complete!"
+                log "Tools installed in: $BIN_DIR"
+            else
+                # Install specific tools (shift past "install" command)
+                shift
+                log "Installing specific tools: $*"
+                mkdir -p "$BIN_DIR"
+                install_specific_tools "$@"
             fi
-            
-            log "Tool installation complete!"
-            log "Tools installed in: $BIN_DIR"
-            ;;
-            
-        install-optional)
-            log "Installing optional tools..."
-            mkdir -p "$BIN_DIR"
-            process_tools "optional_tools" "$TOOLS_CONFIG"
             ;;
             
         list)
             echo "Claude Habitat Tools Status"
             echo "=========================="
             echo
-            list_tools "$TOOLS_CONFIG" "core_tools"
-            list_tools "$TOOLS_CONFIG" "optional_tools"
+            list_tools "$TOOLS_CONFIG" "tools"
             
             if [[ -f "$USER_TOOLS_CONFIG" ]]; then
                 echo "User tools:"
-                list_tools "$USER_TOOLS_CONFIG" "core_tools"
-                list_tools "$USER_TOOLS_CONFIG" "optional_tools"
+                list_tools "$USER_TOOLS_CONFIG" "tools"
             fi
             ;;
             
@@ -393,11 +442,11 @@ main() {
             echo "Usage: $0 [command]"
             echo
             echo "Commands:"
-            echo "  install          Install core tools (default)"
-            echo "  install-optional Install optional tools"
-            echo "  list             List all available tools and status"
-            echo "  clean            Remove all installed tools"
-            echo "  help             Show this help"
+            echo "  install               Install all tools (default)"
+            echo "  install [tool1 tool2] Install specific tools"
+            echo "  list                  List all available tools and status"
+            echo "  clean                 Remove all installed tools"
+            echo "  help                  Show this help"
             echo
             echo "Environment variables:"
             echo "  DEBUG=1          Enable debug output"

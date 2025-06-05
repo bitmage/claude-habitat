@@ -1,7 +1,7 @@
 # Claude Habitat Tools Configuration
-# This file defines tools that will be available in all containers
+# This file defines development tools available in all containers
 
-core_tools:
+tools:
   # Essential search and navigation tools
   - name: rg
     description: "ripgrep - fast text search"
@@ -33,7 +33,6 @@ core_tools:
     binary: "gh"
     extract_path: "gh_{version}_linux_amd64/bin/gh"
 
-optional_tools:
   # Enhanced CLI tools
   - name: bat
     description: "bat - cat with syntax highlighting"
@@ -64,9 +63,6 @@ optional_tools:
 config:
   # Where to install tools (relative to this file)
   install_path: "./bin"
-  
-  # Whether to auto-install core tools
-  auto_install_core: true
   
   # Whether to check for updates
   check_updates: false

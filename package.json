@@ -8,7 +8,9 @@
   },
   "scripts": {
     "test": "node --test",
-    "test:watch": "node --test --watch"
+    "test:watch": "node --test --watch",
+    "test:integration": "node test/integration/repository-access.test.js",
+    "test:github-fix": "node test/github-system-tools.test.js"
   },
   "keywords": [
     "claude",

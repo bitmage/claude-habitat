@@ -48,13 +48,13 @@ async function testGitAccess(repoPath, sshKeyPath) {
 }
 
 // Pure function: test GitHub CLI access (function of gh auth status and repo path)
-async function testGitHubCliAccess(repoPath) {
+async function testGitHubCliAccess(repoPath, ghCommand = 'gh') {
   try {
     // Check if gh is authenticated
-    await execAsync('gh auth status', { timeout: 5000 });
+    await execAsync(`${ghCommand} auth status`, { timeout: 5000 });
     
     // Test repository access via gh CLI
-    await execAsync(`gh repo view ${repoPath}`, { timeout: 10000 });
+    await execAsync(`${ghCommand} repo view ${repoPath}`, { timeout: 10000 });
     
     return { accessible: true, error: null };
   } catch (err) {
@@ -62,13 +62,15 @@ async function testGitHubCliAccess(repoPath) {
       return { accessible: false, error: 'GitHub CLI not authenticated - run `gh auth login`' };
     } else if (err.message.includes('Could not resolve to a Repository')) {
       return { accessible: false, error: 'Repository not found or no access via GitHub CLI' };
+    } else if (err.message.includes('command not found')) {
+      return { accessible: false, error: `GitHub CLI not found at: ${ghCommand}` };
     }
     return { accessible: false, error: `GitHub CLI error: ${err.message}` };
   }
 }
 
 // Main function: compose pure functions to test repository access
-async function testRepositoryAccess(repoUrl, accessMode = 'write') {
+async function testRepositoryAccess(repoUrl, accessMode = 'write', options = {}) {
   try {
     const repoPath = parseRepoPath(repoUrl);
     if (!repoPath) {
@@ -76,6 +78,9 @@ async function testRepositoryAccess(repoUrl, accessMode = 'write') {
     }
     
     const sshKeyPath = path.join(__dirname, '../shared/github_deploy_key');
+    
+    // Use system tools gh if available, fallback to system gh
+    const ghCommand = options.ghCommand || path.join(__dirname, '../system/tools/bin/gh');
     
     // Test git access (needed for both read and write)
     const gitResult = await testGitAccess(repoPath, sshKeyPath);
@@ -88,7 +93,7 @@ async function testRepositoryAccess(repoUrl, accessMode = 'write') {
     }
     
     // Write mode: need both git and GitHub CLI access
-    const ghResult = await testGitHubCliAccess(repoPath);
+    const ghResult = await testGitHubCliAccess(repoPath, ghCommand);
     
     const issues = [];
     if (!gitResult.accessible) {

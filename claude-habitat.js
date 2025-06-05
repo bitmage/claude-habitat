@@ -846,6 +846,120 @@ The configuration should be complete and ready to use.
   }
 }
 
+// Tools management mode
+async function runToolsManagement() {
+  console.log(colors.green('\n=== Claude Habitat Tools Management ===\n'));
+  console.log('Manage development tools available in all containers.\n');
+
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  const ask = (question) => new Promise(resolve => {
+    rl.question(question, answer => resolve(answer.trim().toLowerCase()));
+  });
+
+  try {
+    while (true) {
+      console.log('Tools Management Options:\n');
+      console.log(`  ${colors.yellow('[1]')} Clean & reinstall all tools`);
+      console.log(`  ${colors.yellow('[2]')} List tool status`);
+      console.log(`  ${colors.yellow('[3]')} Reinstall specific tool`);
+      console.log(`  ${colors.yellow('[q]')} Back to main menu\n`);
+
+      const choice = await ask('Enter your choice: ');
+
+      if (choice === 'q') {
+        break;
+      } else if (choice === '1') {
+        await cleanAndReinstallAllTools();
+      } else if (choice === '2') {
+        await listToolStatus();
+      } else if (choice === '3') {
+        await reinstallSpecificTool();
+      } else {
+        console.log(colors.red('Invalid choice. Please try again.\n'));
+      }
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+// Clean and reinstall all tools
+async function cleanAndReinstallAllTools() {
+  console.log('\n' + colors.yellow('=== Clean & Reinstall All Tools ===\n'));
+  
+  const toolsDir = path.join(__dirname, 'system/tools');
+  
+  try {
+    console.log('Cleaning existing tools...');
+    await execAsync('cd "' + toolsDir + '" && ./install-tools.sh clean');
+    
+    console.log('Installing all tools...');
+    await execAsync('cd "' + toolsDir + '" && ./install-tools.sh install');
+    
+    console.log(colors.green('✅ All tools reinstalled successfully!\n'));
+  } catch (err) {
+    console.error(colors.red(`❌ Error reinstalling tools: ${err.message}\n`));
+  }
+}
+
+// List tool status
+async function listToolStatus() {
+  console.log('\n' + colors.yellow('=== Tool Status ===\n'));
+  
+  const toolsDir = path.join(__dirname, 'system/tools');
+  
+  try {
+    const { stdout } = await execAsync('cd "' + toolsDir + '" && ./install-tools.sh list');
+    console.log(stdout);
+  } catch (err) {
+    console.error(colors.red(`❌ Error listing tools: ${err.message}\n`));
+  }
+}
+
+// Reinstall specific tool
+async function reinstallSpecificTool() {
+  console.log('\n' + colors.yellow('=== Reinstall Specific Tool ===\n'));
+  
+  const toolsDir = path.join(__dirname, 'system/tools');
+  
+  try {
+    // First show available tools
+    const { stdout } = await execAsync('cd "' + toolsDir + '" && ./install-tools.sh list');
+    console.log('Available tools:\n');
+    console.log(stdout);
+    
+    const readline = require('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    const toolChoice = await new Promise(resolve => {
+      rl.question('Enter tool name to reinstall (or "q" to cancel): ', answer => {
+        rl.close();
+        resolve(answer.trim());
+      });
+    });
+
+    if (toolChoice === 'q' || toolChoice === '') {
+      console.log('Cancelled.\n');
+      return;
+    }
+
+    console.log(`Installing ${toolChoice}...`);
+    await execAsync(`cd "${toolsDir}" && ./install-tools.sh install ${toolChoice}`);
+    
+    console.log(colors.green(`✅ ${toolChoice} reinstalled successfully!\n`));
+  } catch (err) {
+    console.error(colors.red(`❌ Error reinstalling tool: ${err.message}\n`));
+  }
+}
+
 // Maintenance mode
 async function runMaintenanceMode() {
   console.log(colors.green('\n=== Claude Habitat Maintenance Mode ===\n'));
@@ -1264,6 +1378,7 @@ EXAMPLES:
     }
     console.log(`  ${colors.yellow('[s]')}tart   - Start last used configuration`);
     console.log(`  ${colors.yellow('[a]')}dd     - Create new configuration with AI assistance`);
+    console.log(`  ${colors.yellow('[t]')}ools   - Manage development tools`);
     console.log(`  ${colors.yellow('[m]')}aintain - Update/troubleshoot Claude Habitat itself`);
     console.log(`  ${colors.yellow('[c]')}lean   - Remove all Docker images`);
     console.log(`  ${colors.yellow('[h]')}elp    - Show usage information`);
@@ -1311,6 +1426,11 @@ EXAMPLES:
       // Add new configuration with AI
       await addNewConfiguration();
       process.exit(0);
+    } else if (choice === 't') {
+      // Tools management
+      await runToolsManagement();
+      await returnToMainMenu();
+      return;
     } else if (choice === 'm') {
       // Maintenance mode
       await runMaintenanceMode();
