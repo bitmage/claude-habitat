@@ -134,6 +134,14 @@ async function cloneRepository(container, repoInfo) {
     if [ -f /tmp/github-app-key.pem ]; then
       echo "GitHub App: Available"
       echo "GitHub App authentication will be used for repository access"
+      
+      # Test credential helper
+      echo "Testing credential helper..."
+      echo | /usr/local/bin/git-credential-github-app get | head -2
+      
+      # Check git config
+      echo "Git credential config:"
+      git config --global --list | grep credential || echo "No credential config found"
     else
       echo "GitHub App: NOT CONFIGURED - will try anonymous access"
     fi
@@ -343,20 +351,82 @@ async function buildPreparedImage(config, tag, extraRepos) {
     if (await hasGitHubAppAuth()) {
       console.log('Configuring GitHub App authentication...');
       
-      const gitAuthSetup = `
-        echo "Setting up GitHub App authentication..."
+      // Copy GitHub App private key to container
+      const pemFiles = await findPemFiles(path.join(__dirname, 'shared'));
+      if (pemFiles.length > 0) {
+        // Use the 2025-06-04 key that's referenced in the config
+        const pemFile = pemFiles.find(f => f.includes('2025-06-04')) || pemFiles[0];
+        console.log(`Copying GitHub App key: ${path.basename(pemFile)}`);
+        await copyFileToContainer(tempContainer, pemFile, '/tmp/github-app-key.pem', 'root');
         
-        # GitHub App authentication will be handled by the app itself
-        # No additional git credential setup needed for app-based auth
-        echo "GitHub App authentication configured"
-      `;
-      
-      try {
-        await dockerExec(tempContainer, gitAuthSetup);
-        console.log('Git authentication setup completed');
-      } catch (authError) {
-        console.error('Git authentication setup failed:', authError.message);
-        // Don't throw - continue with the build
+        // Extract GitHub App ID from config
+        const appIdEnv = config.environment?.find(env => env.includes('GITHUB_APP_ID='));
+        const appId = appIdEnv ? appIdEnv.split('=')[1] : '1357221'; // fallback to known value
+        
+        const gitAuthSetup = `
+          echo "Setting up GitHub App authentication..."
+          
+          # Install required tools for GitHub App authentication
+          apt-get update -qq && apt-get install -y jq curl openssl > /dev/null 2>&1
+          
+          # Generate GitHub App token once during setup
+          echo "Generating GitHub App token..."
+          header='{"alg":"RS256","typ":"JWT"}'
+          payload="{\\"iat\\":$(date +%s),\\"exp\\":$(($(date +%s) + 600)),\\"iss\\":\\"${appId}\\"}"
+          
+          header_b64=$(echo -n "$header" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
+          payload_b64=$(echo -n "$payload" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
+          signature=$(echo -n "$header_b64.$payload_b64" | openssl dgst -sha256 -sign /tmp/github-app-key.pem | base64 -w 0 | tr '+/' '-_' | tr -d '=')
+          jwt="$header_b64.$payload_b64.$signature"
+          
+          # Get installation token
+          installation_id=$(curl -s -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations" | jq -r '.[0].id')
+          
+          if [ "$installation_id" != "null" ] && [ -n "$installation_id" ]; then
+            token=$(curl -s -X POST -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations/$installation_id/access_tokens" | jq -r '.token')
+            
+            if [ "$token" != "null" ] && [ -n "$token" ]; then
+              echo "Got GitHub App token successfully"
+              
+              # Configure git with the token directly using credential store
+              echo "https://x-access-token:$token@github.com" > /root/.git-credentials
+              git config --global credential.helper store
+              git config --global credential."https://github.com".username x-access-token
+              
+              # Store token for later use
+              echo "$token" > /tmp/github-token
+              chmod 600 /tmp/github-token
+            else
+              echo "Failed to get GitHub App installation token"
+            fi
+          else
+            echo "Failed to get GitHub App installation"
+          fi
+          
+          echo "GitHub App authentication configured"
+        `;
+        
+        try {
+          await dockerExec(tempContainer, gitAuthSetup);
+          console.log('Git authentication setup completed');
+          
+          // Test the setup
+          console.log('Testing credential helper installation...');
+          const testResult = await dockerExec(tempContainer, `
+            echo "Checking git config..."
+            git config --global --list | grep credential || echo "No credential config found"
+            echo "Checking GitHub token..."
+            if [ -f /tmp/github-token ]; then
+              echo "Token available: $(cat /tmp/github-token | cut -c1-20)..."
+            else
+              echo "No token file found"
+            fi
+          `);
+          console.log('Credential helper test result:', testResult);
+        } catch (authError) {
+          console.error('Git authentication setup failed:', authError.message);
+          // Don't throw - continue with the build
+        }
       }
     } else {
       console.log('No GitHub App configured - public repositories only');
