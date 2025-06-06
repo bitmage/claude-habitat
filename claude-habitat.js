@@ -554,12 +554,18 @@ async function buildPreparedImage(config, tag, extraRepos) {
       }
     }
     
-    // Copy remaining shared files (user preferences)
-    const sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/habitat/shared`, true);
-    if (sharedFiles.length > 0) {
-      console.log('Copying shared files to container...');
-      for (const file of sharedFiles) {
-        await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
+    // Skip infrastructure setup if bypass mode is enabled
+    let sharedFiles = [];
+    if (config.claude?.bypass_habitat_construction) {
+      console.log('⏭️  Bypassing habitat infrastructure construction (self-contained mode)');
+    } else {
+      // Copy remaining shared files (user preferences)
+      sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/habitat/shared`, true);
+      if (sharedFiles.length > 0) {
+        console.log('Copying shared files to container...');
+        for (const file of sharedFiles) {
+          await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
+        }
       }
     }
 
@@ -743,59 +749,63 @@ EOF
       }
     }
     
-    // Copy remaining system files (infrastructure)
-    const systemFiles = await findFilesToCopy(systemDir, `${workDir}/habitat/system`, true);
-    if (systemFiles.length > 0) {
-      console.log('Copying system files to container...');
-      for (const file of systemFiles) {
-        await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
+    let systemFiles = [];
+    let filesToCopy = [];
+    if (!config.claude?.bypass_habitat_construction) {
+      // Copy remaining system files (infrastructure)
+      systemFiles = await findFilesToCopy(systemDir, `${workDir}/habitat/system`, true);
+      if (systemFiles.length > 0) {
+        console.log('Copying system files to container...');
+        for (const file of systemFiles) {
+          await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
+        }
+      }
+
+      // Shared files were already processed before authentication setup
+
+      // Copy additional files from habitat directory to local
+      const habitatDir = path.dirname(config._configPath);
+      filesToCopy = await findFilesToCopy(habitatDir, `${workDir}/habitat/local`);
+      if (filesToCopy.length > 0) {
+        console.log('Copying habitat files to container...');
+        for (const file of filesToCopy) {
+          await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
+        }
+      }
+
+      // Install Claude Habitat tools
+      const systemToolsScript = `${workDir}/habitat/system/tools/install-tools.sh`;
+      const sharedToolsScript = `${workDir}/habitat/shared/tools/install-tools.sh`;
+      
+      // Install system tools (core infrastructure)
+      if (systemFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
+        console.log('Installing system tools...');
+        try {
+          await dockerExec(tempContainer, `chmod +x ${systemToolsScript}`);
+          await dockerExec(tempContainer, `cd ${workDir}/habitat/system/tools && ./install-tools.sh install`);
+          console.log('✅ System tools installed successfully');
+        } catch (err) {
+          console.warn(`Warning: Failed to install system tools: ${err.message}`);
+          console.warn('Container will still work, but some development tools may be missing');
+        }
+      }
+      
+      // Install shared tools (user's personal tools)
+      if (sharedFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
+        console.log('Installing user tools...');
+        try {
+          await dockerExec(tempContainer, `chmod +x ${sharedToolsScript}`);
+          await dockerExec(tempContainer, `cd ${workDir}/habitat/shared/tools && ./install-tools.sh install`);
+          console.log('✅ User tools installed successfully');
+        } catch (err) {
+          console.warn(`Warning: Failed to install user tools: ${err.message}`);
+          console.warn('User tools not available, but system tools should work');
+        }
       }
     }
 
-    // Shared files were already processed before authentication setup
-
-    // Copy additional files from habitat directory to local
-    const habitatDir = path.dirname(config._configPath);
-    const filesToCopy = await findFilesToCopy(habitatDir, `${workDir}/habitat/local`);
-    if (filesToCopy.length > 0) {
-      console.log('Copying habitat files to container...');
-      for (const file of filesToCopy) {
-        await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
-      }
-    }
-
-    // Install Claude Habitat tools
-    const systemToolsScript = `${workDir}/habitat/system/tools/install-tools.sh`;
-    const sharedToolsScript = `${workDir}/habitat/shared/tools/install-tools.sh`;
-    
-    // Install system tools (core infrastructure)
-    if (systemFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
-      console.log('Installing system tools...');
-      try {
-        await dockerExec(tempContainer, `chmod +x ${systemToolsScript}`);
-        await dockerExec(tempContainer, `cd ${workDir}/habitat/system/tools && ./install-tools.sh install`);
-        console.log('✅ System tools installed successfully');
-      } catch (err) {
-        console.warn(`Warning: Failed to install system tools: ${err.message}`);
-        console.warn('Container will still work, but some development tools may be missing');
-      }
-    }
-    
-    // Install shared tools (user's personal tools)
-    if (sharedFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
-      console.log('Installing user tools...');
-      try {
-        await dockerExec(tempContainer, `chmod +x ${sharedToolsScript}`);
-        await dockerExec(tempContainer, `cd ${workDir}/habitat/shared/tools && ./install-tools.sh install`);
-        console.log('✅ User tools installed successfully');
-      } catch (err) {
-        console.warn(`Warning: Failed to install user tools: ${err.message}`);
-        console.warn('User tools not available, but system tools should work');
-      }
-    }
-
-    // Create concatenated CLAUDE.md instructions (unless disabled)
-    if (!config.claude?.disable_habitat_instructions) {
+    // Create concatenated CLAUDE.md instructions (unless disabled or bypassed)
+    if (!config.claude?.disable_habitat_instructions && !config.claude?.bypass_habitat_construction) {
       console.log('Setting up Claude instructions...');
       try {
         const systemClaudePath = path.join(__dirname, 'system/CLAUDE.md');
@@ -807,13 +817,23 @@ EOF
         
         // Add system base instructions (infrastructure)
         if (await fileExists(systemClaudePath)) {
-          const systemContent = await fs.readFile(systemClaudePath, 'utf8');
+          let systemContent = await fs.readFile(systemClaudePath, 'utf8');
+          // Update path references to use claude-habitat/ subdirectory
+          systemContent = systemContent.replace(/\.\/claude-habitat\//g, './claude-habitat/');
+          systemContent = systemContent.replace(/claude-habitat\/system\//g, 'claude-habitat/system/');
+          systemContent = systemContent.replace(/claude-habitat\/shared\//g, 'claude-habitat/shared/');
+          systemContent = systemContent.replace(/claude-habitat\/local\//g, 'claude-habitat/local/');
           claudeContent += systemContent;
         }
         
         // Add shared user preferences
         if (await fileExists(sharedClaudePath)) {
-          const sharedContent = await fs.readFile(sharedClaudePath, 'utf8');
+          let sharedContent = await fs.readFile(sharedClaudePath, 'utf8');
+          // Update path references to use claude-habitat/ subdirectory
+          sharedContent = sharedContent.replace(/\.\/claude-habitat\//g, './claude-habitat/');
+          sharedContent = sharedContent.replace(/claude-habitat\/system\//g, 'claude-habitat/system/');
+          sharedContent = sharedContent.replace(/claude-habitat\/shared\//g, 'claude-habitat/shared/');
+          sharedContent = sharedContent.replace(/claude-habitat\/local\//g, 'claude-habitat/local/');
           if (claudeContent.length > 0) {
             claudeContent += '\n\n---\n\n# User Preferences\n\n';
           }
@@ -822,7 +842,12 @@ EOF
         
         // Add habitat-specific instructions
         if (await fileExists(habitatClaudePath)) {
-          const habitatContent = await fs.readFile(habitatClaudePath, 'utf8');
+          let habitatContent = await fs.readFile(habitatClaudePath, 'utf8');
+          // Update path references to use claude-habitat/ subdirectory
+          habitatContent = habitatContent.replace(/\.\/claude-habitat\//g, './claude-habitat/');
+          habitatContent = habitatContent.replace(/claude-habitat\/system\//g, 'claude-habitat/system/');
+          habitatContent = habitatContent.replace(/claude-habitat\/shared\//g, 'claude-habitat/shared/');
+          habitatContent = habitatContent.replace(/claude-habitat\/local\//g, 'claude-habitat/local/');
           if (claudeContent.length > 0) {
             claudeContent += '\n\n---\n\n# Project-Specific Instructions\n\n';
           }

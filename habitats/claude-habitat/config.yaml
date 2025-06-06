@@ -52,10 +52,10 @@ container:
   init_command: /sbin/init
   startup_delay: 5
 
-# Filesystem verification structure
+# Filesystem verification structure (bypass mode - just the repository)
 verify-fs:
   required_files:
-    # Main claude-habitat source files
+    # Main claude-habitat source files at repository root
     - /workspace/src/.git/config
     - /workspace/src/CLAUDE.md
     - /workspace/src/README.md
@@ -68,17 +68,8 @@ verify-fs:
     - /workspace/src/habitats/discourse/config.yaml
     - /workspace/src/test/unit/claude-habitat.test.js
     - /workspace/src/node_modules/package.json
-    # Helper files in habitat subdirectory
-    - /workspace/habitat/system/CLAUDE.md
-    - /workspace/habitat/system/tools/tools.yaml
-    - /workspace/habitat/shared/CLAUDE.md
-    - /workspace/habitat/shared/config.yaml
-    - /workspace/habitat/local/CLAUDE.md
-    - /workspace/habitat/local/config.yaml
-    # Claude starts here
-    - /workspace/CLAUDE.md
 
-# Disable automatic Claude instruction generation
+# Bypass habitat infrastructure construction (claude-habitat is self-contained)
 claude:
   command: claude --dangerously-skip-permissions
-  disable_habitat_instructions: true
+  bypass_habitat_construction: true

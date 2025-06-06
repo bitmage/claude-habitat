@@ -28,20 +28,20 @@ environment:
 # Git repositories to clone
 repositories:
   - url: https://github.com/discourse/discourse
-    path: /src
+    path: /discourse
     branch: main
     shallow: true
     access: read  # Read-only dependency, not for active development
 
   # Plugins for active development
   - url: https://github.com/bitmage/county-fence-plugin
-    path: /src/plugins/county-fence
+    path: /discourse/plugins/county-fence
     branch: main
     shallow: true
     access: write # (default) - Active development with PRs
 
   - url: https://github.com/bitmage/discourse-calendar
-    path: /src/plugins/discourse-calendar
+    path: /discourse/plugins/discourse-calendar
     branch: main
     shallow: true
     access: write # (default) - Active development with PRs
@@ -59,7 +59,7 @@ setup:
       sudo -u postgres createdb discourse_test -O discourse 2>/dev/null || true
 
       # Git safe directory
-      git config --global --add safe.directory /src
+      git config --global --add safe.directory /discourse
 
       # Export GitHub App private key if file is mounted
       if [ -f /tmp/github-app-key.pem ]; then
@@ -71,7 +71,7 @@ setup:
     run_as: discourse
     commands:
       - |
-        cd /src
+        cd /discourse
         echo "Installing Ruby dependencies..."
         bundle install
 
@@ -83,10 +83,30 @@ setup:
 
 # Container configuration
 container:
-  work_dir: /src
+  work_dir: /discourse
   user: discourse
   init_command: /sbin/boot
   startup_delay: 10
+
+# Filesystem verification structure
+verify-fs:
+  required_files:
+    # Main discourse source files at project root
+    - /discourse/.git/config
+    - /discourse/CLAUDE.md
+    - /discourse/Gemfile
+    - /discourse/package.json
+    - /discourse/bin/rails
+    - /discourse/app/controllers/application_controller.rb
+    - /discourse/plugins/county-fence
+    - /discourse/plugins/discourse-calendar
+    # Infrastructure files in claude-habitat subdirectory
+    - /discourse/claude-habitat/system/CLAUDE.md
+    - /discourse/claude-habitat/system/tools/tools.yaml
+    - /discourse/claude-habitat/shared/CLAUDE.md
+    - /discourse/claude-habitat/shared/config.yaml
+    - /discourse/claude-habitat/local/CLAUDE.md
+    - /discourse/claude-habitat/local/config.yaml
 
 # Claude configuration
 claude:

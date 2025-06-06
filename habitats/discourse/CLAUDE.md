@@ -2,12 +2,13 @@
 
 ## Project Structure
 
-- **Main application**: `/src/app/` - Discourse core
-- **Plugins**: `/src/plugins/` - Plugin development area  
-- **Admin**: `/src/app/assets/javascripts/admin/` - Admin interface
-- **Tests**: `/src/spec/` (Ruby), `/src/test/javascripts/` (JS)
+- **Main application**: `/discourse/app/` - Discourse core
+- **Plugins**: `/discourse/plugins/` - Plugin development area  
+- **Admin**: `/discourse/app/assets/javascripts/admin/` - Admin interface
+- **Tests**: `/discourse/spec/` (Ruby), `/discourse/test/javascripts/` (JS)
 - **Database**: PostgreSQL with Redis for caching
-- **Working Directory**: `/src` - Main Discourse codebase
+- **Working Directory**: `/discourse` - Main Discourse codebase
+- **Infrastructure**: `./claude-habitat/` - System tools, user preferences, and habitat configuration
 
 ## Discourse-Specific Tools
 
@@ -126,6 +127,10 @@ fd ".*user.*" app/models/
 # Find frontend components
 rg "@Component" assets/javascripts/
 fd ".*component.*" assets/javascripts/
+
+# Use claude-habitat tools for enhanced searching
+./claude-habitat/system/tools/bin/rg "class.*Controller" --type rb
+./claude-habitat/system/tools/bin/fd ".*component.*" assets/javascripts/
 ```
 
 ### Debugging
