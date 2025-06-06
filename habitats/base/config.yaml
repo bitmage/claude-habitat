@@ -1,0 +1,28 @@
+name: base
+description: Minimal base habitat for testing system and shared components
+
+# Docker image configuration
+image:
+  dockerfile: Dockerfile
+  tag: claude-habitat-base:latest
+
+# No repositories needed for base habitat
+repositories: []
+
+# Minimal environment
+environment:
+  - GITHUB_APP_ID=1357221
+
+# No additional setup needed
+setup: {}
+
+# Container configuration
+container:
+  work_dir: /workspace
+  user: root
+  init_command: /sbin/init
+  startup_delay: 2
+
+# Claude configuration
+claude:
+  command: claude

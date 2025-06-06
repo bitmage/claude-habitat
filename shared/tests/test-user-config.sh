@@ -4,8 +4,8 @@
 
 set -e
 
-# Load TAP helpers
-source /claude-habitat/system/tools/tap-helpers.sh
+# Load TAP helpers from relative location  
+source "$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")/system/tools/tap-helpers.sh"
 
 tap_start 4
 

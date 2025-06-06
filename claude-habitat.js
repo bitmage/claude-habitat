@@ -1163,16 +1163,42 @@ Session started: ${new Date().toISOString()}
 async function runTestMode(testType, testTarget) {
   console.log(colors.green('\n=== Claude Habitat Test Runner ===\n'));
 
-  if (testType === 'system') {
-    await runSystemTests();
-  } else if (testType === 'shared') {
-    await runSharedTests();
-  } else if (testTarget) {
-    // Run tests for specific habitat
-    await runHabitatTests(testTarget);
-  } else {
+  if (testType === 'all' && !testTarget) {
+    // Run all tests for all habitats
+    await runAllTests();
+  } else if (testType === 'menu' || (!testType && !testTarget)) {
     // Show test menu
     await showTestMenu();
+  } else if (testTarget) {
+    // Run tests for specific habitat
+    const habitatConfigPath = path.join(__dirname, 'habitats', testTarget, 'config.yaml');
+    if (!await fileExists(habitatConfigPath)) {
+      console.error(colors.red(`Habitat ${testTarget} not found`));
+      process.exit(1);
+    }
+    
+    const habitatConfig = await loadConfig(habitatConfigPath);
+    
+    if (testType === 'system') {
+      console.log(`Running system tests in ${testTarget} habitat...`);
+      await runSystemTests(habitatConfig);
+    } else if (testType === 'shared') {
+      console.log(`Running shared tests in ${testTarget} habitat...`);
+      await runSharedTests(habitatConfig);
+    } else if (testType === 'habitat') {
+      console.log(`Running ${testTarget}-specific tests...`);
+      if (habitatConfig.tests && habitatConfig.tests.length > 0) {
+        await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig);
+      } else {
+        console.log(`No ${testTarget}-specific tests configured`);
+      }
+    } else {
+      // Default: run all tests for the habitat
+      await runHabitatTests(testTarget);
+    }
+  } else {
+    console.error(colors.red('Invalid test configuration'));
+    process.exit(1);
   }
 }
 
@@ -1191,54 +1217,182 @@ async function showTestMenu() {
     habitats.sort((a, b) => a.name.localeCompare(b.name));
   } catch (err) {
     console.log('No habitats directory found');
+    return;
   }
 
-  console.log('Test Options:\n');
-  console.log(`  ${colors.yellow('[sys]')}tem    - Test system infrastructure`);
-  console.log(`  ${colors.yellow('[shr]')}ed     - Test shared user configuration`);
-  console.log(`  ${colors.yellow('[all]')}       - Test all (system + shared + all habitats)\n`);
+  if (habitats.length === 0) {
+    console.log('No habitats found to test');
+    return;
+  }
+
+  console.log('Select Habitat to Test:\n');
   
-  if (habitats.length > 0) {
-    console.log('Habitat Tests:\n');
-    habitats.forEach((habitat, index) => {
-      const key = (index + 1).toString();
-      console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}`);
-    });
-    console.log('');
+  habitats.forEach((habitat, index) => {
+    const key = (index + 1).toString();
+    console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}`);
+  });
+  console.log('');
+  console.log(`  ${colors.yellow('[b]')}ack - Return to main menu\n`);
+  
+  // Use single keypress for habitat selection
+  const choice = await new Promise(resolve => {
+    if (!process.stdin.isTTY) {
+      // Fallback for non-TTY mode
+      const readline = require('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      
+      rl.question('Select habitat: ', answer => {
+        rl.close();
+        resolve(answer.trim().toLowerCase());
+      });
+      return;
+    }
+    
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    
+    const onKeypress = (key) => {
+      // Handle Ctrl+C
+      if (key === '\u0003') {
+        console.log('\n');
+        process.exit(0);
+      }
+      
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdin.removeListener('data', onKeypress);
+      resolve(key.toLowerCase());
+    };
+    
+    process.stdin.on('data', onKeypress);
+  });
+  
+  if (choice === 'b') {
+    // Return to main menu
+    await returnToMainMenu();
+    return;
   }
   
-  console.log(`  ${colors.yellow('[q]')}uit     - Exit\n`);
-  
-  const readline = require('readline');
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  
-  const choice = await new Promise(resolve => {
-    rl.question('Select test to run: ', answer => {
-      rl.close();
-      resolve(answer.trim().toLowerCase());
-    });
-  });
-  
-  if (choice === 'q') {
-    process.exit(0);
-  } else if (choice === 'sys' || choice === 'system') {
-    await runSystemTests();
-  } else if (choice === 'shr' || choice === 'shared') {
-    await runSharedTests();
-  } else if (choice === 'all') {
-    await runAllTests();
+  // Check if it's a habitat number
+  const habitatIndex = parseInt(choice) - 1;
+  if (!isNaN(habitatIndex) && habitatIndex >= 0 && habitatIndex < habitats.length) {
+    await showHabitatTestMenu(habitats[habitatIndex].name);
   } else {
-    // Check if it's a habitat number
-    const habitatIndex = parseInt(choice) - 1;
-    if (!isNaN(habitatIndex) && habitatIndex >= 0 && habitatIndex < habitats.length) {
-      await runHabitatTests(habitats[habitatIndex].name);
-    } else {
-      console.error(colors.red('Invalid choice'));
-      process.exit(1);
+    console.error(colors.red('\n❌ Invalid choice'));
+    await sleep(1500);
+    await showTestMenu();
+  }
+}
+
+async function showHabitatTestMenu(habitatName) {
+  console.log(`\n${colors.green(`=== Testing ${habitatName} ===`)}\n`);
+  console.log('Which tests to run?\n');
+  console.log(`  ${colors.yellow('[a]')}ll     - Run all tests (default)`);
+  console.log(`  ${colors.yellow('[s]')}ystem  - System infrastructure only`);
+  console.log(`  ${colors.yellow('[h]')}ared   - Shared configuration only`);
+  console.log(`  ${colors.yellow('[hab]')}itat - ${habitatName}-specific tests only`);
+  console.log(`  ${colors.yellow('[b]')}ack    - Back to habitat selection\n`);
+  
+  // Use single keypress with support for multi-char options
+  const choice = await new Promise(resolve => {
+    if (!process.stdin.isTTY) {
+      // Fallback for non-TTY mode
+      const readline = require('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      
+      rl.question('Select test type (a/s/h/hab/b): ', answer => {
+        rl.close();
+        resolve(answer.trim().toLowerCase());
+      });
+      return;
     }
+    
+    let buffer = '';
+    
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    
+    const onKeypress = (key) => {
+      // Handle Ctrl+C
+      if (key === '\u0003') {
+        console.log('\n');
+        process.exit(0);
+      }
+      
+      // For 'h', wait to see if it's 'hab' or just 'h'
+      if (key === 'h' && buffer === '') {
+        buffer = 'h';
+        // Set a timeout to process just 'h' if no more input
+        setTimeout(() => {
+          if (buffer === 'h') {
+            process.stdin.setRawMode(false);
+            process.stdin.pause();
+            process.stdin.removeListener('data', onKeypress);
+            resolve('h');
+          }
+        }, 200);
+        return;
+      }
+      
+      // Complete 'hab' if we have 'h' buffered
+      if (buffer === 'h' && key === 'a') {
+        buffer = 'ha';
+        return;
+      }
+      
+      if (buffer === 'ha' && key === 'b') {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeListener('data', onKeypress);
+        resolve('hab');
+        return;
+      }
+      
+      // For other keys, resolve immediately
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdin.removeListener('data', onKeypress);
+      resolve(key.toLowerCase());
+    };
+    
+    process.stdin.on('data', onKeypress);
+  });
+  
+  console.log(''); // Add newline after selection
+  
+  if (choice === 'b') {
+    await showTestMenu();
+    return;
+  } else if (choice === 'a' || choice === '') {
+    // Default to all tests
+    await runHabitatTests(habitatName);
+  } else if (choice === 's') {
+    await runSystemTests();
+  } else if (choice === 'h') {
+    await runSharedTests();
+  } else if (choice === 'hab') {
+    // Run only habitat-specific tests
+    const habitatConfigPath = path.join(__dirname, 'habitats', habitatName, 'config.yaml');
+    const habitatConfig = await loadConfig(habitatConfigPath);
+    
+    if (habitatConfig.tests && habitatConfig.tests.length > 0) {
+      console.log(`Running ${habitatName}-specific tests...\n`);
+      await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig);
+    } else {
+      console.log(`No ${habitatName}-specific tests configured`);
+    }
+  } else {
+    console.error(colors.red('\n❌ Invalid choice'));
+    await sleep(1500);
+    await showHabitatTestMenu(habitatName);
   }
 }
 
@@ -1267,23 +1421,35 @@ async function runAllTests() {
   }
 }
 
-async function runSystemTests() {
+async function runSystemTests(habitatConfig = null) {
   console.log(colors.yellow('Running system infrastructure tests...\n'));
+  
+  // If no habitat provided, use the base habitat
+  if (!habitatConfig) {
+    const baseConfigPath = path.join(__dirname, 'habitats/base/config.yaml');
+    habitatConfig = await loadConfig(baseConfigPath);
+  }
   
   const systemConfig = await loadConfig(path.join(__dirname, 'system/config.yaml'));
   if (systemConfig.tests && systemConfig.tests.length > 0) {
-    await runTestsInContainer('system', systemConfig.tests, path.join(__dirname, 'system'));
+    await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig);
   } else {
     console.log('No system tests configured');
   }
 }
 
-async function runSharedTests() {
+async function runSharedTests(habitatConfig = null) {
   console.log(colors.yellow('Running shared configuration tests...\n'));
+  
+  // If no habitat provided, use the base habitat
+  if (!habitatConfig) {
+    const baseConfigPath = path.join(__dirname, 'habitats/base/config.yaml');
+    habitatConfig = await loadConfig(baseConfigPath);
+  }
   
   const sharedConfig = await loadConfig(path.join(__dirname, 'shared/config.yaml'));
   if (sharedConfig.tests && sharedConfig.tests.length > 0) {
-    await runTestsInContainer('shared', sharedConfig.tests, path.join(__dirname, 'shared'));
+    await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig);
   } else {
     console.log('No shared tests configured');
   }
@@ -1302,120 +1468,108 @@ async function runHabitatTests(habitatName) {
   
   // Run system tests first
   console.log('System tests:');
-  await runSystemTests();
+  await runSystemTests(habitatConfig);
   
   // Run shared tests
   console.log('\nShared tests:');
-  await runSharedTests();
+  await runSharedTests(habitatConfig);
   
   // Run habitat-specific tests
   if (habitatConfig.tests && habitatConfig.tests.length > 0) {
     console.log(`\n${habitatName} habitat tests:`);
-    await runTestsInContainer(habitatName, habitatConfig.tests, path.dirname(habitatConfigPath), habitatConfig);
+    await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig);
   } else {
     console.log(`No ${habitatName}-specific tests configured`);
   }
 }
 
-async function runTestsInContainer(testType, tests, testDir, habitatConfig = null) {
-  const containerName = `claude-habitat-test-${testType}-${Date.now()}_${process.pid}`;
+async function runTestsInHabitatContainer(tests, testType, habitatConfig = null) {
+  // If no habitat config provided, we need one to run tests properly
+  if (!habitatConfig) {
+    console.error(colors.red('Error: No habitat specified for testing'));
+    console.log('Please select a habitat from the test menu or use: ./claude-habitat test <habitat-name>');
+    return;
+  }
+
+  const containerName = `claude-habitat-test-${habitatConfig.name}-${Date.now()}_${process.pid}`;
   
   try {
-    // Use the prepared habitat image if running habitat tests, otherwise use a simple base
-    let imageTag;
-    if (habitatConfig) {
-      // For habitat tests, use the prepared image if it exists
-      const hash = calculateCacheHash(habitatConfig, []);
-      const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
-      
-      if (await dockerImageExists(preparedTag)) {
-        imageTag = preparedTag;
-        console.log(`Using prepared habitat image: ${preparedTag}`);
-      } else {
-        const baseTag = habitatConfig.image.tag || `claude-habitat-${habitatConfig.name}:latest`;
-        if (await dockerImageExists(baseTag)) {
-          imageTag = baseTag;
-          console.log(`Using base habitat image: ${baseTag}`);
-        } else {
-          console.log(colors.yellow('Habitat image not built yet. Building for testing...'));
-          await buildBaseImage(habitatConfig);
-          imageTag = baseTag;
-        }
-      }
-    } else {
-      // For system/shared tests, use a minimal Ubuntu image
-      imageTag = 'ubuntu:22.04';
+    // Always use the habitat's prepared image
+    const hash = calculateCacheHash(habitatConfig, []);
+    const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
+    let imageTag = preparedTag;
+    
+    if (!await dockerImageExists(preparedTag)) {
+      console.log(colors.yellow('Prepared image not found. Building habitat for testing...'));
+      await buildBaseImage(habitatConfig);
+      await buildPreparedImage(habitatConfig, preparedTag, []);
+      imageTag = preparedTag;
     }
     
-    // Start test container
-    const workDir = habitatConfig?.container?.work_dir || '/src';
+    console.log(`Using habitat image: ${imageTag}`);
+    
+    // Start test container with same configuration as normal habitat
+    const workDir = habitatConfig.container?.work_dir || '/src';
+    const containerUser = habitatConfig.container?.user || 'root';
+    
+    // Parse environment variables from config
+    const envArgs = [];
+    if (habitatConfig.environment && Array.isArray(habitatConfig.environment)) {
+      habitatConfig.environment.forEach(env => {
+        if (env && typeof env === 'string' && !env.startsWith('GITHUB_APP_PRIVATE_KEY_FILE=')) {
+          envArgs.push('-e', env.replace(/^- /, ''));
+        }
+      });
+    }
+    
+    // Build test command to run instead of normal init
+    const testCommands = tests.map(testScript => {
+      const testPath = testType === 'habitat' 
+        ? `${workDir}/claude-habitat/local/${testScript}`
+        : `${workDir}/claude-habitat/${testType}/${testScript}`;
+      
+      return `
+        echo "Running ${testScript}..."
+        if [ -f ${testPath} ]; then
+          chmod +x ${testPath}
+          ${testPath}
+        else
+          echo "Test not found: ${testPath}"
+          exit 1
+        fi
+      `;
+    }).join('\n');
+    
+    // Create the full test script
+    const testEntrypoint = `
+      #!/bin/bash
+      set -e
+      
+      # Source environment
+      set -a; source /etc/environment 2>/dev/null || true; set +a
+      
+      # Run all tests
+      ${testCommands}
+      
+      echo "All tests completed"
+    `;
+    
+    // Run container with test script as entrypoint
     const runArgs = [
-      'run', '-d',
+      'run', '--rm',
       '--name', containerName,
       '-w', workDir,
+      ...envArgs,
       imageTag,
-      'sleep', '300'
+      '/bin/bash', '-c', testEntrypoint
     ];
     
+    console.log('Running tests in container...\n');
     await dockerRun(runArgs);
-    
-    // Copy test files to container if needed
-    if (testType !== 'habitat') {
-      // For system/shared tests, copy the test files
-      const testFiles = await findFilesToCopy(testDir, `/claude-habitat/${testType}`, true);
-      for (const file of testFiles) {
-        await copyFileToContainer(containerName, file.src, file.dest);
-      }
-      
-      // Also copy TAP helpers
-      await copyFileToContainer(containerName, 
-        path.join(__dirname, 'system/tools/tap-helpers.sh'),
-        '/claude-habitat/system/tools/tap-helpers.sh');
-    }
-    
-    // Set environment variables for tests
-    const envSetup = `
-      export GITHUB_APP_ID=1357221
-      export CLAUDE_HABITAT_WORKDIR=${workDir}
-    `;
-    await dockerExec(containerName, envSetup);
-    
-    // Install basic tools for testing if needed
-    if (testType !== 'habitat') {
-      const toolsSetup = `
-        apt-get update -qq >/dev/null 2>&1
-        apt-get install -y curl jq openssl git >/dev/null 2>&1
-      `;
-      await dockerExec(containerName, toolsSetup);
-    }
-    
-    // Run each test
-    for (const testScript of tests) {
-      const testPath = testType === 'habitat' 
-        ? `/claude-habitat/local/${testScript}`
-        : `/claude-habitat/${testType}/${testScript}`;
-      
-      console.log(`Running ${testScript}...`);
-      
-      try {
-        const result = await dockerExec(containerName, `chmod +x ${testPath} && ${testPath}`);
-        console.log(result);
-      } catch (err) {
-        console.error(colors.red(`Test failed: ${testScript}`));
-        console.error(colors.red(err.message));
-      }
-    }
     
   } catch (err) {
     console.error(colors.red(`Error running tests: ${err.message}`));
-  } finally {
-    // Cleanup
-    try {
-      await execAsync(`docker stop ${containerName}`);
-      await execAsync(`docker rm ${containerName}`);
-    } catch {
-      // Ignore cleanup errors
-    }
+    // Container already removed with --rm flag
   }
 }
 
@@ -1471,18 +1625,34 @@ async function main() {
         break;
       case 'test':
         options.test = true;
-        // Check for test target (habitat name or --system/--shared)
+        // Next argument should be habitat name (or "all" for all habitats)
         if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-          options.testTarget = args[++i];
+          const target = args[++i];
+          if (target === 'all') {
+            options.testType = 'all';
+          } else {
+            options.testTarget = target;
+            // Check for test type flag after habitat name
+            if (i + 1 < args.length && args[i + 1].startsWith('--')) {
+              const testTypeFlag = args[++i];
+              if (testTypeFlag === '--system') {
+                options.testType = 'system';
+              } else if (testTypeFlag === '--shared') {
+                options.testType = 'shared';
+              } else if (testTypeFlag === '--habitat') {
+                options.testType = 'habitat';
+              } else if (testTypeFlag === '--all') {
+                options.testType = 'all';
+              }
+            } else {
+              // Default to all tests for the habitat
+              options.testType = 'all';
+            }
+          }
+        } else {
+          // No habitat specified - show menu
+          options.testType = 'menu';
         }
-        break;
-      case '--system':
-        options.test = true;
-        options.testType = 'system';
-        break;
-      case '--shared':
-        options.test = true;
-        options.testType = 'shared';
         break;
       default:
         // If it doesn't start with -, treat it as a habitat name
@@ -1511,13 +1681,16 @@ SHORTCUTS:
     s, start               Start last used configuration (or first available)
     a, add                 Create new configuration with AI assistance
     m, maintain            Update/troubleshoot Claude Habitat itself
-    test [HABITAT]         Run tests (habitat, --system, --shared, or menu)
+    test [HABITAT] [TYPE]  Run tests (show menu if no args)
 
 TEST OPTIONS:
-    test                   Show test menu for selecting what to test
-    test discourse         Run all tests for discourse habitat
-    test --system          Run system infrastructure tests only
-    test --shared          Run shared user configuration tests only
+    test                   Show interactive test menu
+    test all               Run all tests for all habitats
+    test discourse         Run all tests for discourse habitat  
+    test discourse --system    Run system tests in discourse habitat
+    test discourse --shared    Run shared tests in discourse habitat
+    test discourse --habitat   Run discourse-specific tests only
+    test discourse --all       Run all tests for discourse habitat
 
 EXAMPLES:
     # Start with shortcut
@@ -1881,8 +2054,8 @@ EXAMPLES:
       await addNewConfiguration();
       process.exit(0);
     } else if (choice === 't') {
-      // Test mode
-      await runTestMode('all', null);
+      // Test mode - show test menu
+      await runTestMode(null, null);
       await returnToMainMenu();
       return;
     } else if (choice === 'o') {
