@@ -1,0 +1,52 @@
+name: claude-habitat
+description: Development environment for Claude Habitat itself
+
+image:
+  dockerfile: Dockerfile
+  tag: claude-habitat-dev:latest
+
+repositories:
+  - url: https://github.com/bitmage/claude-habitat
+    path: /workspace/claude-habitat
+    branch: main
+
+environment:
+  - NODE_ENV=development
+  - DOCKER_HOST=unix:///var/run/docker.sock
+
+volumes:
+  # Mount Docker socket for container management
+  - /var/run/docker.sock:/var/run/docker.sock
+  # Optional: Mount local code for live development
+  # - ./:/workspace/claude-habitat
+
+setup:
+  root:
+    - |
+      # Install Docker CLI (not daemon)
+      apt-get update && apt-get install -y docker.io
+      
+      # Ensure docker group exists and add user
+      groupadd -f docker
+      usermod -aG docker node
+      
+      # Fix Docker socket permissions
+      chmod 666 /var/run/docker.sock || true
+      
+  user:
+    run_as: node
+    commands:
+      - |
+        echo "Claude Habitat setup complete"
+        echo "Repository will be available at /workspace/claude-habitat"
+
+container:
+  work_dir: /workspace/claude-habitat
+  user: node
+  init_command: /sbin/init
+  startup_delay: 5
+
+# Disable automatic Claude instruction generation
+claude:
+  command: claude --dangerously-skip-permissions
+  disable_habitat_instructions: true

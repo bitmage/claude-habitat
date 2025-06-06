@@ -396,10 +396,17 @@ async function buildPreparedImage(config, tag, extraRepos) {
   const runArgs = [
     'run', '-d',
     '--name', tempContainer,
-    ...envArgs,
-    baseTag,
-    config.container?.init_command || '/sbin/boot'
+    ...envArgs
   ];
+
+  // Add volume mounts if specified
+  if (config.volumes && Array.isArray(config.volumes)) {
+    config.volumes.forEach(volume => {
+      runArgs.push('-v', volume);
+    });
+  }
+
+  runArgs.push(baseTag, config.container?.init_command || '/sbin/boot');
 
   const containerId = await dockerRun(runArgs);
 
@@ -688,60 +695,64 @@ EOF
       }
     }
 
-    // Create concatenated CLAUDE.md instructions
-    console.log('Setting up Claude instructions...');
-    try {
-      const systemClaudePath = path.join(__dirname, 'system/CLAUDE.md');
-      const sharedClaudePath = path.join(__dirname, 'shared/CLAUDE.md');
-      const habitatDir = path.dirname(config._configPath);
-      const habitatClaudePath = path.join(habitatDir, 'CLAUDE.md');
-      
-      let claudeContent = '';
-      
-      // Add system base instructions (infrastructure)
-      if (await fileExists(systemClaudePath)) {
-        const systemContent = await fs.readFile(systemClaudePath, 'utf8');
-        claudeContent += systemContent;
-      }
-      
-      // Add shared user preferences
-      if (await fileExists(sharedClaudePath)) {
-        const sharedContent = await fs.readFile(sharedClaudePath, 'utf8');
+    // Create concatenated CLAUDE.md instructions (unless disabled)
+    if (!config.claude?.disable_habitat_instructions) {
+      console.log('Setting up Claude instructions...');
+      try {
+        const systemClaudePath = path.join(__dirname, 'system/CLAUDE.md');
+        const sharedClaudePath = path.join(__dirname, 'shared/CLAUDE.md');
+        const habitatDir = path.dirname(config._configPath);
+        const habitatClaudePath = path.join(habitatDir, 'CLAUDE.md');
+        
+        let claudeContent = '';
+        
+        // Add system base instructions (infrastructure)
+        if (await fileExists(systemClaudePath)) {
+          const systemContent = await fs.readFile(systemClaudePath, 'utf8');
+          claudeContent += systemContent;
+        }
+        
+        // Add shared user preferences
+        if (await fileExists(sharedClaudePath)) {
+          const sharedContent = await fs.readFile(sharedClaudePath, 'utf8');
+          if (claudeContent.length > 0) {
+            claudeContent += '\n\n---\n\n# User Preferences\n\n';
+          }
+          claudeContent += sharedContent;
+        }
+        
+        // Add habitat-specific instructions
+        if (await fileExists(habitatClaudePath)) {
+          const habitatContent = await fs.readFile(habitatClaudePath, 'utf8');
+          if (claudeContent.length > 0) {
+            claudeContent += '\n\n---\n\n# Project-Specific Instructions\n\n';
+          }
+          claudeContent += habitatContent;
+        }
+        
+        // Only create the file if we have content
         if (claudeContent.length > 0) {
-          claudeContent += '\n\n---\n\n# User Preferences\n\n';
+          // Write to temporary file first
+          const tempClaudePath = '/tmp/CLAUDE.md';
+          await dockerExec(tempContainer, `cat > ${tempClaudePath} << 'CLAUDE_EOF'\n${claudeContent}\nCLAUDE_EOF`);
+          
+          // Move to working directory (not in claude-habitat subdirectory)
+          await dockerExec(tempContainer, `mv ${tempClaudePath} ${workDir}/CLAUDE.md`);
+          
+          // Set ownership to container user
+          if (containerUser && containerUser !== 'root') {
+            await dockerExec(tempContainer, `chown ${containerUser}:${containerUser} ${workDir}/CLAUDE.md`);
+          }
+          
+          console.log('✅ Claude instructions configured');
+        } else {
+          console.log('ℹ️  No Claude instructions found');
         }
-        claudeContent += sharedContent;
+      } catch (err) {
+        console.warn(`Warning: Failed to setup Claude instructions: ${err.message}`);
       }
-      
-      // Add habitat-specific instructions
-      if (await fileExists(habitatClaudePath)) {
-        const habitatContent = await fs.readFile(habitatClaudePath, 'utf8');
-        if (claudeContent.length > 0) {
-          claudeContent += '\n\n---\n\n# Project-Specific Instructions\n\n';
-        }
-        claudeContent += habitatContent;
-      }
-      
-      // Only create the file if we have content
-      if (claudeContent.length > 0) {
-        // Write to temporary file first
-        const tempClaudePath = '/tmp/CLAUDE.md';
-        await dockerExec(tempContainer, `cat > ${tempClaudePath} << 'CLAUDE_EOF'\n${claudeContent}\nCLAUDE_EOF`);
-        
-        // Move to working directory (not in claude-habitat subdirectory)
-        await dockerExec(tempContainer, `mv ${tempClaudePath} ${workDir}/CLAUDE.md`);
-        
-        // Set ownership to container user
-        if (containerUser && containerUser !== 'root') {
-          await dockerExec(tempContainer, `chown ${containerUser}:${containerUser} ${workDir}/CLAUDE.md`);
-        }
-        
-        console.log('✅ Claude instructions configured');
-      } else {
-        console.log('ℹ️  No Claude instructions found');
-      }
-    } catch (err) {
-      console.warn(`Warning: Failed to setup Claude instructions: ${err.message}`);
+    } else {
+      console.log('⏭️  Skipping Claude instruction setup (disabled in config)');
     }
 
     // Git configuration is now handled by shared/config.yaml file operations
@@ -788,10 +799,17 @@ async function runContainer(tag, config, envVars) {
   const runArgs = [
     'run', '-d',
     '--name', containerName,
-    ...envVars.flatMap(env => ['-e', env]),
-    tag,
-    config.container?.init_command || '/sbin/boot'
+    ...envVars.flatMap(env => ['-e', env])
   ];
+
+  // Add volume mounts if specified
+  if (config.volumes && Array.isArray(config.volumes)) {
+    config.volumes.forEach(volume => {
+      runArgs.push('-v', volume);
+    });
+  }
+
+  runArgs.push(tag, config.container?.init_command || '/sbin/boot');
 
   await dockerRun(runArgs);
 
@@ -1582,10 +1600,17 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       'run', '--rm',
       '--name', containerName,
       '-w', workDir,
-      ...envArgs,
-      imageTag,
-      '/bin/bash', '-c', testEntrypoint
+      ...envArgs
     ];
+
+    // Add volume mounts if specified
+    if (config.volumes && Array.isArray(config.volumes)) {
+      config.volumes.forEach(volume => {
+        runArgs.push('-v', volume);
+      });
+    }
+
+    runArgs.push(imageTag, '/bin/bash', '-c', testEntrypoint);
     
     console.log('Running tests in container...\n');
     

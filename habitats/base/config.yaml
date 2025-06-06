@@ -25,4 +25,4 @@ container:
 
 # Claude configuration
 claude:
-  command: claude
+  command: claude --dangerously-skip-permissions
