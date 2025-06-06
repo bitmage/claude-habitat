@@ -1,13 +1,17 @@
 name: claude-habitat
 description: Development environment for Claude Habitat itself
 
+# Habitat tests (run with: claude-habitat test claude-habitat)
+tests:
+  - tests/test-claude-habitat-inception.sh
+
 image:
   dockerfile: Dockerfile
   tag: claude-habitat-dev:latest
 
 repositories:
   - url: https://github.com/bitmage/claude-habitat  
-    path: /home/node/claude-habitat
+    path: /src
     branch: main
     shallow: true
 
@@ -38,7 +42,7 @@ setup:
     run_as: node
     commands:
       - |
-        cd /home/node/claude-habitat
+        cd /src
         echo "Installing Claude Habitat dependencies..."
         npm install
         echo "Running tests to verify setup..."
@@ -46,10 +50,34 @@ setup:
         echo "Claude Habitat setup complete"
 
 container:
-  work_dir: /home/node/claude-habitat
+  work_dir: /src
   user: node
   init_command: /sbin/init
   startup_delay: 5
+
+# Filesystem verification structure
+verify-fs:
+  required_files:
+    # Main claude-habitat source files
+    - /src/.git/config
+    - /src/CLAUDE.md
+    - /src/README.md
+    - /src/package.json
+    - /src/package-lock.json
+    - /src/claude-habitat
+    - /src/claude-habitat.js
+    - /src/claude-habitat.sh
+    - /src/habitats/base/config.yaml
+    - /src/habitats/discourse/config.yaml
+    - /src/test/unit/claude-habitat.test.js
+    - /src/node_modules/package.json
+    # Helper files in claude-habitat subdirectory
+    - /src/claude-habitat/system/CLAUDE.md
+    - /src/claude-habitat/system/tools/tools.yaml
+    - /src/claude-habitat/shared/CLAUDE.md
+    - /src/claude-habitat/shared/config.yaml
+    - /src/claude-habitat/local/CLAUDE.md
+    - /src/claude-habitat/local/config.yaml
 
 # Disable automatic Claude instruction generation
 claude:

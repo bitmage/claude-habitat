@@ -42,10 +42,10 @@ tools:
 
   - name: tree
     description: "tree - directory structure visualization"
-    url: "https://github.com/Old-Man-Programmer/tree/releases/latest/download/tree-{version}.tar.gz"
+    url: "http://mama.indstate.edu/users/ice/tree/src/tree-2.1.1.tgz"
     binary: "tree"
-    extract_path: "tree-{version}/tree"
-    fallback_url: "http://mama.indstate.edu/users/ice/tree/src/tree-2.1.1.tgz"
+    extract_path: "tree-2.1.1/tree"
+    make_required: true
 
   - name: delta
     description: "delta - enhanced git diffs"

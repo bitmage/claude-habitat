@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     vim \
     curl \
     sudo \
+    tree \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code globally

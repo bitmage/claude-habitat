@@ -373,6 +373,105 @@ async function runSetupCommands(container, config) {
   }
 }
 
+// Filesystem verification for containers
+async function verifyFilesystem(config, containerName) {
+  if (!config['verify-fs'] || !config['verify-fs'].required_files) {
+    return { passed: true, message: 'No filesystem verification configured' };
+  }
+
+  const requiredFiles = config['verify-fs'].required_files;
+  const missingFiles = [];
+  
+  console.log('Verifying filesystem structure...');
+  
+  for (const file of requiredFiles) {
+    try {
+      await dockerExec(containerName, `test -e "${file}"`, 'node');
+    } catch (err) {
+      missingFiles.push(file);
+    }
+  }
+  
+  if (missingFiles.length > 0) {
+    return {
+      passed: false,
+      message: `Missing files: ${missingFiles.join(', ')}`,
+      missingFiles
+    };
+  }
+  
+  return { 
+    passed: true, 
+    message: `All ${requiredFiles.length} required files verified` 
+  };
+}
+
+// Run filesystem verification as a test
+async function runFilesystemVerification(config) {
+  console.log(colors.green('=== Filesystem Verification ===\n'));
+  
+  if (!config['verify-fs'] || !config['verify-fs'].required_files) {
+    console.log(colors.yellow('No filesystem verification configured for this habitat'));
+    return;
+  }
+  
+  // Check if a container is already running for this habitat
+  const containerName = `${config.name}_fs_verify_${Date.now()}`;
+  
+  try {
+    // Build/get the prepared image
+    const tag = `claude-habitat-${config.name}:latest`;
+    const cacheHash = calculateCacheHash(config, []);
+    const preparedTag = `claude-habitat-${config.name}:${cacheHash}`;
+    
+    // Try to use existing prepared image, or build if needed
+    const { stdout: images } = await execAsync(`docker images -q ${preparedTag}`);
+    if (!images.trim()) {
+      console.log('No prepared image found, building...');
+      await buildPreparedImage(config, preparedTag, []);
+    }
+    
+    // Start a temporary container for verification
+    const runArgs = [
+      'run', '-d',
+      '--name', containerName,
+      preparedTag,
+      config.container?.init_command || '/sbin/init'
+    ];
+    
+    await dockerRun(runArgs);
+    
+    // Wait a moment for container to start
+    await sleep(2000);
+    
+    // Run verification
+    const verifyResult = await verifyFilesystem(config, containerName);
+    
+    if (verifyResult.passed) {
+      console.log(colors.green(`✅ ${verifyResult.message}`));
+    } else {
+      console.log(colors.red(`❌ ${verifyResult.message}`));
+      if (verifyResult.missingFiles) {
+        console.log(colors.red('Missing files:'));
+        verifyResult.missingFiles.forEach(file => {
+          console.log(colors.red(`  - ${file}`));
+        });
+      }
+    }
+    
+  } catch (err) {
+    console.error(colors.red(`Error during filesystem verification: ${err.message}`));
+    throw err;
+  } finally {
+    // Cleanup
+    try {
+      await execAsync(`docker stop ${containerName}`);
+      await execAsync(`docker rm ${containerName}`);
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
 
 async function buildPreparedImage(config, tag, extraRepos) {
   console.log(`Building prepared image: ${tag}`);
@@ -846,6 +945,20 @@ async function runContainer(tag, config, envVars) {
       throw new Error(`Work directory ${workDir} not found in prepared image`);
     }
 
+    // Run filesystem verification if configured
+    const verifyResult = await verifyFilesystem(config, containerName);
+    if (!verifyResult.passed) {
+      console.warn(colors.yellow(`⚠️  Filesystem verification: ${verifyResult.message}`));
+      if (verifyResult.missingFiles) {
+        console.warn(colors.yellow(`Missing files:`));
+        verifyResult.missingFiles.forEach(file => {
+          console.warn(colors.yellow(`  - ${file}`));
+        });
+      }
+    } else {
+      console.log(colors.green(`✅ ${verifyResult.message}`));
+    }
+
     console.log('');
     console.log(colors.green('Container ready!'));
     console.log('Launching Claude Code...');
@@ -1203,6 +1316,9 @@ async function runTestMode(testType, testTarget) {
     } else if (testType === 'shared') {
       console.log(`Running shared tests in ${testTarget} habitat...`);
       await runSharedTests(habitatConfig);
+    } else if (testType === 'verify-fs') {
+      console.log(`Running filesystem verification for ${testTarget} habitat...`);
+      await runFilesystemVerification(habitatConfig);
     } else if (testType === 'habitat') {
       console.log(`Running ${testTarget}-specific tests...`);
       if (habitatConfig.tests && habitatConfig.tests.length > 0) {
@@ -1923,6 +2039,8 @@ async function main() {
                 options.testType = 'system';
               } else if (testTypeFlag === '--shared') {
                 options.testType = 'shared';
+              } else if (testTypeFlag === '--verify-fs') {
+                options.testType = 'verify-fs';
               } else if (testTypeFlag === '--habitat') {
                 options.testType = 'habitat';
               } else if (testTypeFlag === '--all') {
@@ -1973,6 +2091,7 @@ TEST OPTIONS:
     test discourse         Run all tests for discourse habitat  
     test discourse --system    Run system tests in discourse habitat
     test discourse --shared    Run shared tests in discourse habitat
+    test discourse --verify-fs Run filesystem verification for discourse habitat
     test discourse --habitat   Run discourse-specific tests only
     test discourse --all       Run all tests for discourse habitat
 
