@@ -1426,9 +1426,9 @@ async function showHabitatTestMenu(habitatName) {
   console.log(`\n${colors.green(`=== Testing ${habitatName} ===`)}\n`);
   console.log('Which tests to run?\n');
   console.log(`  ${colors.yellow('[a]')}ll     - Run all tests (default)`);
-  console.log(`  ${colors.yellow('[s]')}ystem  - System infrastructure only`);
-  console.log(`  ${colors.yellow('[h]')}ared   - Shared configuration only`);
-  console.log(`  ${colors.yellow('[hab]')}itat - ${habitatName}-specific tests only`);
+  console.log(`  s${colors.yellow('[y]')}stem  - System infrastructure only`);
+  console.log(`  ${colors.yellow('[s]')}hared   - Shared configuration only`);
+  console.log(`  ${colors.yellow('[h]')}abitat - ${habitatName}-specific tests only`);
   console.log(`  ${colors.yellow('[b]')}ack    - Back to habitat selection\n`);
   
   // Use single keypress with support for multi-char options
@@ -1441,14 +1441,12 @@ async function showHabitatTestMenu(habitatName) {
         output: process.stdout
       });
       
-      rl.question('Select test type (a/s/h/hab/b): ', answer => {
+      rl.question('Select test type (a/y/s/h/b): ', answer => {
         rl.close();
         resolve(answer.trim().toLowerCase());
       });
       return;
     }
-    
-    let buffer = '';
     
     process.stdin.setRawMode(true);
     process.stdin.resume();
@@ -1461,36 +1459,7 @@ async function showHabitatTestMenu(habitatName) {
         process.exit(0);
       }
       
-      // For 'h', wait to see if it's 'hab' or just 'h'
-      if (key === 'h' && buffer === '') {
-        buffer = 'h';
-        // Set a timeout to process just 'h' if no more input
-        setTimeout(() => {
-          if (buffer === 'h') {
-            process.stdin.setRawMode(false);
-            process.stdin.pause();
-            process.stdin.removeListener('data', onKeypress);
-            resolve('h');
-          }
-        }, 200);
-        return;
-      }
-      
-      // Complete 'hab' if we have 'h' buffered
-      if (buffer === 'h' && key === 'a') {
-        buffer = 'ha';
-        return;
-      }
-      
-      if (buffer === 'ha' && key === 'b') {
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.removeListener('data', onKeypress);
-        resolve('hab');
-        return;
-      }
-      
-      // For other keys, resolve immediately
+      // For single key presses, resolve immediately
       process.stdin.setRawMode(false);
       process.stdin.pause();
       process.stdin.removeListener('data', onKeypress);
@@ -1514,11 +1483,11 @@ async function showHabitatTestMenu(habitatName) {
   if (choice === 'a' || choice === '') {
     // Default to all tests
     testResults = await runHabitatTests(habitatName, true);
-  } else if (choice === 's') {
+  } else if (choice === 'y') {
     testResults = await runSystemTests(null, true);
-  } else if (choice === 'h') {
+  } else if (choice === 's') {
     testResults = await runSharedTests(null, true);
-  } else if (choice === 'hab') {
+  } else if (choice === 'h') {
     // Run only habitat-specific tests
     const habitatConfigPath = path.join(__dirname, 'habitats', habitatName, 'config.yaml');
     const habitatConfig = await loadConfig(habitatConfigPath);
@@ -1911,9 +1880,9 @@ async function showTestResults(results, habitatName, testChoice, duration) {
 function getTestTypeName(choice) {
   switch (choice) {
     case 'a': case '': return 'All tests';
-    case 's': return 'System tests';
-    case 'h': return 'Shared tests';
-    case 'hab': return 'Habitat-specific tests';
+    case 'y': return 'System tests';
+    case 's': return 'Shared tests';
+    case 'h': return 'Habitat-specific tests';
     default: return 'Unknown';
   }
 }
@@ -2336,6 +2305,11 @@ EXAMPLES:
     
     if (habitats.length > 0) {
       console.log('Habitats:\n');
+      
+      // Get the most recently used config to mark it
+      const lastConfig = await getLastUsedConfig();
+      const lastUsedHabitat = lastConfig ? path.basename(path.dirname(lastConfig)) : null;
+      
       // Show all habitats with appropriate hotkeys
       habitats.forEach((habitat, index) => {
         let key;
@@ -2354,10 +2328,14 @@ EXAMPLES:
         const habitatStatus = habitatRepoStatus.find(h => h.name === habitat.name);
         const statusWarning = habitatStatus?.hasIssues ? ' ⚠️' : '';
         
+        // Check if this is the most recent habitat
+        const isLastUsed = habitat.name === lastUsedHabitat;
+        const startOption = isLastUsed ? ` ${colors.yellow('[s]')}tart (most recent)` : '';
+        
         try {
           const content = require('fs').readFileSync(habitat.path, 'utf8');
           const parsed = yaml.load(content);
-          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}`);
+          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}${startOption}`);
           if (parsed.description) {
             console.log(`      ${parsed.description}`);
           }
@@ -2366,7 +2344,7 @@ EXAMPLES:
           }
           console.log('');
         } catch (err) {
-          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}`);
+          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}${startOption}`);
           console.log(`      (configuration error: ${err.message})`);
           console.log('');
         }
@@ -2378,7 +2356,6 @@ EXAMPLES:
     if (initStatus.completedSteps < initStatus.totalSteps) {
       console.log(`  ${colors.yellow('[i]')}nitialize - Set up authentication and verify system`);
     }
-    console.log(`  ${colors.yellow('[s]')}tart   - Start last used configuration`);
     console.log(`  ${colors.yellow('[a]')}dd     - Create new configuration with AI assistance`);
     console.log(`  ${colors.yellow('[t]')}est    - Run tests (system, shared, or habitat)`);
     console.log(`  t${colors.yellow('[o]')}ols   - Manage development tools`);
