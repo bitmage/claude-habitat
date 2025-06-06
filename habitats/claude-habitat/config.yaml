@@ -6,9 +6,10 @@ image:
   tag: claude-habitat-dev:latest
 
 repositories:
-  - url: https://github.com/bitmage/claude-habitat
-    path: /workspace/claude-habitat
+  - url: https://github.com/bitmage/claude-habitat  
+    path: /home/node/claude-habitat
     branch: main
+    shallow: true
 
 environment:
   - NODE_ENV=development
@@ -37,11 +38,15 @@ setup:
     run_as: node
     commands:
       - |
+        cd /home/node/claude-habitat
+        echo "Installing Claude Habitat dependencies..."
+        npm install
+        echo "Running tests to verify setup..."
+        npm test
         echo "Claude Habitat setup complete"
-        echo "Repository will be available at /workspace/claude-habitat"
 
 container:
-  work_dir: /workspace/claude-habitat
+  work_dir: /home/node/claude-habitat
   user: node
   init_command: /sbin/init
   startup_delay: 5

@@ -14,15 +14,11 @@ RUN npm install -g @anthropic-ai/claude-code
 # Use existing node user (UID 1000) and give it sudo access
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Set up workspace
-RUN mkdir -p /workspace && \
-    chown -R node:node /workspace
-
 # Create a simple init script that keeps container running
 RUN echo '#!/bin/bash\nwhile true; do sleep 3600; done' > /sbin/init && chmod +x /sbin/init
 
 USER node
-WORKDIR /workspace
+WORKDIR /home/node
 
 # Use simple init script
 CMD ["/sbin/init"]
