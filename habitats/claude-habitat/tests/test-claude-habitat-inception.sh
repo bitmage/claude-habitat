@@ -7,8 +7,8 @@ echo "=== Claude Habitat Inception Test ==="
 echo "Testing claude-habitat functionality from within claude-habitat container"
 
 # Verify we're in the right environment
-if [ ! -f /src/claude-habitat.js ]; then
-    echo "❌ ERROR: Not in claude-habitat environment - missing /src/claude-habitat.js"
+if [ ! -f /workspace/src/claude-habitat.js ]; then
+    echo "❌ ERROR: Not in claude-habitat environment - missing /workspace/src/claude-habitat.js"
     exit 1
 fi
 
@@ -23,7 +23,7 @@ echo "✅ Environment check passed"
 echo ""
 echo "Testing claude-habitat inception: running base --system tests from within claude-habitat"
 
-cd /src
+cd /workspace/src
 
 # Run the inception test: claude-habitat test base --system
 echo "Running: ./claude-habitat test base --system"

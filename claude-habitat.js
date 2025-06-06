@@ -131,7 +131,7 @@ async function cloneRepository(container, repoInfo, workDir = '/src') {
 
     # Test GitHub App authentication
     echo "=== GitHub App Authentication Verification ==="
-    if [ -d ${workDir}/claude-habitat/shared ] && find ${workDir}/claude-habitat/shared -name "*.pem" -type f | grep -q .; then
+    if [ -d ${workDir}/habitat/shared ] && find ${workDir}/habitat/shared -name "*.pem" -type f | grep -q .; then
       echo "GitHub App: Available"
       echo "GitHub App authentication will be used for repository access"
       
@@ -555,7 +555,7 @@ async function buildPreparedImage(config, tag, extraRepos) {
     }
     
     // Copy remaining shared files (user preferences)
-    const sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/claude-habitat/shared`, true);
+    const sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/habitat/shared`, true);
     if (sharedFiles.length > 0) {
       console.log('Copying shared files to container...');
       for (const file of sharedFiles) {
@@ -600,11 +600,11 @@ if [ "$1" = "get" ]; then
     fi
     
     # Use CLAUDE_HABITAT_WORKDIR environment variable to find PEM files
-    if [ -n "\$CLAUDE_HABITAT_WORKDIR" ] && [ -d "\$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" ]; then
-        pem_file=\$(find "\$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" -name "*.pem" -type f | sort -r | head -1)
+    if [ -n "\$CLAUDE_HABITAT_WORKDIR" ] && [ -d "\$CLAUDE_HABITAT_WORKDIR/habitat/shared" ]; then
+        pem_file=\$(find "\$CLAUDE_HABITAT_WORKDIR/habitat/shared" -name "*.pem" -type f | sort -r | head -1)
     else
         # Fallback: try common locations
-        for shared_path in "/src/claude-habitat/shared" "/claude-habitat/shared" "\$(pwd)/claude-habitat/shared"; do
+        for shared_path in "/workspace/habitat/shared" "/habitat/shared" "\$(pwd)/habitat/shared"; do
             if [ -d "\$shared_path" ]; then
                 pem_file=\$(find "\$shared_path" -name "*.pem" -type f | sort -r | head -1)
                 if [ -n "\$pem_file" ]; then
@@ -687,8 +687,8 @@ EOF
           echo "CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR"
           echo "Contents of /etc/environment:"
           cat /etc/environment
-          echo "PEM files in \$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared:"
-          find "\$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" -name "*.pem" -type f 2>/dev/null || echo "No PEM files found"
+          echo "PEM files in \$CLAUDE_HABITAT_WORKDIR/habitat/shared:"
+          find "\$CLAUDE_HABITAT_WORKDIR/habitat/shared" -name "*.pem" -type f 2>/dev/null || echo "No PEM files found"
           echo "Testing credential helper with verbose output:"
           GITHUB_APP_ID=\$GITHUB_APP_ID CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR bash -x /usr/local/bin/git-credential-github-app get < /dev/null 2>&1 | head -20
           echo "Simplified test:"
@@ -744,7 +744,7 @@ EOF
     }
     
     // Copy remaining system files (infrastructure)
-    const systemFiles = await findFilesToCopy(systemDir, `${workDir}/claude-habitat/system`, true);
+    const systemFiles = await findFilesToCopy(systemDir, `${workDir}/habitat/system`, true);
     if (systemFiles.length > 0) {
       console.log('Copying system files to container...');
       for (const file of systemFiles) {
@@ -756,7 +756,7 @@ EOF
 
     // Copy additional files from habitat directory to local
     const habitatDir = path.dirname(config._configPath);
-    const filesToCopy = await findFilesToCopy(habitatDir, `${workDir}/claude-habitat/local`);
+    const filesToCopy = await findFilesToCopy(habitatDir, `${workDir}/habitat/local`);
     if (filesToCopy.length > 0) {
       console.log('Copying habitat files to container...');
       for (const file of filesToCopy) {
@@ -765,15 +765,15 @@ EOF
     }
 
     // Install Claude Habitat tools
-    const systemToolsScript = `${workDir}/claude-habitat/system/tools/install-tools.sh`;
-    const sharedToolsScript = `${workDir}/claude-habitat/shared/tools/install-tools.sh`;
+    const systemToolsScript = `${workDir}/habitat/system/tools/install-tools.sh`;
+    const sharedToolsScript = `${workDir}/habitat/shared/tools/install-tools.sh`;
     
     // Install system tools (core infrastructure)
     if (systemFiles.some(file => file.dest.includes('tools/install-tools.sh'))) {
       console.log('Installing system tools...');
       try {
         await dockerExec(tempContainer, `chmod +x ${systemToolsScript}`);
-        await dockerExec(tempContainer, `cd ${workDir}/claude-habitat/system/tools && ./install-tools.sh install`);
+        await dockerExec(tempContainer, `cd ${workDir}/habitat/system/tools && ./install-tools.sh install`);
         console.log('✅ System tools installed successfully');
       } catch (err) {
         console.warn(`Warning: Failed to install system tools: ${err.message}`);
@@ -786,7 +786,7 @@ EOF
       console.log('Installing user tools...');
       try {
         await dockerExec(tempContainer, `chmod +x ${sharedToolsScript}`);
-        await dockerExec(tempContainer, `cd ${workDir}/claude-habitat/shared/tools && ./install-tools.sh install`);
+        await dockerExec(tempContainer, `cd ${workDir}/habitat/shared/tools && ./install-tools.sh install`);
         console.log('✅ User tools installed successfully');
       } catch (err) {
         console.warn(`Warning: Failed to install user tools: ${err.message}`);
@@ -858,8 +858,8 @@ EOF
 
     // Ensure the entire claude-habitat directory is accessible to the container user
     if (containerUser && containerUser !== 'root' && (sharedFiles.length > 0 || filesToCopy.length > 0)) {
-      console.log(`Setting ownership of claude-habitat directory to ${containerUser}...`);
-      await dockerExec(tempContainer, `chown -R ${containerUser}:${containerUser} ${workDir}/claude-habitat 2>/dev/null || true`);
+      console.log(`Setting ownership of habitat directory to ${containerUser}...`);
+      await dockerExec(tempContainer, `chown -R ${containerUser}:${containerUser} ${workDir}/habitat 2>/dev/null || true`);
     }
 
     // Run setup commands
@@ -1682,8 +1682,8 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     // Build test command to run instead of normal init
     const testCommands = tests.map(testScript => {
       const testPath = testType === 'habitat' 
-        ? `${workDir}/claude-habitat/local/${testScript}`
-        : `${workDir}/claude-habitat/${testType}/${testScript}`;
+        ? `${workDir}/habitat/local/${testScript}`
+        : `${workDir}/habitat/${testType}/${testScript}`;
       
       return `
         echo "Running ${testScript}..."
@@ -1720,8 +1720,8 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     ];
 
     // Add volume mounts if specified
-    if (config.volumes && Array.isArray(config.volumes)) {
-      config.volumes.forEach(volume => {
+    if (habitatConfig.volumes && Array.isArray(habitatConfig.volumes)) {
+      habitatConfig.volumes.forEach(volume => {
         runArgs.push('-v', volume);
       });
     }

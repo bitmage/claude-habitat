@@ -11,7 +11,7 @@ image:
 
 repositories:
   - url: https://github.com/bitmage/claude-habitat  
-    path: /src
+    path: /workspace/src
     branch: main
     shallow: true
 
@@ -28,29 +28,26 @@ volumes:
 setup:
   root:
     - |
-      # Install Docker CLI (not daemon)
-      apt-get update && apt-get install -y docker.io
-      
-      # Ensure docker group exists and add user
-      groupadd -f docker
-      usermod -aG docker node
-      
-      # Fix Docker socket permissions
+      # Fix Docker socket permissions for development
       chmod 666 /var/run/docker.sock || true
       
   user:
     run_as: node
     commands:
       - |
-        cd /src
+        cd /workspace/src
         echo "Installing Claude Habitat dependencies..."
         npm install
         echo "Running tests to verify setup..."
         npm test
+        echo "Verifying Docker access..."
+        /usr/bin/docker --version && echo "Docker CLI available" || echo "Docker not accessible"
+        echo "Testing Docker socket..."
+        /usr/bin/docker ps > /dev/null 2>&1 && echo "Docker socket accessible" || echo "Docker socket not accessible"
         echo "Claude Habitat setup complete"
 
 container:
-  work_dir: /src
+  work_dir: /workspace
   user: node
   init_command: /sbin/init
   startup_delay: 5
@@ -59,25 +56,27 @@ container:
 verify-fs:
   required_files:
     # Main claude-habitat source files
-    - /src/.git/config
-    - /src/CLAUDE.md
-    - /src/README.md
-    - /src/package.json
-    - /src/package-lock.json
-    - /src/claude-habitat
-    - /src/claude-habitat.js
-    - /src/claude-habitat.sh
-    - /src/habitats/base/config.yaml
-    - /src/habitats/discourse/config.yaml
-    - /src/test/unit/claude-habitat.test.js
-    - /src/node_modules/package.json
-    # Helper files in claude-habitat subdirectory
-    - /src/claude-habitat/system/CLAUDE.md
-    - /src/claude-habitat/system/tools/tools.yaml
-    - /src/claude-habitat/shared/CLAUDE.md
-    - /src/claude-habitat/shared/config.yaml
-    - /src/claude-habitat/local/CLAUDE.md
-    - /src/claude-habitat/local/config.yaml
+    - /workspace/src/.git/config
+    - /workspace/src/CLAUDE.md
+    - /workspace/src/README.md
+    - /workspace/src/package.json
+    - /workspace/src/package-lock.json
+    - /workspace/src/claude-habitat
+    - /workspace/src/claude-habitat.js
+    - /workspace/src/claude-habitat.sh
+    - /workspace/src/habitats/base/config.yaml
+    - /workspace/src/habitats/discourse/config.yaml
+    - /workspace/src/test/unit/claude-habitat.test.js
+    - /workspace/src/node_modules/package.json
+    # Helper files in habitat subdirectory
+    - /workspace/habitat/system/CLAUDE.md
+    - /workspace/habitat/system/tools/tools.yaml
+    - /workspace/habitat/shared/CLAUDE.md
+    - /workspace/habitat/shared/config.yaml
+    - /workspace/habitat/local/CLAUDE.md
+    - /workspace/habitat/local/config.yaml
+    # Claude starts here
+    - /workspace/CLAUDE.md
 
 # Disable automatic Claude instruction generation
 claude:
