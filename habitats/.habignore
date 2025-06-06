@@ -1,9 +1,11 @@
 # Habitats .habignore - files to exclude from habitat copying
 
 # Habitat infrastructure files (handled specially by claude-habitat.js)
+CLAUDE.md
 Dockerfile
 config.yaml
 config.yml
+tests/
 
 # Version control
 .git/
