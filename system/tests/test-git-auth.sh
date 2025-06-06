@@ -28,11 +28,17 @@ else
 fi
 
 # Test 4: Git credential helper is installed
-tap_has_file "/usr/local/bin/git-credential-github-app" "Git credential helper is installed"
+tools_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/tools"
+credential_helper="$tools_dir/bin/git-credential-github-app"
+if [ -f "$credential_helper" ]; then
+    tap_ok "Git credential helper is installed at $credential_helper"
+else
+    tap_not_ok "Git credential helper is installed" "Not found at $credential_helper"
+fi
 
 # Test 5: Git credential helper is executable
-if [ -f "/usr/local/bin/git-credential-github-app" ]; then
-    if [ -x "/usr/local/bin/git-credential-github-app" ]; then
+if [ -f "$credential_helper" ]; then
+    if [ -x "$credential_helper" ]; then
         tap_ok "Git credential helper is executable"
     else
         tap_not_ok "Git credential helper is executable" "File exists but is not executable"
@@ -49,19 +55,24 @@ else
 fi
 
 # Test 7: Credential helper can generate tokens
-if [ -n "$GITHUB_APP_ID" ] && [ -n "$CLAUDE_HABITAT_WORKDIR" ]; then
+if [ -n "$GITHUB_APP_ID" ] && [ -f "$credential_helper" ]; then
     # Test token generation by running credential helper
-    cred_output=$(echo | /usr/local/bin/git-credential-github-app get 2>/dev/null)
+    cred_output=$(echo | "$credential_helper" get 2>/dev/null)
     if echo "$cred_output" | grep -q "username=x-access-token" && echo "$cred_output" | grep -q "password=ghs_"; then
         tap_ok "Credential helper generates valid GitHub tokens"
     else
         tap_not_ok "Credential helper generates valid GitHub tokens" "Output: $cred_output"
     fi
 else
-    tap_skip "Credential helper generates valid GitHub tokens" "Required environment variables not set"
+    tap_skip "Credential helper generates valid GitHub tokens" "Required environment variables not set or credential helper not found"
 fi
 
-# Test 8: Token regeneration script is available
-tap_has_file "/claude-habitat/system/tools/regenerate-github-token.sh" "Token regeneration script is available"
+# Test 8: GitHub setup tool is available
+setup_tool="$tools_dir/bin/setup-github-auth"
+if [ -f "$setup_tool" ]; then
+    tap_ok "GitHub setup tool is available at $setup_tool"
+else
+    tap_not_ok "GitHub setup tool is available" "Not found at $setup_tool"
+fi
 
 tap_diag "Git authentication test completed"

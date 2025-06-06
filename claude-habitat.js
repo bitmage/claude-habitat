@@ -142,7 +142,13 @@ async function cloneRepository(container, repoInfo, workDir = '/src') {
       
       # Test credential helper
       echo "Testing credential helper..."
-      echo | /usr/local/bin/git-credential-github-app get | head -2
+      credential_helper=\$(git config --global --get credential.https://github.com.helper 2>/dev/null || echo "")
+      if [ -n "\$credential_helper" ] && [ -x "\$credential_helper" ]; then
+        echo "Found credential helper: \$credential_helper"
+        echo | "\$credential_helper" get | head -2
+      else
+        echo "No credential helper configured or not executable"
+      fi
       
       # Check git config
       echo "Git credential config:"
@@ -569,144 +575,35 @@ async function buildPreparedImage(config, tag, extraRepos) {
       }
     }
 
-    // Setup Git authentication using GitHub App AFTER shared files are available
-    console.log('Setting up Git authentication...');
-    
-    if (await hasGitHubAppAuth()) {
-      console.log('Configuring GitHub App authentication...');
-      
-      // Extract GitHub App ID from config
-      const appIdEnv = config.environment?.find(env => env.includes('GITHUB_APP_ID='));
-      const appId = appIdEnv ? appIdEnv.split('=')[1] : '1357221'; // fallback to known value
-      
-      const gitAuthSetup = `
-        echo "Setting up GitHub App authentication..."
-        
-        # Install required tools for GitHub App authentication
-        apt-get update -qq && apt-get install -y jq curl openssl > /dev/null 2>&1
-        
-        # Create dynamic git credential helper script for GitHub App
-        cat > /usr/local/bin/git-credential-github-app << 'EOF'
-#!/bin/bash
-# Git credential helper for GitHub App authentication
-# Generates fresh tokens on each use to avoid expiration issues
+    // GitHub authentication is now handled by system/tools/bin/setup-github-auth
+    console.log('GitHub authentication setup delegated to system tools');
 
-if [ "$1" = "get" ]; then
-    # Read the input 
-    while read -r line; do
-        if [ -z "$line" ]; then
-            break
-        fi
-    done
+    // Process system configuration and files BEFORE repository cloning
+    const systemDir = path.join(__dirname, 'system');
+    const systemConfigPath = path.join(systemDir, 'config.yaml');
     
-    # Find the most recent PEM file by timestamp in filename
-    # Ensure we have environment variables (source /etc/environment if needed)
-    if [ -z "\$GITHUB_APP_ID" ] || [ -z "\$CLAUDE_HABITAT_WORKDIR" ]; then
-        set -a; source /etc/environment 2>/dev/null || true; set +a
-    fi
-    
-    # Use CLAUDE_HABITAT_WORKDIR environment variable to find PEM files
-    if [ -n "\$CLAUDE_HABITAT_WORKDIR" ] && [ -d "\$CLAUDE_HABITAT_WORKDIR/habitat/shared" ]; then
-        pem_file=\$(find "\$CLAUDE_HABITAT_WORKDIR/habitat/shared" -name "*.pem" -type f | sort -r | head -1)
-    else
-        # Fallback: try common locations
-        for shared_path in "/workspace/habitat/shared" "/habitat/shared" "\$(pwd)/habitat/shared"; do
-            if [ -d "\$shared_path" ]; then
-                pem_file=\$(find "\$shared_path" -name "*.pem" -type f | sort -r | head -1)
-                if [ -n "\$pem_file" ]; then
-                    break
-                fi
-            fi
-        done
-    fi
-    
-    if [ -f "\$pem_file" ] && [ -n "\$GITHUB_APP_ID" ]; then
-        # Generate JWT for GitHub App
-        header='{"alg":"RS256","typ":"JWT"}'
-        payload="{\\\"iat\\\":\$(date +%s),\\\"exp\\\":\$((\$(date +%s) + 600)),\\\"iss\\\":\\\"\$GITHUB_APP_ID\\\"}"
-        
-        # Encode header and payload
-        header_b64=\$(echo -n "\$header" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-        payload_b64=\$(echo -n "\$payload" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-        
-        # Create signature
-        signature=\$(echo -n "\$header_b64.\$payload_b64" | openssl dgst -sha256 -sign "\$pem_file" | base64 -w 0 | tr '+/' '-_' | tr -d '=' 2>/dev/null)
-        
-        if [ -n "\$signature" ]; then
-            # Create JWT
-            jwt="\$header_b64.\$payload_b64.\$signature"
-            
-            # Get installation token with error handling
-            installations_response=\$(curl -s -H "Authorization: Bearer \$jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations" 2>/dev/null)
-            installation_id=\$(echo "\$installations_response" | jq -r '.[0].id' 2>/dev/null)
-            
-            if [ "\$installation_id" != "null" ] && [ -n "\$installation_id" ] && [ "\$installation_id" != "" ]; then
-                token_response=\$(curl -s -X POST -H "Authorization: Bearer \$jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations/\$installation_id/access_tokens" 2>/dev/null)
-                token=\$(echo "\$token_response" | jq -r '.token' 2>/dev/null)
-                
-                if [ "\$token" != "null" ] && [ -n "\$token" ] && [ "\$token" != "" ]; then
-                    echo "username=x-access-token"
-                    echo "password=\$token"
-                    exit 0
-                fi
-            fi
-        fi
-    fi
-    
-    # Fallback: no token available
-    echo "username="
-    echo "password="
-fi
-EOF
-        chmod +x /usr/local/bin/git-credential-github-app
-        
-        # Set up environment variables for the credential helper
-        export GITHUB_APP_ID="${appId}"
-        export CLAUDE_HABITAT_WORKDIR="${workDir}"
-        echo "export GITHUB_APP_ID=${appId}" >> /etc/environment
-        echo "export CLAUDE_HABITAT_WORKDIR=${workDir}" >> /etc/environment
-        
-        # Configure git to use our credential helper for GitHub
-        git config --global credential."https://github.com".helper /usr/local/bin/git-credential-github-app
-        
-        echo "GitHub App dynamic credential helper configured"
-      `;
+    if (await fileExists(systemConfigPath)) {
+      console.log('Processing system configuration...');
+      const systemConfig = await loadConfig(systemConfigPath);
       
-      try {
-        await dockerExec(tempContainer, gitAuthSetup);
-        console.log('Git authentication setup completed');
-        
-        // Test the setup
-        console.log('Testing credential helper installation...');
-        const testResult = await dockerExec(tempContainer, `
-          echo "Checking git config..."
-          git config --global --list | grep credential || echo "No credential config found"
-          echo "Checking credential helper..."
-          ls -la /usr/local/bin/git-credential-github-app
-          echo "Testing token generation..."
-          echo "Environment variables:"
-          echo "GITHUB_APP_ID=\$GITHUB_APP_ID"
-          echo "CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR"
-          set -a; source /etc/environment 2>/dev/null || true; set +a
-          echo "After sourcing /etc/environment:"
-          echo "GITHUB_APP_ID=\$GITHUB_APP_ID"
-          echo "CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR"
-          echo "Contents of /etc/environment:"
-          cat /etc/environment
-          echo "PEM files in \$CLAUDE_HABITAT_WORKDIR/habitat/shared:"
-          find "\$CLAUDE_HABITAT_WORKDIR/habitat/shared" -name "*.pem" -type f 2>/dev/null || echo "No PEM files found"
-          echo "Testing credential helper with verbose output:"
-          GITHUB_APP_ID=\$GITHUB_APP_ID CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR bash -x /usr/local/bin/git-credential-github-app get < /dev/null 2>&1 | head -20
-          echo "Simplified test:"
-          echo | /usr/local/bin/git-credential-github-app get | head -2 || echo "Credential helper test failed"
-        `);
-        console.log('Credential helper test result:', testResult);
-      } catch (authError) {
-        console.error('Git authentication setup failed:', authError.message);
-        // Don't throw - continue with the build
+      // Copy system tools FIRST so they're available for setup commands
+      const systemToolsFiles = await findFilesToCopy(systemDir, `${workDir}/habitat/system`, true);
+      if (systemToolsFiles.length > 0) {
+        console.log('Copying system tools for setup...');
+        for (const file of systemToolsFiles) {
+          await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
+        }
       }
-    } else {
-      console.log('No GitHub App configured - public repositories only');
+      
+      // Process system file operations
+      await processFileOperations(tempContainer, systemConfig, systemDir, containerUser);
+      
+      // Run system setup commands (replace {container_user} placeholder)
+      if (systemConfig.setup) {
+        // Replace placeholder with actual container user
+        const processedConfig = JSON.parse(JSON.stringify(systemConfig).replace(/\{container_user\}/g, containerUser));
+        await runSetupCommands(tempContainer, processedConfig);
+      }
     }
 
     // Clone repositories from config
@@ -731,23 +628,6 @@ EOF
     }
 
     // Working directory and user already defined above
-    
-    // Process system configuration and files
-    const systemDir = path.join(__dirname, 'system');
-    const systemConfigPath = path.join(systemDir, 'config.yaml');
-    
-    if (await fileExists(systemConfigPath)) {
-      console.log('Processing system configuration...');
-      const systemConfig = await loadConfig(systemConfigPath);
-      
-      // Process system file operations
-      await processFileOperations(tempContainer, systemConfig, systemDir, containerUser);
-      
-      // Run system setup commands
-      if (systemConfig.setup) {
-        await runSetupCommands(tempContainer, systemConfig);
-      }
-    }
     
     let systemFiles = [];
     let filesToCopy = [];
