@@ -1371,13 +1371,19 @@ async function showHabitatTestMenu(habitatName) {
   if (choice === 'b') {
     await showTestMenu();
     return;
-  } else if (choice === 'a' || choice === '') {
+  }
+  
+  // Capture test results for interactive display
+  let testResults = [];
+  const startTime = new Date();
+  
+  if (choice === 'a' || choice === '') {
     // Default to all tests
-    await runHabitatTests(habitatName);
+    testResults = await runHabitatTests(habitatName, true);
   } else if (choice === 's') {
-    await runSystemTests();
+    testResults = await runSystemTests(null, true);
   } else if (choice === 'h') {
-    await runSharedTests();
+    testResults = await runSharedTests(null, true);
   } else if (choice === 'hab') {
     // Run only habitat-specific tests
     const habitatConfigPath = path.join(__dirname, 'habitats', habitatName, 'config.yaml');
@@ -1385,15 +1391,23 @@ async function showHabitatTestMenu(habitatName) {
     
     if (habitatConfig.tests && habitatConfig.tests.length > 0) {
       console.log(`Running ${habitatName}-specific tests...\n`);
-      await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig);
+      testResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, true);
     } else {
       console.log(`No ${habitatName}-specific tests configured`);
+      testResults = [{ type: 'info', message: `No ${habitatName}-specific tests configured` }];
     }
   } else {
     console.error(colors.red('\n❌ Invalid choice'));
     await sleep(1500);
     await showHabitatTestMenu(habitatName);
+    return;
   }
+  
+  const endTime = new Date();
+  const duration = ((endTime - startTime) / 1000).toFixed(1);
+  
+  // Show results screen for interactive mode
+  await showTestResults(testResults, habitatName, choice, duration);
 }
 
 async function runAllTests() {
@@ -1421,7 +1435,7 @@ async function runAllTests() {
   }
 }
 
-async function runSystemTests(habitatConfig = null) {
+async function runSystemTests(habitatConfig = null, captureResults = false) {
   console.log(colors.yellow('Running system infrastructure tests...\n'));
   
   // If no habitat provided, use the base habitat
@@ -1432,13 +1446,14 @@ async function runSystemTests(habitatConfig = null) {
   
   const systemConfig = await loadConfig(path.join(__dirname, 'system/config.yaml'));
   if (systemConfig.tests && systemConfig.tests.length > 0) {
-    await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig);
+    return await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig, captureResults);
   } else {
     console.log('No system tests configured');
+    return captureResults ? [{ type: 'info', message: 'No system tests configured' }] : undefined;
   }
 }
 
-async function runSharedTests(habitatConfig = null) {
+async function runSharedTests(habitatConfig = null, captureResults = false) {
   console.log(colors.yellow('Running shared configuration tests...\n'));
   
   // If no habitat provided, use the base habitat
@@ -1449,13 +1464,14 @@ async function runSharedTests(habitatConfig = null) {
   
   const sharedConfig = await loadConfig(path.join(__dirname, 'shared/config.yaml'));
   if (sharedConfig.tests && sharedConfig.tests.length > 0) {
-    await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig);
+    return await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig, captureResults);
   } else {
     console.log('No shared tests configured');
+    return captureResults ? [{ type: 'info', message: 'No shared tests configured' }] : undefined;
   }
 }
 
-async function runHabitatTests(habitatName) {
+async function runHabitatTests(habitatName, captureResults = false) {
   console.log(colors.yellow(`Running tests for ${habitatName} habitat...\n`));
   
   const habitatConfigPath = path.join(__dirname, 'habitats', habitatName, 'config.yaml');
@@ -1465,30 +1481,37 @@ async function runHabitatTests(habitatName) {
   }
   
   const habitatConfig = await loadConfig(habitatConfigPath);
+  let allResults = [];
   
   // Run system tests first
   console.log('System tests:');
-  await runSystemTests(habitatConfig);
+  const systemResults = await runSystemTests(habitatConfig, captureResults);
+  if (captureResults && systemResults) allResults.push(...systemResults);
   
   // Run shared tests
   console.log('\nShared tests:');
-  await runSharedTests(habitatConfig);
+  const sharedResults = await runSharedTests(habitatConfig, captureResults);
+  if (captureResults && sharedResults) allResults.push(...sharedResults);
   
   // Run habitat-specific tests
   if (habitatConfig.tests && habitatConfig.tests.length > 0) {
     console.log(`\n${habitatName} habitat tests:`);
-    await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig);
+    const habitatResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, captureResults);
+    if (captureResults && habitatResults) allResults.push(...habitatResults);
   } else {
     console.log(`No ${habitatName}-specific tests configured`);
+    if (captureResults) allResults.push({ type: 'info', message: `No ${habitatName}-specific tests configured` });
   }
+  
+  return captureResults ? allResults : undefined;
 }
 
-async function runTestsInHabitatContainer(tests, testType, habitatConfig = null) {
+async function runTestsInHabitatContainer(tests, testType, habitatConfig = null, captureResults = false) {
   // If no habitat config provided, we need one to run tests properly
   if (!habitatConfig) {
     console.error(colors.red('Error: No habitat specified for testing'));
     console.log('Please select a habitat from the test menu or use: ./claude-habitat test <habitat-name>');
-    return;
+    return captureResults ? [] : undefined;
   }
 
   const containerName = `claude-habitat-test-${habitatConfig.name}-${Date.now()}_${process.pid}`;
@@ -1565,11 +1588,247 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null)
     ];
     
     console.log('Running tests in container...\n');
-    await dockerRun(runArgs);
+    
+    let results = [];
+    if (captureResults) {
+      try {
+        const output = await execAsync(`docker ${runArgs.join(' ')}`);
+        results = parseTestOutput(output, testType);
+      } catch (err) {
+        results = [{ 
+          type: 'error', 
+          message: `Test execution failed: ${err.message}`,
+          details: err.stdout || err.stderr || ''
+        }];
+      }
+    } else {
+      await dockerRun(runArgs);
+    }
+    
+    return captureResults ? results : undefined;
     
   } catch (err) {
     console.error(colors.red(`Error running tests: ${err.message}`));
     // Container already removed with --rm flag
+    return captureResults ? [{ type: 'error', message: err.message }] : undefined;
+  }
+}
+
+function parseTestOutput(output, testType) {
+  const results = [];
+  const lines = output.split('\n');
+  
+  for (const line of lines) {
+    // Parse TAP output
+    if (line.match(/^ok \d+/)) {
+      const match = line.match(/^ok \d+ - (.+)/);
+      results.push({
+        type: 'pass',
+        test: match ? match[1] : line,
+        details: line
+      });
+    } else if (line.match(/^not ok \d+/)) {
+      const match = line.match(/^not ok \d+ - (.+)/);
+      results.push({
+        type: 'fail',
+        test: match ? match[1] : line,
+        details: line
+      });
+    } else if (line.match(/^# /)) {
+      // TAP diagnostic message
+      results.push({
+        type: 'info',
+        message: line.replace(/^# /, ''),
+        details: line
+      });
+    } else if (line.includes('Error') || line.includes('Failed')) {
+      results.push({
+        type: 'error',
+        message: line,
+        details: line
+      });
+    }
+  }
+  
+  // If no structured results found, treat the whole output as info
+  if (results.length === 0) {
+    results.push({
+      type: 'info',
+      message: `${testType} tests completed`,
+      details: output
+    });
+  }
+  
+  return results;
+}
+
+async function showTestResults(results, habitatName, testChoice, duration) {
+  console.log(`\n${colors.green('=')}${colors.green('='.repeat(50))}${colors.green('=')}`);
+  console.log(`${colors.green('Test Results Summary')}`);
+  console.log(`${colors.green('=')}${colors.green('='.repeat(50))}${colors.green('=')}`);
+  
+  console.log(`\nHabitat: ${colors.cyan(habitatName)}`);
+  console.log(`Test Type: ${colors.cyan(getTestTypeName(testChoice))}`);
+  console.log(`Duration: ${colors.cyan(duration + 's')}`);
+  console.log(`Timestamp: ${colors.cyan(new Date().toLocaleString())}\n`);
+  
+  // Count results by type
+  const counts = {
+    pass: results.filter(r => r.type === 'pass').length,
+    fail: results.filter(r => r.type === 'fail').length,
+    error: results.filter(r => r.type === 'error').length,
+    info: results.filter(r => r.type === 'info').length
+  };
+  
+  console.log(`${colors.green('✓ Passed:')} ${counts.pass}`);
+  console.log(`${colors.red('✗ Failed:')} ${counts.fail}`);
+  console.log(`${colors.red('⚠ Errors:')} ${counts.error}`);
+  console.log(`${colors.yellow('ℹ Info:')} ${counts.info}\n`);
+  
+  // Show failed tests first
+  const failedTests = results.filter(r => r.type === 'fail' || r.type === 'error');
+  if (failedTests.length > 0) {
+    console.log(`${colors.red('Failed Tests:')}`);
+    failedTests.forEach((result, index) => {
+      console.log(`  ${index + 1}. ${result.test || result.message}`);
+      if (result.details && result.details !== result.message) {
+        console.log(`     ${colors.gray(result.details)}`);
+      }
+    });
+    console.log('');
+  }
+  
+  // Show passed tests
+  const passedTests = results.filter(r => r.type === 'pass');
+  if (passedTests.length > 0) {
+    console.log(`${colors.green('Passed Tests:')}`);
+    passedTests.forEach((result, index) => {
+      console.log(`  ${index + 1}. ${result.test || result.message}`);
+    });
+    console.log('');
+  }
+  
+  console.log(`${colors.green('=')}${colors.green('='.repeat(50))}${colors.green('=')}\n`);
+  
+  // Interactive options
+  console.log('Options:');
+  console.log(`  ${colors.yellow('[Enter]')} - Continue to test menu`);
+  console.log(`  ${colors.yellow('[s]')}ave   - Save results to file`);
+  console.log(`  ${colors.yellow('[r]')}un    - Run tests again`);
+  console.log('');
+  
+  const choice = await new Promise(resolve => {
+    if (!process.stdin.isTTY) {
+      resolve('');
+      return;
+    }
+    
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    
+    const onKeypress = (key) => {
+      // Handle Ctrl+C
+      if (key === '\u0003') {
+        console.log('\n');
+        process.exit(0);
+      }
+      
+      // Handle Enter
+      if (key === '\r' || key === '\n') {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.removeListener('data', onKeypress);
+        resolve('');
+        return;
+      }
+      
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdin.removeListener('data', onKeypress);
+      resolve(key.toLowerCase());
+    };
+    
+    process.stdin.on('data', onKeypress);
+  });
+  
+  console.log(''); // Add newline after selection
+  
+  if (choice === 's') {
+    await saveTestResults(results, habitatName, testChoice, duration);
+    // Show results again after saving
+    await showTestResults(results, habitatName, testChoice, duration);
+  } else if (choice === 'r') {
+    // Run tests again
+    await showHabitatTestMenu(habitatName);
+  } else {
+    // Return to test menu
+    await showTestMenu();
+  }
+}
+
+function getTestTypeName(choice) {
+  switch (choice) {
+    case 'a': case '': return 'All tests';
+    case 's': return 'System tests';
+    case 'h': return 'Shared tests';
+    case 'hab': return 'Habitat-specific tests';
+    default: return 'Unknown';
+  }
+}
+
+async function saveTestResults(results, habitatName, testChoice, duration) {
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  
+  const filename = await new Promise(resolve => {
+    const defaultName = `test-results-${habitatName}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+    rl.question(`Enter filename (${colors.gray(defaultName)}): `, answer => {
+      rl.close();
+      resolve(answer.trim() || defaultName);
+    });
+  });
+  
+  const timestamp = new Date().toLocaleString();
+  const testTypeName = getTestTypeName(testChoice);
+  
+  const report = `Claude Habitat Test Results
+==========================
+
+Habitat: ${habitatName}
+Test Type: ${testTypeName}
+Duration: ${duration}s
+Timestamp: ${timestamp}
+
+Summary:
+--------
+✓ Passed: ${results.filter(r => r.type === 'pass').length}
+✗ Failed: ${results.filter(r => r.type === 'fail').length}
+⚠ Errors: ${results.filter(r => r.type === 'error').length}
+ℹ Info: ${results.filter(r => r.type === 'info').length}
+
+Detailed Results:
+----------------
+${results.map((result, index) => {
+  const icon = result.type === 'pass' ? '✓' : 
+               result.type === 'fail' ? '✗' : 
+               result.type === 'error' ? '⚠' : 'ℹ';
+  return `${index + 1}. ${icon} ${result.test || result.message}
+   ${result.details || ''}`;
+}).join('\n\n')}
+
+Generated by Claude Habitat v1.0
+`;
+  
+  try {
+    const fs = require('fs');
+    fs.writeFileSync(filename, report);
+    console.log(`${colors.green('✓')} Test results saved to: ${colors.cyan(filename)}\n`);
+  } catch (err) {
+    console.error(`${colors.red('✗')} Failed to save results: ${err.message}\n`);
   }
 }
 
