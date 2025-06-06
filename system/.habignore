@@ -1,0 +1,21 @@
+# System .habignore - files to exclude from habitat copying
+
+# Version control
+.git/
+.gitignore
+
+# Documentation (system docs are for developers, not habitat users)
+*.md
+README*
+
+# Build artifacts
+*.log
+*.tmp
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

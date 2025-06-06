@@ -1,0 +1,23 @@
+# Shared .habignore - files to exclude from habitat copying
+
+# Version control
+.git/
+.gitignore
+
+# Sensitive files (private keys should be handled separately)
+*.pem
+*_key
+*_key.*
+github_deploy_key*
+
+# Build artifacts
+*.log
+*.tmp
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

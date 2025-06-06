@@ -1,0 +1,34 @@
+# Shared user configuration applied to all habitats
+name: shared-setup
+description: User preferences and shared configuration for all habitats
+
+# Structured file operations - copy files to specific locations with permissions
+files:
+  - src: gitconfig
+    dest: /etc/gitconfig
+    mode: 644
+    description: "System-wide git configuration"
+    
+  - src: gitconfig  
+    dest: /root/.gitconfig
+    mode: 644
+    description: "Git configuration for root user"
+    
+  # Future example: user aliases
+  # - src: aliases.sh
+  #   dest: /etc/profile.d/user-aliases.sh
+  #   mode: 755
+  #   description: "User command aliases"
+
+# Setup commands that run after file operations
+setup:
+  user:
+    run_as: "{container_user}"
+    commands:
+      - |
+        # Configure git for container user
+        if [ -f /claude-habitat/shared/gitconfig ]; then
+          cp /claude-habitat/shared/gitconfig ~/.gitconfig
+          chmod 644 ~/.gitconfig
+          echo "Git configuration applied for user: $(whoami)"
+        fi

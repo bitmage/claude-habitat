@@ -1,0 +1,22 @@
+# Habitats .habignore - files to exclude from habitat copying
+
+# Habitat infrastructure files (handled specially by claude-habitat.js)
+Dockerfile
+config.yaml
+config.yml
+
+# Version control
+.git/
+.gitignore
+
+# Build artifacts
+*.log
+*.tmp
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

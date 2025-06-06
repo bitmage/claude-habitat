@@ -34,13 +34,13 @@ repositories:
     path: /src/plugins/county-fence
     branch: main
     shallow: true
-    # access: write (default) - Active development with PRs
+    access: write # (default) - Active development with PRs
 
   - url: https://github.com/bitmage/discourse-calendar
     path: /src/plugins/discourse-calendar
-    branch: main
+    branch: filter-by-tags
     shallow: true
-    # access: write (default) - Active development with PRs
+    access: write # (default) - Active development with PRs
 
 # Setup commands
 setup:
@@ -83,10 +83,6 @@ container:
   user: discourse
   init_command: /sbin/boot
   startup_delay: 10
-
-# Git configuration
-git:
-  config_file: "gitconfig"
 
 # Claude configuration
 claude:

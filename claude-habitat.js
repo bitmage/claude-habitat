@@ -166,38 +166,69 @@ async function cloneRepository(container, repoInfo) {
   }
 }
 
+async function loadIgnorePatterns(sourceDir) {
+  const ignoreFile = path.join(sourceDir, '.habignore');
+  const patterns = [];
+  
+  try {
+    const content = await fs.readFile(ignoreFile, 'utf8');
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // Skip empty lines and comments
+      if (trimmed && !trimmed.startsWith('#')) {
+        patterns.push(trimmed);
+      }
+    }
+  } catch (err) {
+    // No .habignore file found, that's OK
+  }
+  
+  return patterns;
+}
+
+function shouldIgnoreItem(item, patterns) {
+  return patterns.some(pattern => {
+    if (pattern.includes('*')) {
+      // Convert glob pattern to regex
+      const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+      return regex.test(item);
+    } else if (pattern.endsWith('/')) {
+      // Directory pattern
+      return item === pattern.slice(0, -1);
+    } else {
+      // Exact match
+      return item === pattern;
+    }
+  });
+}
+
 async function findFilesToCopy(sourceDir, destBase = '/claude-habitat', isShared = false) {
   const filesToCopy = [];
-  const excludePatterns = isShared ? [] : ['Dockerfile', 'config.yaml', 'config.yml', '*.md', '.git', '.gitignore'];
+  
+  // Load ignore patterns from .habignore file
+  const ignorePatterns = await loadIgnorePatterns(sourceDir);
   
   try {
     const items = await fs.readdir(sourceDir);
     for (const item of items) {
-      // Check if item should be excluded (only for habitat directories, not shared)
-      const shouldExclude = excludePatterns.some(pattern => {
-        if (pattern.includes('*')) {
-          const regex = new RegExp('^' + pattern.replace('*', '.*') + '$');
-          return regex.test(item);
-        }
-        return item === pattern;
-      });
+      // Check if item should be ignored based on .habignore
+      if (shouldIgnoreItem(item, ignorePatterns)) {
+        continue;
+      }
       
-      if (!shouldExclude) {
-        const itemPath = path.join(sourceDir, item);
-        const stat = await fs.stat(itemPath);
-        
-        if (stat.isFile()) {
-          filesToCopy.push({
-            src: itemPath,
-            dest: `${destBase}/${item}`
-          });
-        } else if (stat.isDirectory() && item === 'files') {
-          // Special handling for 'files' directory - copy its contents
-          await copyFilesDirectory(itemPath, destBase, filesToCopy);
-        } else if (stat.isDirectory() && isShared) {
-          // For shared directory, copy subdirectories recursively
-          await copyFilesDirectory(itemPath, `${destBase}/${item}`, filesToCopy);
-        }
+      const itemPath = path.join(sourceDir, item);
+      const stat = await fs.stat(itemPath);
+      
+      if (stat.isFile()) {
+        filesToCopy.push({
+          src: itemPath,
+          dest: `${destBase}/${item}`
+        });
+      } else if (stat.isDirectory() && isShared) {
+        // For shared directory, copy subdirectories recursively
+        await copyFilesDirectory(itemPath, `${destBase}/${item}`, filesToCopy);
       }
     }
   } catch (err) {
@@ -221,6 +252,47 @@ async function copyFilesDirectory(srcDir, destBase, filesToCopy) {
     } else if (stat.isDirectory()) {
       // Recursively handle subdirectories
       await copyFilesDirectory(srcPath, path.join(destBase, item), filesToCopy);
+    }
+  }
+}
+
+async function processFileOperations(container, config, configDir, containerUser = null) {
+  if (!config.files || !Array.isArray(config.files)) {
+    return;
+  }
+
+  console.log('Processing file operations...');
+  for (const fileOp of config.files) {
+    const { src, dest, mode = '644', description } = fileOp;
+    
+    if (!src || !dest) {
+      console.warn(`Warning: Invalid file operation - missing src or dest: ${JSON.stringify(fileOp)}`);
+      continue;
+    }
+
+    const srcPath = path.join(configDir, src);
+    
+    // Check if source file exists
+    if (!await fileExists(srcPath)) {
+      console.warn(`Warning: Source file not found: ${srcPath}`);
+      continue;
+    }
+
+    if (description) {
+      console.log(`  ${description}`);
+    }
+    
+    console.log(`  Copying ${src} to ${dest} (mode: ${mode})`);
+    
+    try {
+      // Copy file to container
+      await copyFileToContainer(container, srcPath, dest, containerUser);
+      
+      // Set permissions
+      await dockerExec(container, `chmod ${mode} ${dest} 2>/dev/null || true`);
+      
+    } catch (err) {
+      console.warn(`Warning: Failed to process file operation for ${src}: ${err.message}`);
     }
   }
 }
@@ -457,8 +529,24 @@ async function buildPreparedImage(config, tag, extraRepos) {
     const workDir = config.container?.work_dir || '/src';
     const containerUser = config.container?.user || 'root';
     
-    // Copy system files (infrastructure)
+    // Process system configuration and files
     const systemDir = path.join(__dirname, 'system');
+    const systemConfigPath = path.join(systemDir, 'config.yaml');
+    
+    if (await fileExists(systemConfigPath)) {
+      console.log('Processing system configuration...');
+      const systemConfig = await loadConfig(systemConfigPath);
+      
+      // Process system file operations
+      await processFileOperations(tempContainer, systemConfig, systemDir, containerUser);
+      
+      // Run system setup commands
+      if (systemConfig.setup) {
+        await runSetupCommands(tempContainer, systemConfig);
+      }
+    }
+    
+    // Copy remaining system files (infrastructure)
     const systemFiles = await findFilesToCopy(systemDir, `${workDir}/claude-habitat/system`, true);
     if (systemFiles.length > 0) {
       console.log('Copying system files to container...');
@@ -467,7 +555,26 @@ async function buildPreparedImage(config, tag, extraRepos) {
       }
     }
 
-    // Copy shared files (user preferences)
+    // Process shared configuration and files
+    const sharedDir = path.join(__dirname, 'shared');
+    const sharedConfigPath = path.join(sharedDir, 'config.yaml');
+    
+    if (await fileExists(sharedConfigPath)) {
+      console.log('Processing shared configuration...');
+      const sharedConfig = await loadConfig(sharedConfigPath);
+      
+      // Process shared file operations
+      await processFileOperations(tempContainer, sharedConfig, sharedDir, containerUser);
+      
+      // Run shared setup commands (replace {container_user} placeholder)
+      if (sharedConfig.setup) {
+        // Replace placeholder with actual container user
+        const processedConfig = JSON.parse(JSON.stringify(sharedConfig).replace(/\{container_user\}/g, containerUser));
+        await runSetupCommands(tempContainer, processedConfig);
+      }
+    }
+    
+    // Copy remaining shared files (user preferences)
     const sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/claude-habitat/shared`, true);
     if (sharedFiles.length > 0) {
       console.log('Copying shared files to container...');
@@ -476,9 +583,9 @@ async function buildPreparedImage(config, tag, extraRepos) {
       }
     }
 
-    // Copy additional files from habitat directory
+    // Copy additional files from habitat directory to local
     const habitatDir = path.dirname(config._configPath);
-    const filesToCopy = await findFilesToCopy(habitatDir, `${workDir}/claude-habitat`);
+    const filesToCopy = await findFilesToCopy(habitatDir, `${workDir}/claude-habitat/local`);
     if (filesToCopy.length > 0) {
       console.log('Copying habitat files to container...');
       for (const file of filesToCopy) {
@@ -520,9 +627,9 @@ async function buildPreparedImage(config, tag, extraRepos) {
     console.log('Setting up Claude instructions...');
     try {
       const systemClaudePath = path.join(__dirname, 'system/CLAUDE.md');
-      const sharedClaudePath = path.join(__dirname, 'shared/claude.md');
+      const sharedClaudePath = path.join(__dirname, 'shared/CLAUDE.md');
       const habitatDir = path.dirname(config._configPath);
-      const habitatClaudePath = path.join(habitatDir, 'claude.md');
+      const habitatClaudePath = path.join(habitatDir, 'CLAUDE.md');
       
       let claudeContent = '';
       
@@ -572,52 +679,7 @@ async function buildPreparedImage(config, tag, extraRepos) {
       console.warn(`Warning: Failed to setup Claude instructions: ${err.message}`);
     }
 
-    // Configure git settings if specified in config
-    if (config.git?.config_file) {
-      const habitatDir = path.dirname(config._configPath);
-      const gitConfigPath = path.join(habitatDir, config.git.config_file);
-      
-      if (await fileExists(gitConfigPath)) {
-        console.log('Configuring git from config file...');
-        
-        // Copy git config file to container
-        await copyFileToContainer(tempContainer, gitConfigPath, '/tmp/gitconfig', 'root');
-        
-        const gitSetup = `
-          # Apply git configuration globally
-          cp /tmp/gitconfig /etc/gitconfig
-          chmod 644 /etc/gitconfig
-          
-          # Also copy to root user's home
-          cp /tmp/gitconfig /root/.gitconfig
-          chmod 644 /root/.gitconfig
-          
-          # Copy to container user's home if different
-          if [ "${containerUser}" != "root" ]; then
-            mkdir -p /home/${containerUser}
-            cp /tmp/gitconfig /home/${containerUser}/.gitconfig
-            chown ${containerUser}:${containerUser} /home/${containerUser}/.gitconfig
-            chmod 644 /home/${containerUser}/.gitconfig
-          fi
-          
-          # Clean up temp file
-          rm -f /tmp/gitconfig
-        `;
-        
-        await dockerExec(tempContainer, gitSetup);
-      }
-    } else if (config.git?.user?.name && config.git?.user?.email) {
-      // Fallback to old method if no config file specified
-      console.log('Configuring git user...');
-      
-      const gitSetup = `
-        # Configure git user globally
-        git config --global user.name "${config.git.user.name}"
-        git config --global user.email "${config.git.user.email}"
-      `;
-      
-      await dockerExec(tempContainer, gitSetup);
-    }
+    // Git configuration is now handled by shared/config.yaml file operations
 
     // Ensure the entire claude-habitat directory is accessible to the container user
     if (containerUser && containerUser !== 'root' && (sharedFiles.length > 0 || filesToCopy.length > 0)) {

@@ -1,0 +1,26 @@
+# System infrastructure configuration applied to all habitats
+name: system-setup  
+description: Core infrastructure setup for all claude-habitat containers
+
+# System-level file operations
+files:
+  # Future examples:
+  # - src: bashrc-additions
+  #   dest: /etc/bash.bashrc.d/claude-habitat
+  #   mode: 644
+  #   description: "System bash configuration additions"
+
+# System setup commands
+setup:
+  root:
+    - |
+      # System-wide configuration
+      echo "Claude Habitat system setup complete"
+      
+      # Ensure profile.d directory exists for future use
+      mkdir -p /etc/profile.d
+      
+      # Set timezone if not already set
+      if [ ! -f /etc/timezone ]; then
+        echo "UTC" > /etc/timezone
+      fi

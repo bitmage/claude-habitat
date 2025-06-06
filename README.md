@@ -8,7 +8,7 @@ AI-powered development environments that are isolated, reproducible, and ready f
 # Clone and setup
 git clone <repo-url> && cd claude-habitat && npm install
 
-# Try the example  
+# Try the example
 ./claude-habitat discourse
 
 # Or create your own (with AI assistance)
@@ -29,7 +29,7 @@ When "Habitat" Claude runs in a container:
 📖 **[Complete Documentation →](docs/README.md)**
 
 - **[Setup Guide](docs/SETUP.md)** - Get started quickly
-- **[Usage Guide](docs/USAGE.md)** - Create and run environments  
+- **[Usage Guide](docs/USAGE.md)** - Create and run environments
 - **[Terminology](docs/TERMINOLOGY.md)** - Complete domain model and concepts
 - **[GitHub Authentication](docs/GITHUB-AUTH.md)** - SSH keys and GitHub Apps
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues and solutions
@@ -42,6 +42,6 @@ When "Habitat" Claude runs in a container:
 - **`shared/`** - Your personal preferences across all projects
 - **`habitats/`** - Individual project development environments
 
-Perfect for AI pair programming without risk! 🚀
+Perfect for semi-autonomous AI without risk! 🚀
 
 See **[TERMINOLOGY.md](docs/TERMINOLOGY.md)** for complete domain concepts including "Meta" Claude vs "Habitat" Claude.
