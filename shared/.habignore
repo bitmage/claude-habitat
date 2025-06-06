@@ -4,10 +4,8 @@
 .git/
 .gitignore
 
-# Sensitive files (private keys should be handled separately)
-*.pem
+# Sensitive files (but keep .pem files for GitHub App auth)
 *_key
-*_key.*
 github_deploy_key*
 
 # Build artifacts

@@ -81,6 +81,13 @@ Your tasks may include:
 
 Users can say "menu" at any time to see the options again.
 
+For further instructions about maintenance mode refer to these items in the claude/ directory:
+
+BEST_PRACTICES.md  MAINTENANCE.md  TROUBLESHOOTING.md
+INSTRUCTIONS.md
+
+In addition you may use the claude/scratch directory for any temporary files you wish to create.
+
 ## Important Guidelines
 
 ### For Configuration Creation:
@@ -107,7 +114,7 @@ Users can say "menu" at any time to see the options again.
 
 1. **Preserve functionality** - Don't break existing features
 2. **Follow code style** - Match the existing patterns
-3. **Test thoroughly** - Ensure changes work correctly
+3. **Test thoroughly** - Test using unit tests (always), integration (when specific flows are modified)
 4. **Document changes** - Update README when adding features
 
 ## Common Patterns

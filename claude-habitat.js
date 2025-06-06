@@ -108,7 +108,7 @@ async function buildBaseImage(config) {
   return tag;
 }
 
-async function cloneRepository(container, repoInfo) {
+async function cloneRepository(container, repoInfo, workDir = '/src') {
   const { url, path: repoPath, branch = 'main' } = repoInfo;
   
   // Ensure we're using HTTPS URLs for token authentication
@@ -131,9 +131,14 @@ async function cloneRepository(container, repoInfo) {
 
     # Test GitHub App authentication
     echo "=== GitHub App Authentication Verification ==="
-    if [ -f /tmp/github-app-key.pem ]; then
+    if [ -d ${workDir}/claude-habitat/shared ] && find ${workDir}/claude-habitat/shared -name "*.pem" -type f | grep -q .; then
       echo "GitHub App: Available"
       echo "GitHub App authentication will be used for repository access"
+      
+      # Show environment variables for debugging
+      echo "Environment check:"
+      echo "GITHUB_APP_ID=\$GITHUB_APP_ID"
+      echo "CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR"
       
       # Test credential helper
       echo "Testing credential helper..."
@@ -305,8 +310,11 @@ async function copyFileToContainer(container, srcPath, destPath, containerUser =
     const destDir = path.dirname(destPath);
     await dockerExec(container, `mkdir -p ${destDir}`);
     
+    // Resolve symlinks before copying to avoid Docker cp issues
+    const realSrcPath = await fs.realpath(srcPath);
+    
     // Copy file using docker cp
-    await execAsync(`docker cp "${srcPath}" ${container}:${destPath}`);
+    await execAsync(`docker cp "${realSrcPath}" ${container}:${destPath}`);
     
     // Get original file permissions
     const stat = await fs.stat(srcPath);
@@ -417,88 +425,173 @@ async function buildPreparedImage(config, tag, extraRepos) {
       throw new Error(`Container exited unexpectedly:\n${logs}`);
     }
 
-    // Setup Git authentication using GitHub App BEFORE cloning repositories
+    // Get working directory and user for file placement first
+    const workDir = config.container?.work_dir || '/src';
+    const containerUser = config.container?.user || 'root';
+    
+    // Copy shared files FIRST so they're available for authentication
+    const sharedDir = path.join(__dirname, 'shared');
+    const sharedConfigPath = path.join(sharedDir, 'config.yaml');
+    
+    if (await fileExists(sharedConfigPath)) {
+      console.log('Processing shared configuration...');
+      const sharedConfig = await loadConfig(sharedConfigPath);
+      
+      // Process shared file operations
+      await processFileOperations(tempContainer, sharedConfig, sharedDir, containerUser);
+      
+      // Run shared setup commands (replace {container_user} placeholder)
+      if (sharedConfig.setup) {
+        // Replace placeholder with actual container user
+        const processedConfig = JSON.parse(JSON.stringify(sharedConfig).replace(/\{container_user\}/g, containerUser));
+        await runSetupCommands(tempContainer, processedConfig);
+      }
+    }
+    
+    // Copy remaining shared files (user preferences)
+    const sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/claude-habitat/shared`, true);
+    if (sharedFiles.length > 0) {
+      console.log('Copying shared files to container...');
+      for (const file of sharedFiles) {
+        await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
+      }
+    }
+
+    // Setup Git authentication using GitHub App AFTER shared files are available
     console.log('Setting up Git authentication...');
     
     if (await hasGitHubAppAuth()) {
       console.log('Configuring GitHub App authentication...');
       
-      // Copy GitHub App private key to container
-      const pemFiles = await findPemFiles(path.join(__dirname, 'shared'));
-      if (pemFiles.length > 0) {
-        // Use the 2025-06-04 key that's referenced in the config
-        const pemFile = pemFiles.find(f => f.includes('2025-06-04')) || pemFiles[0];
-        console.log(`Copying GitHub App key: ${path.basename(pemFile)}`);
-        await copyFileToContainer(tempContainer, pemFile, '/tmp/github-app-key.pem', 'root');
+      // Extract GitHub App ID from config
+      const appIdEnv = config.environment?.find(env => env.includes('GITHUB_APP_ID='));
+      const appId = appIdEnv ? appIdEnv.split('=')[1] : '1357221'; // fallback to known value
+      
+      const gitAuthSetup = `
+        echo "Setting up GitHub App authentication..."
         
-        // Extract GitHub App ID from config
-        const appIdEnv = config.environment?.find(env => env.includes('GITHUB_APP_ID='));
-        const appId = appIdEnv ? appIdEnv.split('=')[1] : '1357221'; // fallback to known value
+        # Install required tools for GitHub App authentication
+        apt-get update -qq && apt-get install -y jq curl openssl > /dev/null 2>&1
         
-        const gitAuthSetup = `
-          echo "Setting up GitHub App authentication..."
-          
-          # Install required tools for GitHub App authentication
-          apt-get update -qq && apt-get install -y jq curl openssl > /dev/null 2>&1
-          
-          # Generate GitHub App token once during setup
-          echo "Generating GitHub App token..."
-          header='{"alg":"RS256","typ":"JWT"}'
-          payload="{\\"iat\\":$(date +%s),\\"exp\\":$(($(date +%s) + 600)),\\"iss\\":\\"${appId}\\"}"
-          
-          header_b64=$(echo -n "$header" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-          payload_b64=$(echo -n "$payload" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-          signature=$(echo -n "$header_b64.$payload_b64" | openssl dgst -sha256 -sign /tmp/github-app-key.pem | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-          jwt="$header_b64.$payload_b64.$signature"
-          
-          # Get installation token
-          installation_id=$(curl -s -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations" | jq -r '.[0].id')
-          
-          if [ "$installation_id" != "null" ] && [ -n "$installation_id" ]; then
-            token=$(curl -s -X POST -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations/$installation_id/access_tokens" | jq -r '.token')
+        # Create dynamic git credential helper script for GitHub App
+        cat > /usr/local/bin/git-credential-github-app << 'EOF'
+#!/bin/bash
+# Git credential helper for GitHub App authentication
+# Generates fresh tokens on each use to avoid expiration issues
+
+if [ "$1" = "get" ]; then
+    # Read the input 
+    while read -r line; do
+        if [ -z "$line" ]; then
+            break
+        fi
+    done
+    
+    # Find the most recent PEM file by timestamp in filename
+    # Ensure we have environment variables (source /etc/environment if needed)
+    if [ -z "\$GITHUB_APP_ID" ] || [ -z "\$CLAUDE_HABITAT_WORKDIR" ]; then
+        set -a; source /etc/environment 2>/dev/null || true; set +a
+    fi
+    
+    # Use CLAUDE_HABITAT_WORKDIR environment variable to find PEM files
+    if [ -n "\$CLAUDE_HABITAT_WORKDIR" ] && [ -d "\$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" ]; then
+        pem_file=\$(find "\$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" -name "*.pem" -type f | sort -r | head -1)
+    else
+        # Fallback: try common locations
+        for shared_path in "/src/claude-habitat/shared" "/claude-habitat/shared" "\$(pwd)/claude-habitat/shared"; do
+            if [ -d "\$shared_path" ]; then
+                pem_file=\$(find "\$shared_path" -name "*.pem" -type f | sort -r | head -1)
+                if [ -n "\$pem_file" ]; then
+                    break
+                fi
+            fi
+        done
+    fi
+    
+    if [ -f "\$pem_file" ] && [ -n "\$GITHUB_APP_ID" ]; then
+        # Generate JWT for GitHub App
+        header='{"alg":"RS256","typ":"JWT"}'
+        payload="{\\\"iat\\\":\$(date +%s),\\\"exp\\\":\$((\$(date +%s) + 600)),\\\"iss\\\":\\\"\$GITHUB_APP_ID\\\"}"
+        
+        # Encode header and payload
+        header_b64=\$(echo -n "\$header" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
+        payload_b64=\$(echo -n "\$payload" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
+        
+        # Create signature
+        signature=\$(echo -n "\$header_b64.\$payload_b64" | openssl dgst -sha256 -sign "\$pem_file" | base64 -w 0 | tr '+/' '-_' | tr -d '=' 2>/dev/null)
+        
+        if [ -n "\$signature" ]; then
+            # Create JWT
+            jwt="\$header_b64.\$payload_b64.\$signature"
             
-            if [ "$token" != "null" ] && [ -n "$token" ]; then
-              echo "Got GitHub App token successfully"
-              
-              # Configure git with the token directly using credential store
-              echo "https://x-access-token:$token@github.com" > /root/.git-credentials
-              git config --global credential.helper store
-              git config --global credential."https://github.com".username x-access-token
-              
-              # Store token for later use
-              echo "$token" > /tmp/github-token
-              chmod 600 /tmp/github-token
-            else
-              echo "Failed to get GitHub App installation token"
+            # Get installation token with error handling
+            installations_response=\$(curl -s -H "Authorization: Bearer \$jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations" 2>/dev/null)
+            installation_id=\$(echo "\$installations_response" | jq -r '.[0].id' 2>/dev/null)
+            
+            if [ "\$installation_id" != "null" ] && [ -n "\$installation_id" ] && [ "\$installation_id" != "" ]; then
+                token_response=\$(curl -s -X POST -H "Authorization: Bearer \$jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations/\$installation_id/access_tokens" 2>/dev/null)
+                token=\$(echo "\$token_response" | jq -r '.token' 2>/dev/null)
+                
+                if [ "\$token" != "null" ] && [ -n "\$token" ] && [ "\$token" != "" ]; then
+                    echo "username=x-access-token"
+                    echo "password=\$token"
+                    exit 0
+                fi
             fi
-          else
-            echo "Failed to get GitHub App installation"
-          fi
-          
-          echo "GitHub App authentication configured"
-        `;
+        fi
+    fi
+    
+    # Fallback: no token available
+    echo "username="
+    echo "password="
+fi
+EOF
+        chmod +x /usr/local/bin/git-credential-github-app
         
-        try {
-          await dockerExec(tempContainer, gitAuthSetup);
-          console.log('Git authentication setup completed');
-          
-          // Test the setup
-          console.log('Testing credential helper installation...');
-          const testResult = await dockerExec(tempContainer, `
-            echo "Checking git config..."
-            git config --global --list | grep credential || echo "No credential config found"
-            echo "Checking GitHub token..."
-            if [ -f /tmp/github-token ]; then
-              echo "Token available: $(cat /tmp/github-token | cut -c1-20)..."
-            else
-              echo "No token file found"
-            fi
-          `);
-          console.log('Credential helper test result:', testResult);
-        } catch (authError) {
-          console.error('Git authentication setup failed:', authError.message);
-          // Don't throw - continue with the build
-        }
+        # Set up environment variables for the credential helper
+        export GITHUB_APP_ID="${appId}"
+        export CLAUDE_HABITAT_WORKDIR="${workDir}"
+        echo "export GITHUB_APP_ID=${appId}" >> /etc/environment
+        echo "export CLAUDE_HABITAT_WORKDIR=${workDir}" >> /etc/environment
+        
+        # Configure git to use our credential helper for GitHub
+        git config --global credential."https://github.com".helper /usr/local/bin/git-credential-github-app
+        
+        echo "GitHub App dynamic credential helper configured"
+      `;
+      
+      try {
+        await dockerExec(tempContainer, gitAuthSetup);
+        console.log('Git authentication setup completed');
+        
+        // Test the setup
+        console.log('Testing credential helper installation...');
+        const testResult = await dockerExec(tempContainer, `
+          echo "Checking git config..."
+          git config --global --list | grep credential || echo "No credential config found"
+          echo "Checking credential helper..."
+          ls -la /usr/local/bin/git-credential-github-app
+          echo "Testing token generation..."
+          echo "Environment variables:"
+          echo "GITHUB_APP_ID=\$GITHUB_APP_ID"
+          echo "CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR"
+          set -a; source /etc/environment 2>/dev/null || true; set +a
+          echo "After sourcing /etc/environment:"
+          echo "GITHUB_APP_ID=\$GITHUB_APP_ID"
+          echo "CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR"
+          echo "Contents of /etc/environment:"
+          cat /etc/environment
+          echo "PEM files in \$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared:"
+          find "\$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" -name "*.pem" -type f 2>/dev/null || echo "No PEM files found"
+          echo "Testing credential helper with verbose output:"
+          GITHUB_APP_ID=\$GITHUB_APP_ID CLAUDE_HABITAT_WORKDIR=\$CLAUDE_HABITAT_WORKDIR bash -x /usr/local/bin/git-credential-github-app get < /dev/null 2>&1 | head -20
+          echo "Simplified test:"
+          echo | /usr/local/bin/git-credential-github-app get | head -2 || echo "Credential helper test failed"
+        `);
+        console.log('Credential helper test result:', testResult);
+      } catch (authError) {
+        console.error('Git authentication setup failed:', authError.message);
+        // Don't throw - continue with the build
       }
     } else {
       console.log('No GitHub App configured - public repositories only');
@@ -511,7 +604,7 @@ async function buildPreparedImage(config, tag, extraRepos) {
         const repo = config.repositories[i];
         if (repo && repo.url) {
           console.log(`Processing repository ${i}: ${repo.url}`);
-          await cloneRepository(tempContainer, repo);
+          await cloneRepository(tempContainer, repo, workDir);
         }
       }
     }
@@ -521,13 +614,11 @@ async function buildPreparedImage(config, tag, extraRepos) {
       console.log('Cloning additional repositories...');
       for (const repoSpec of extraRepos) {
         const repo = parseRepoSpec(repoSpec);
-        await cloneRepository(tempContainer, repo);
+        await cloneRepository(tempContainer, repo, workDir);
       }
     }
 
-    // Get working directory and user for file placement
-    const workDir = config.container?.work_dir || '/src';
-    const containerUser = config.container?.user || 'root';
+    // Working directory and user already defined above
     
     // Process system configuration and files
     const systemDir = path.join(__dirname, 'system');
@@ -555,33 +646,7 @@ async function buildPreparedImage(config, tag, extraRepos) {
       }
     }
 
-    // Process shared configuration and files
-    const sharedDir = path.join(__dirname, 'shared');
-    const sharedConfigPath = path.join(sharedDir, 'config.yaml');
-    
-    if (await fileExists(sharedConfigPath)) {
-      console.log('Processing shared configuration...');
-      const sharedConfig = await loadConfig(sharedConfigPath);
-      
-      // Process shared file operations
-      await processFileOperations(tempContainer, sharedConfig, sharedDir, containerUser);
-      
-      // Run shared setup commands (replace {container_user} placeholder)
-      if (sharedConfig.setup) {
-        // Replace placeholder with actual container user
-        const processedConfig = JSON.parse(JSON.stringify(sharedConfig).replace(/\{container_user\}/g, containerUser));
-        await runSetupCommands(tempContainer, processedConfig);
-      }
-    }
-    
-    // Copy remaining shared files (user preferences)
-    const sharedFiles = await findFilesToCopy(sharedDir, `${workDir}/claude-habitat/shared`, true);
-    if (sharedFiles.length > 0) {
-      console.log('Copying shared files to container...');
-      for (const file of sharedFiles) {
-        await copyFileToContainer(tempContainer, file.src, file.dest, containerUser);
-      }
-    }
+    // Shared files were already processed before authentication setup
 
     // Copy additional files from habitat directory to local
     const habitatDir = path.dirname(config._configPath);
@@ -1094,6 +1159,266 @@ Session started: ${new Date().toISOString()}
   console.log('\nMaintenance session completed.');
 }
 
+// Test running functionality
+async function runTestMode(testType, testTarget) {
+  console.log(colors.green('\n=== Claude Habitat Test Runner ===\n'));
+
+  if (testType === 'system') {
+    await runSystemTests();
+  } else if (testType === 'shared') {
+    await runSharedTests();
+  } else if (testTarget) {
+    // Run tests for specific habitat
+    await runHabitatTests(testTarget);
+  } else {
+    // Show test menu
+    await showTestMenu();
+  }
+}
+
+async function showTestMenu() {
+  const habitatsDir = path.join(__dirname, 'habitats');
+  let habitats = [];
+  
+  try {
+    const dirs = await fs.readdir(habitatsDir);
+    for (const dir of dirs) {
+      const configPath = path.join(habitatsDir, dir, 'config.yaml');
+      if (await fileExists(configPath)) {
+        habitats.push({ name: dir, path: configPath });
+      }
+    }
+    habitats.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (err) {
+    console.log('No habitats directory found');
+  }
+
+  console.log('Test Options:\n');
+  console.log(`  ${colors.yellow('[sys]')}tem    - Test system infrastructure`);
+  console.log(`  ${colors.yellow('[shr]')}ed     - Test shared user configuration`);
+  console.log(`  ${colors.yellow('[all]')}       - Test all (system + shared + all habitats)\n`);
+  
+  if (habitats.length > 0) {
+    console.log('Habitat Tests:\n');
+    habitats.forEach((habitat, index) => {
+      const key = (index + 1).toString();
+      console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}`);
+    });
+    console.log('');
+  }
+  
+  console.log(`  ${colors.yellow('[q]')}uit     - Exit\n`);
+  
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  
+  const choice = await new Promise(resolve => {
+    rl.question('Select test to run: ', answer => {
+      rl.close();
+      resolve(answer.trim().toLowerCase());
+    });
+  });
+  
+  if (choice === 'q') {
+    process.exit(0);
+  } else if (choice === 'sys' || choice === 'system') {
+    await runSystemTests();
+  } else if (choice === 'shr' || choice === 'shared') {
+    await runSharedTests();
+  } else if (choice === 'all') {
+    await runAllTests();
+  } else {
+    // Check if it's a habitat number
+    const habitatIndex = parseInt(choice) - 1;
+    if (!isNaN(habitatIndex) && habitatIndex >= 0 && habitatIndex < habitats.length) {
+      await runHabitatTests(habitats[habitatIndex].name);
+    } else {
+      console.error(colors.red('Invalid choice'));
+      process.exit(1);
+    }
+  }
+}
+
+async function runAllTests() {
+  console.log(colors.yellow('=== Running All Tests ===\n'));
+  
+  console.log('1. System Tests:');
+  await runSystemTests();
+  
+  console.log('\n2. Shared Tests:');
+  await runSharedTests();
+  
+  // Run tests for all habitats
+  const habitatsDir = path.join(__dirname, 'habitats');
+  try {
+    const dirs = await fs.readdir(habitatsDir);
+    for (const dir of dirs) {
+      const configPath = path.join(habitatsDir, dir, 'config.yaml');
+      if (await fileExists(configPath)) {
+        console.log(`\n3. ${dir} Habitat Tests:`);
+        await runHabitatTests(dir);
+      }
+    }
+  } catch (err) {
+    console.log('No habitats found to test');
+  }
+}
+
+async function runSystemTests() {
+  console.log(colors.yellow('Running system infrastructure tests...\n'));
+  
+  const systemConfig = await loadConfig(path.join(__dirname, 'system/config.yaml'));
+  if (systemConfig.tests && systemConfig.tests.length > 0) {
+    await runTestsInContainer('system', systemConfig.tests, path.join(__dirname, 'system'));
+  } else {
+    console.log('No system tests configured');
+  }
+}
+
+async function runSharedTests() {
+  console.log(colors.yellow('Running shared configuration tests...\n'));
+  
+  const sharedConfig = await loadConfig(path.join(__dirname, 'shared/config.yaml'));
+  if (sharedConfig.tests && sharedConfig.tests.length > 0) {
+    await runTestsInContainer('shared', sharedConfig.tests, path.join(__dirname, 'shared'));
+  } else {
+    console.log('No shared tests configured');
+  }
+}
+
+async function runHabitatTests(habitatName) {
+  console.log(colors.yellow(`Running tests for ${habitatName} habitat...\n`));
+  
+  const habitatConfigPath = path.join(__dirname, 'habitats', habitatName, 'config.yaml');
+  if (!await fileExists(habitatConfigPath)) {
+    console.error(colors.red(`Habitat ${habitatName} not found`));
+    process.exit(1);
+  }
+  
+  const habitatConfig = await loadConfig(habitatConfigPath);
+  
+  // Run system tests first
+  console.log('System tests:');
+  await runSystemTests();
+  
+  // Run shared tests
+  console.log('\nShared tests:');
+  await runSharedTests();
+  
+  // Run habitat-specific tests
+  if (habitatConfig.tests && habitatConfig.tests.length > 0) {
+    console.log(`\n${habitatName} habitat tests:`);
+    await runTestsInContainer(habitatName, habitatConfig.tests, path.dirname(habitatConfigPath), habitatConfig);
+  } else {
+    console.log(`No ${habitatName}-specific tests configured`);
+  }
+}
+
+async function runTestsInContainer(testType, tests, testDir, habitatConfig = null) {
+  const containerName = `claude-habitat-test-${testType}-${Date.now()}_${process.pid}`;
+  
+  try {
+    // Use the prepared habitat image if running habitat tests, otherwise use a simple base
+    let imageTag;
+    if (habitatConfig) {
+      // For habitat tests, use the prepared image if it exists
+      const hash = calculateCacheHash(habitatConfig, []);
+      const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
+      
+      if (await dockerImageExists(preparedTag)) {
+        imageTag = preparedTag;
+        console.log(`Using prepared habitat image: ${preparedTag}`);
+      } else {
+        const baseTag = habitatConfig.image.tag || `claude-habitat-${habitatConfig.name}:latest`;
+        if (await dockerImageExists(baseTag)) {
+          imageTag = baseTag;
+          console.log(`Using base habitat image: ${baseTag}`);
+        } else {
+          console.log(colors.yellow('Habitat image not built yet. Building for testing...'));
+          await buildBaseImage(habitatConfig);
+          imageTag = baseTag;
+        }
+      }
+    } else {
+      // For system/shared tests, use a minimal Ubuntu image
+      imageTag = 'ubuntu:22.04';
+    }
+    
+    // Start test container
+    const workDir = habitatConfig?.container?.work_dir || '/src';
+    const runArgs = [
+      'run', '-d',
+      '--name', containerName,
+      '-w', workDir,
+      imageTag,
+      'sleep', '300'
+    ];
+    
+    await dockerRun(runArgs);
+    
+    // Copy test files to container if needed
+    if (testType !== 'habitat') {
+      // For system/shared tests, copy the test files
+      const testFiles = await findFilesToCopy(testDir, `/claude-habitat/${testType}`, true);
+      for (const file of testFiles) {
+        await copyFileToContainer(containerName, file.src, file.dest);
+      }
+      
+      // Also copy TAP helpers
+      await copyFileToContainer(containerName, 
+        path.join(__dirname, 'system/tools/tap-helpers.sh'),
+        '/claude-habitat/system/tools/tap-helpers.sh');
+    }
+    
+    // Set environment variables for tests
+    const envSetup = `
+      export GITHUB_APP_ID=1357221
+      export CLAUDE_HABITAT_WORKDIR=${workDir}
+    `;
+    await dockerExec(containerName, envSetup);
+    
+    // Install basic tools for testing if needed
+    if (testType !== 'habitat') {
+      const toolsSetup = `
+        apt-get update -qq >/dev/null 2>&1
+        apt-get install -y curl jq openssl git >/dev/null 2>&1
+      `;
+      await dockerExec(containerName, toolsSetup);
+    }
+    
+    // Run each test
+    for (const testScript of tests) {
+      const testPath = testType === 'habitat' 
+        ? `/claude-habitat/local/${testScript}`
+        : `/claude-habitat/${testType}/${testScript}`;
+      
+      console.log(`Running ${testScript}...`);
+      
+      try {
+        const result = await dockerExec(containerName, `chmod +x ${testPath} && ${testPath}`);
+        console.log(result);
+      } catch (err) {
+        console.error(colors.red(`Test failed: ${testScript}`));
+        console.error(colors.red(err.message));
+      }
+    }
+    
+  } catch (err) {
+    console.error(colors.red(`Error running tests: ${err.message}`));
+  } finally {
+    // Cleanup
+    try {
+      await execAsync(`docker stop ${containerName}`);
+      await execAsync(`docker rm ${containerName}`);
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
 // CLI handling
 async function main() {
   const args = process.argv.slice(2);
@@ -1105,7 +1430,10 @@ async function main() {
     help: false,
     start: false,
     add: false,
-    maintain: false
+    maintain: false,
+    test: false,
+    testTarget: null,
+    testType: 'all'
   };
 
   // Parse arguments
@@ -1141,6 +1469,21 @@ async function main() {
       case 'maintain':
         options.maintain = true;
         break;
+      case 'test':
+        options.test = true;
+        // Check for test target (habitat name or --system/--shared)
+        if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+          options.testTarget = args[++i];
+        }
+        break;
+      case '--system':
+        options.test = true;
+        options.testType = 'system';
+        break;
+      case '--shared':
+        options.test = true;
+        options.testType = 'shared';
+        break;
       default:
         // If it doesn't start with -, treat it as a habitat name
         if (!args[i].startsWith('-')) {
@@ -1168,6 +1511,13 @@ SHORTCUTS:
     s, start               Start last used configuration (or first available)
     a, add                 Create new configuration with AI assistance
     m, maintain            Update/troubleshoot Claude Habitat itself
+    test [HABITAT]         Run tests (habitat, --system, --shared, or menu)
+
+TEST OPTIONS:
+    test                   Show test menu for selecting what to test
+    test discourse         Run all tests for discourse habitat
+    test --system          Run system infrastructure tests only
+    test --shared          Run shared user configuration tests only
 
 EXAMPLES:
     # Start with shortcut
@@ -1307,6 +1657,9 @@ EXAMPLES:
   } else if (options.maintain) {
     await runMaintenanceMode();
     await returnToMainMenu();
+    return;
+  } else if (options.test) {
+    await runTestMode(options.testType, options.testTarget);
     return;
   }
 
@@ -1451,7 +1804,8 @@ EXAMPLES:
     }
     console.log(`  ${colors.yellow('[s]')}tart   - Start last used configuration`);
     console.log(`  ${colors.yellow('[a]')}dd     - Create new configuration with AI assistance`);
-    console.log(`  ${colors.yellow('[t]')}ools   - Manage development tools`);
+    console.log(`  ${colors.yellow('[t]')}est    - Run tests (system, shared, or habitat)`);
+    console.log(`  t${colors.yellow('[o]')}ols   - Manage development tools`);
     console.log(`  ${colors.yellow('[m]')}aintain - Update/troubleshoot Claude Habitat itself`);
     console.log(`  ${colors.yellow('[c]')}lean   - Remove all Docker images`);
     console.log(`  ${colors.yellow('[h]')}elp    - Show usage information`);
@@ -1527,6 +1881,11 @@ EXAMPLES:
       await addNewConfiguration();
       process.exit(0);
     } else if (choice === 't') {
+      // Test mode
+      await runTestMode('all', null);
+      await returnToMainMenu();
+      return;
+    } else if (choice === 'o') {
       // Tools management
       await runToolsManagement();
       await returnToMainMenu();

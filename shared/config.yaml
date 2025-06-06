@@ -2,6 +2,10 @@
 name: shared-setup
 description: User preferences and shared configuration for all habitats
 
+# Shared tests (run with: claude-habitat test --shared)
+tests:
+  - tests/test-user-config.sh
+
 # Structured file operations - copy files to specific locations with permissions
 files:
   - src: gitconfig

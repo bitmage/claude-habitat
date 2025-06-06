@@ -18,8 +18,20 @@ You are "Habitat" Claude running in a Claude Habitat - an isolated Docker develo
 - **Project code**: Your current working directory contains the main project
 - **System infrastructure**: `./claude-habitat/system/` - tools, base configuration (managed by Claude Habitat)
 - **User preferences**: `./claude-habitat/shared/` - your personal configs, keys, scripts
+- **Local habitat files**: `./claude-habitat/local/` - habitat-specific files and scripts
 - **Scratch space**: `./claude-habitat/scratch/` - create this for your temporary files and notes
 - **Development tools**: Available in PATH from both system and user tool installations
+
+## GitHub Authentication Recovery
+
+If you encounter git authentication failures (token expired), you can regenerate the GitHub App token:
+
+```bash
+# Regenerate GitHub App token if authentication fails
+./claude-habitat/system/tools/regenerate-github-token.sh
+```
+
+This ensures the habitat never gets stuck unable to push code. The script uses the most recent GitHub App private key and generates a fresh installation token.
 
 ## Available Development Tools
 

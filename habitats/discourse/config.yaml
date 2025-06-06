@@ -1,6 +1,10 @@
 name: discourse
 description: Discourse plugin development environment
 
+# Habitat tests (run with: claude-habitat test discourse)
+tests:
+  - tests/test-discourse-setup.sh
+
 # Docker image configuration
 image:
   dockerfile: Dockerfile

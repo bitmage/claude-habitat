@@ -2,6 +2,12 @@
 name: system-setup  
 description: Core infrastructure setup for all claude-habitat containers
 
+# System tests (run with: claude-habitat test --system)
+tests:
+  - tests/test-core-tools.sh
+  - tests/test-file-operations.sh
+  - tests/test-git-auth.sh
+
 # System-level file operations
 files:
   # Future examples:
