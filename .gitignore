@@ -13,3 +13,4 @@ temp-*.yaml
 # Tools (downloaded on demand, not committed)
 system/tools/bin/
 system/tools/.tmp/
+.last-used-config
