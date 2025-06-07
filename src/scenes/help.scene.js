@@ -53,7 +53,7 @@ EXAMPLES:
     # List available configs
     claude-habitat.js --list-configs`);
 
-  await context.getInput('Press Enter to return to main menu...');
+  await context.getInput('Press Enter to return to main menu...', false);
   
   const { mainMenuScene } = require('./main-menu.scene');
   return mainMenuScene;

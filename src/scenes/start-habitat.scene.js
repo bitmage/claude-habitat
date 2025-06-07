@@ -21,7 +21,7 @@ async function startHabitatScene(context, configPath) {
   } catch (error) {
     context.error(`Failed to start habitat: ${error.message}`);
     
-    await context.getInput('Press Enter to return to main menu...');
+    await context.getInput('Press Enter to return to main menu...', false);
     
     const { mainMenuScene } = require('./main-menu.scene');
     return mainMenuScene;

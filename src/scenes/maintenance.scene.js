@@ -6,7 +6,7 @@ async function maintenanceScene(context) {
   context.log('Maintenance mode is not yet implemented in scene mode.');
   context.log('This would launch the existing runMaintenanceMode() function.');
   
-  await context.getInput('Press Enter to return to main menu...');
+  await context.getInput('Press Enter to return to main menu...', false);
   
   const { mainMenuScene } = require('./main-menu.scene');
   return mainMenuScene;

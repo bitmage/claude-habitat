@@ -33,7 +33,7 @@ class SceneContext {
   /**
    * Get input based on mode (interactive or test sequence)
    */
-  async getInput(prompt = 'Enter your choice: ') {
+  async getInput(prompt = 'Enter your choice: ', singleKey = true) {
     if (this.mode === 'test') {
       // In test mode, return next character from sequence
       const input = this.sequence[this.sequenceIndex++] || 'q';
@@ -41,13 +41,48 @@ class SceneContext {
       return input;
     }
 
-    // Interactive mode
-    this.initReadline();
-    return new Promise((resolve) => {
-      this.rl.question(prompt, (answer) => {
-        resolve(answer.trim());
+    // Interactive mode - use single keypress for menu choices
+    if (singleKey && process.stdin.isTTY) {
+      process.stdout.write(prompt);
+      return new Promise((resolve) => {
+        if (!process.stdin.isTTY) {
+          // Fallback for non-TTY mode
+          this.initReadline();
+          this.rl.question('', (answer) => {
+            resolve(answer.trim().toLowerCase());
+          });
+          return;
+        }
+
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+        process.stdin.setEncoding('utf8');
+
+        const onKeypress = (key) => {
+          // Handle Ctrl+C
+          if (key === '\u0003') {
+            console.log('\n');
+            process.exit(0);
+          }
+
+          process.stdin.setRawMode(false);
+          process.stdin.pause();
+          process.stdin.removeListener('data', onKeypress);
+          console.log(); // Add newline after keypress
+          resolve(key.toLowerCase());
+        };
+
+        process.stdin.on('data', onKeypress);
       });
-    });
+    } else {
+      // Multi-character input mode (for questions that need full answers)
+      this.initReadline();
+      return new Promise((resolve) => {
+        this.rl.question(prompt, (answer) => {
+          resolve(answer.trim());
+        });
+      });
+    }
   }
 
   /**

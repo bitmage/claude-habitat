@@ -19,7 +19,7 @@ async function testTypeScene(context, habitatName = 'base') {
       }
       
       context.log('\nPress Enter to return to main menu...');
-      await context.getInput('');
+      await context.getInput('', false);
       
       const { mainMenuScene } = require('./main-menu.scene');
       return mainMenuScene;
@@ -87,7 +87,7 @@ async function testTypeScene(context, habitatName = 'base') {
     }
     
     context.log('\nPress Enter to return to main menu...');
-    await context.getInput('');
+    await context.getInput('', false);
     
     const { mainMenuScene } = require('./main-menu.scene');
     return mainMenuScene;

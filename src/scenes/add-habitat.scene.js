@@ -6,7 +6,7 @@ async function addHabitatScene(context) {
   context.log('AI-assisted habitat creation is not yet implemented in scene mode.');
   context.log('This would launch the existing addNewConfiguration() function.');
   
-  await context.getInput('Press Enter to return to main menu...');
+  await context.getInput('Press Enter to return to main menu...', false);
   
   const { mainMenuScene } = require('./main-menu.scene');
   return mainMenuScene;

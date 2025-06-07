@@ -4,6 +4,134 @@
 
 Claude Habitat creates isolated Docker environments for development. Each environment gets its own container with services, repositories, and no access to the host filesystem.
 
+## Design Philosophy
+
+### Interactive-First Architecture
+
+Claude Habitat is designed as an **interactive-first** tool that maintains user engagement:
+
+- **Continuous Flow**: CLI commands (`--help`, `--list-configs`, `--clean`) display their output and return to the main menu, rather than exiting to the terminal
+- **User Context**: Users stay within the tool's context, enabling them to perform multiple operations without restarting
+- **Graceful Experience**: Every path leads back to a decision point, never leaving users at a dead end
+
+### Hybrid Architecture: CLI + Interactive
+
+The tool intentionally supports two complementary modes:
+
+1. **Direct CLI Operations** - For automation and quick actions:
+   - `./claude-habitat start discourse` - Start specific habitat directly
+   - `./claude-habitat test base --system` - Run specific tests
+   - `./claude-habitat --clean` - Clean Docker images (then return to menu)
+
+2. **Interactive Scene-Based Flows** - For exploration and complex workflows:
+   - Main menu navigation with single-key selections
+   - Test menu for choosing test types interactively
+   - Context-aware prompts and confirmations
+
+This hybrid approach serves both power users (who know exactly what they want) and exploratory users (who benefit from guided interaction).
+
+### Domain-Driven Functional Programming
+
+Code should reflect the domain model defined in `docs/TERMINOLOGY.md`:
+
+1. **Use Domain Language** in function names:
+   ```javascript
+   // Good: Domain-focused names
+   startSession(habitat, repositories)
+   prepareWorkspace(sessionConfig)
+   validateSessionAccess(habitat)
+   
+   // Avoid: Technical implementation names
+   runContainer(config, repos)
+   buildImage(cfg)
+   checkRepos(hab)
+   ```
+
+2. **Prefer Pure Functions** and data transformation:
+   ```javascript
+   // Good: Pure function that transforms data
+   function calculateCacheHash(config, extraRepos) {
+     return sha256(JSON.stringify({ config, extraRepos }));
+   }
+   
+   // Avoid: Stateful operations mixed with logic
+   function updateAndGetHash() {
+     this.config.lastUsed = Date.now();
+     return this.hash;
+   }
+   ```
+
+3. **Functional Composition** over OOP:
+   ```javascript
+   // Good: Compose simple functions
+   const validateAndStart = flow(
+     validateConfig,
+     prepareWorkspace,
+     startSession
+   );
+   
+   // Avoid: Complex class hierarchies
+   class HabitatManager extends BaseManager {
+     constructor() { super(); }
+   }
+   ```
+
+### Code Organization Principles
+
+1. **Small, Focused Modules** with single responsibilities:
+   - `src/cli-parser.js` - Only parses CLI arguments
+   - `src/session.js` - Only manages habitat sessions
+   - `src/workspace.js` - Only handles workspace operations
+
+2. **Clear Separation** between layers:
+   - **Infrastructure**: `docker.js`, `filesystem.js`, `github.js`
+   - **Domain**: `session.js`, `workspace.js`, `habitat.js`
+   - **UI**: `src/scenes/*.js`
+
+3. **Scene-Based UI Architecture** for testability:
+   - Each scene is an async function: `async (context) => nextScene`
+   - Scenes are pure in terms of application state
+   - Input/output handled through context object
+
+### Testing Philosophy
+
+1. **Product-Focused Tests** over infrastructure tests:
+   - Test what users actually do, not implementation details
+   - Focus on workflows and outcomes, not internal APIs
+
+2. **UI Testing Through Workflows**:
+   ```bash
+   # Test complete user journeys as sequences:
+   ./claude-habitat --test-sequence="t2f"  # Test > Claude-habitat > Filesystem
+   
+   # What this validates:
+   # - User can navigate from main menu to test menu
+   # - Test menu displays correctly with all options
+   # - Selecting option 2 shows habitat list
+   # - Selecting 'f' runs filesystem verification
+   # - Results display correctly
+   # - User returns to appropriate menu
+   ```
+
+   **How to test workflows**:
+   - Identify common user paths (start habitat, run tests, get help)
+   - Create test sequences that follow these paths
+   - Verify both successful completion and error handling
+   - Check that navigation flows correctly between scenes
+   - Ensure error states provide helpful recovery options
+
+3. **Visual Verification** through snapshots:
+   - Generate snapshots: `npm run test:ui`
+   - Review output formatting and content
+   - Catch visual regressions before users see them
+
+### Error Handling Philosophy
+
+- **Always provide a path forward** - Never leave users stuck
+- **Suggest solutions** - Include actionable next steps in error messages
+- **Preserve user context** - Return to appropriate menu after errors
+- **Make errors educational** - Help users understand what went wrong
+
 ## Your Roles
 
 ### 1. Configuration Creator (Add Mode)
