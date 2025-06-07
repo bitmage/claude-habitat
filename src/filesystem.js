@@ -267,6 +267,126 @@ async function runFilesystemVerification(config) {
   }
 }
 
+// Run verify-fs bash script with scope support
+async function runVerifyFsScript(containerName, scope = 'all', config = null) {
+  const { dockerExec } = require('./docker');
+  const { colors } = require('./utils');
+  
+  try {
+    // Determine work directory from config or default
+    const workDir = config?.container?.work_dir || '/workspace';
+    const containerUser = config?.container?.user || 'root';
+    
+    // Set environment variables for the script
+    const envVars = [`WORKSPACE_ROOT=${workDir}`, 'TAP_MODE=true'];
+    
+    console.log(`Running filesystem verification (scope: ${scope})...`);
+    
+    // Run the verify-fs script inside the container
+    const command = `cd ${workDir} && WORKSPACE_ROOT=${workDir} TAP_MODE=true ./claude-habitat/system/tools/bin/verify-fs ${scope}`;
+    const result = await dockerExec(containerName, command, containerUser);
+    
+    // Parse TAP output
+    const lines = result.split('\n').filter(line => line.trim());
+    let passed = 0;
+    let failed = 0;
+    let total = 0;
+    
+    lines.forEach(line => {
+      if (line.startsWith('ok ')) {
+        passed++;
+      } else if (line.startsWith('not ok ')) {
+        failed++;
+      } else if (line.match(/^1\.\.(\d+)$/)) {
+        total = parseInt(line.split('..')[1]);
+      }
+    });
+    
+    const success = failed === 0 && total > 0;
+    const message = success 
+      ? `Filesystem verification passed (${passed}/${total} files verified)`
+      : `Filesystem verification failed (${failed}/${total} files missing)`;
+    
+    return {
+      passed: success,
+      message,
+      scope,
+      totalFiles: total,
+      passedFiles: passed,
+      failedFiles: failed,
+      output: result
+    };
+    
+  } catch (err) {
+    return {
+      passed: false,
+      message: `Filesystem verification error: ${err.message}`,
+      scope,
+      error: err.message
+    };
+  }
+}
+
+// Enhanced verification that uses the bash script
+async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', config = null) {
+  const { dockerRun, dockerIsRunning, dockerImageExists } = require('./docker');
+  const { colors, sleep } = require('./utils');
+  const { promisify } = require('util');
+  const { exec } = require('child_process');
+  const execAsync = promisify(exec);
+  
+  const containerName = `verify-fs-${Date.now()}`;
+  
+  console.log(`Starting filesystem verification container...`);
+  
+  try {
+    // Verify image exists
+    if (!await dockerImageExists(preparedTag)) {
+      throw new Error(`Prepared image not found: ${preparedTag}`);
+    }
+    
+    // Start a temporary container for verification
+    const runArgs = [
+      'run', '-d',
+      '--name', containerName,
+      preparedTag,
+      config?.container?.init_command || '/sbin/init'
+    ];
+    
+    await dockerRun(runArgs);
+    
+    // Wait a moment for container to start
+    await sleep(2000);
+    
+    // Run verification using bash script
+    const verifyResult = await runVerifyFsScript(containerName, scope, config);
+    
+    if (verifyResult.passed) {
+      console.log(colors.green(`✅ ${verifyResult.message}`));
+    } else {
+      console.log(colors.red(`❌ ${verifyResult.message}`));
+      if (verifyResult.output) {
+        console.log(colors.yellow('Verification output:'));
+        console.log(verifyResult.output);
+      }
+    }
+    
+    return verifyResult;
+    
+  } catch (err) {
+    console.error(colors.red(`Error during filesystem verification: ${err.message}`));
+    throw err;
+  } finally {
+    // Cleanup
+    try {
+      await execAsync(`docker stop ${containerName}`);
+      await execAsync(`docker rm ${containerName}`);
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
 module.exports = {
   loadIgnorePatterns,
   shouldIgnoreItem,
@@ -275,5 +395,7 @@ module.exports = {
   processFileOperations,
   copyFileToContainer,
   verifyFilesystem,
-  runFilesystemVerification
+  runFilesystemVerification,
+  runVerifyFsScript,
+  runEnhancedFilesystemVerification
 };

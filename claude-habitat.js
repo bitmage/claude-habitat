@@ -406,8 +406,14 @@ async function main() {
                 options.testType = 'system';
               } else if (testTypeFlag === '--shared') {
                 options.testType = 'shared';
-              } else if (testTypeFlag === '--verify-fs') {
-                options.testType = 'verify-fs';
+              } else if (testTypeFlag.startsWith('--verify-fs')) {
+                // Support --verify-fs=scope syntax
+                if (testTypeFlag.includes('=')) {
+                  const scope = testTypeFlag.split('=')[1];
+                  options.testType = `verify-fs:${scope}`;
+                } else {
+                  options.testType = 'verify-fs';
+                }
               } else if (testTypeFlag === '--habitat') {
                 options.testType = 'habitat';
               } else if (testTypeFlag === '--all') {
@@ -459,7 +465,11 @@ TEST OPTIONS:
     test discourse         Run all tests for discourse habitat  
     test discourse --system    Run system tests in discourse habitat
     test discourse --shared    Run shared tests in discourse habitat
-    test discourse --verify-fs Run filesystem verification for discourse habitat
+    test discourse --verify-fs    Run filesystem verification for discourse habitat
+    test discourse --verify-fs=system   Run system filesystem verification
+    test discourse --verify-fs=shared   Run shared filesystem verification  
+    test discourse --verify-fs=habitat  Run habitat filesystem verification
+    test discourse --verify-fs=all      Run all filesystem verification scopes
     test discourse --habitat   Run discourse-specific tests only
     test discourse --all       Run all tests for discourse habitat
 

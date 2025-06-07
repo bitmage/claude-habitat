@@ -36,3 +36,14 @@ setup:
           chmod 644 ~/.gitconfig
           echo "Git configuration applied for user: $(whoami)"
         fi
+
+# Filesystem verification - verify shared/user files are properly configured
+verify-fs:
+  required_files:
+    # Git configuration files
+    - /etc/gitconfig
+    - /root/.gitconfig
+    # Infrastructure files
+    - /claude-habitat/shared/CLAUDE.md
+    - /claude-habitat/shared/config.yaml
+    - /claude-habitat/shared/gitconfig

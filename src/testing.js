@@ -36,9 +36,18 @@ async function runTestMode(testType, testTarget) {
       console.log(`Running shared tests in ${testTarget} habitat...`);
       await runSharedTests(habitatConfig);
     } else if (testType === 'verify-fs') {
-      console.log(`Running filesystem verification for ${testTarget} habitat...`);
-      const { runFilesystemVerification } = require('./filesystem');
-      await runFilesystemVerification(habitatConfig);
+      // Support scope parameter: verify-fs:scope or just verify-fs (defaults to 'all')
+      const parts = testType.split(':');
+      const scope = parts[1] || 'all';
+      console.log(`Running filesystem verification (scope: ${scope}) for ${testTarget} habitat...`);
+      const { runEnhancedFilesystemVerification } = require('./filesystem');
+      const { calculateCacheHash } = require('./utils');
+      
+      // Calculate prepared image tag
+      const hash = calculateCacheHash(habitatConfig, []);
+      const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
+      
+      await runEnhancedFilesystemVerification(preparedTag, scope, habitatConfig);
     } else if (testType === 'habitat') {
       console.log(`Running ${testTarget}-specific tests...`);
       if (habitatConfig.tests && habitatConfig.tests.length > 0) {
