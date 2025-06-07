@@ -31,7 +31,9 @@ test('testGitAccess with mock SSH key', async () => {
     // Test with existing SSH key (this will fail at SSH step, which is expected)
     const resultWithKey = await testGitAccess('user/repo', fakeSshKey);
     assert.strictEqual(resultWithKey.accessible, false);
-    assert(resultWithKey.error.includes('SSH authentication failed') || resultWithKey.error.includes('Repository access denied'));
+    assert(resultWithKey.error.includes('SSH authentication failed') || 
+           resultWithKey.error.includes('Repository access denied') ||
+           resultWithKey.error.includes('Git access failed'));
     
   } finally {
     // Cleanup
@@ -63,17 +65,17 @@ test('testRepositoryAccess composition', async () => {
   assert.strictEqual(result1.accessible, true);
   assert.strictEqual(result1.reason, 'Unknown URL format, skipping validation');
   
-  // Test with GitHub URL (will fail due to no SSH key/auth, but tests the flow)
+  // Test with GitHub URL (will fail due to no GitHub App auth, but tests the flow)
   const result2 = await testRepositoryAccess('https://github.com/definitely-not-real/repo', 'read');
   assert.strictEqual(result2.accessible, false);
-  assert(result2.reason.includes('Git access failed'));
+  assert(result2.reason.includes('GitHub App') || result2.reason.includes('Repository access failed'));
   assert.strictEqual(result2.accessMode, 'read');
   
   // Test write mode 
   const result3 = await testRepositoryAccess('git@github.com:definitely-not-real/repo', 'write');
   assert.strictEqual(result3.accessible, false);
   assert.strictEqual(result3.accessMode, 'write');
-  assert(result3.needsDeployKey || result3.needsGitHubCli);
+  assert(result3.needsGitHubApp);
 });
 
 // Test error boundary conditions

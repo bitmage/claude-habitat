@@ -106,6 +106,28 @@ async function testGitHubCliAccess(repoPath, ghCommand = null) {
   }
 }
 
+// Test Git access using SSH key (for backward compatibility with integration tests)
+async function testGitAccess(repoPath, sshKeyPath) {
+  try {
+    if (!await fileExists(sshKeyPath)) {
+      return { accessible: false, error: 'SSH key not found' };
+    }
+    
+    // Test SSH connection to GitHub
+    const testCmd = `ssh -i "${sshKeyPath}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -T git@github.com`;
+    await execAsync(testCmd, { timeout: 10000 });
+    
+    return { accessible: true, error: null };
+  } catch (err) {
+    if (err.message.includes('Permission denied') || err.message.includes('publickey')) {
+      return { accessible: false, error: 'SSH authentication failed' };
+    } else if (err.message.includes('Repository access denied')) {
+      return { accessible: false, error: 'Repository access denied' };
+    }
+    return { accessible: false, error: `Git access failed: ${err.message}` };
+  }
+}
+
 // Main function: test repository access using GitHub App
 async function testRepositoryAccess(repoUrl, accessMode = 'write', options = {}) {
   try {
@@ -141,6 +163,8 @@ async function testRepositoryAccess(repoUrl, accessMode = 'write', options = {})
 
 module.exports = {
   parseRepoPath,
+  testGitAccess,
   testGitHubAppAccess,
+  testGitHubCliAccess,
   testRepositoryAccess
 };
