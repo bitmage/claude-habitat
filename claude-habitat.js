@@ -81,7 +81,7 @@ async function runHabitat(configPath, extraRepos = [], overrideCommand = null) {
 
 async function runContainer(tag, config, envVars, overrideCommand = null) {
   const containerName = `${config.name}_${Date.now()}_${process.pid}`;
-  const workDir = config.container?.work_dir || '/src';
+  const workDir = config.container?.work_dir || '/workspace';
   const containerUser = config.container?.user || 'root';
   const claudeCommand = overrideCommand || config.claude?.command || 'claude';
 

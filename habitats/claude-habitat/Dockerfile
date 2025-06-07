@@ -20,7 +20,7 @@ RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 RUN groupadd -f docker && usermod -aG docker node
 
 # Create workspace directory structure with proper permissions
-RUN mkdir -p /workspace/src /workspace/habitat && \
+RUN mkdir -p /workspace && \
     chown -R node:node /workspace
 
 # Create a simple init script that keeps container running

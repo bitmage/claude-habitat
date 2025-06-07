@@ -189,7 +189,7 @@ async function runSetupCommands(container, config) {
 }
 
 // Clone repository into container
-async function cloneRepository(container, repoInfo, workDir = '/src') {
+async function cloneRepository(container, repoInfo, workDir = '/workspace') {
   const { colors } = require('./utils');
   const { url, path: repoPath, branch = 'main' } = repoInfo;
   const cloneUrl = url;
@@ -201,8 +201,32 @@ async function cloneRepository(container, repoInfo, workDir = '/src') {
     await dockerExec(container, `mkdir -p ${repoPath}`);
     
     // Clone repository
-    const cloneCommand = `cd ${workDir} && git clone --depth 1 --branch ${branch} ${cloneUrl} ${repoPath.replace(workDir + '/', '')}`;
-    await dockerExec(container, cloneCommand);
+    // Handle case where repoPath is the same as workDir
+    let targetPath = repoPath;
+    if (repoPath === workDir) {
+      // Clone into current directory - need to handle existing files
+      const checkEmpty = await dockerExec(container, `ls -A ${workDir} | wc -l`);
+      if (checkEmpty.trim() === '0') {
+        // Directory is empty, can clone directly
+        const cloneCommand = `cd ${workDir} && git clone --depth 1 --branch ${branch} ${cloneUrl} .`;
+        await dockerExec(container, cloneCommand);
+      } else {
+        // Directory not empty, clone to temp and move
+        const tempDir = `/tmp/clone_${Date.now()}`;
+        await dockerExec(container, `git clone --depth 1 --branch ${branch} ${cloneUrl} ${tempDir}`);
+        await dockerExec(container, `cp -r ${tempDir}/* ${tempDir}/.* ${workDir}/ 2>/dev/null || true`);
+        await dockerExec(container, `rm -rf ${tempDir}`);
+      }
+    } else if (repoPath.startsWith(workDir + '/')) {
+      // Clone into subdirectory
+      targetPath = repoPath.replace(workDir + '/', '');
+      const cloneCommand = `cd ${workDir} && git clone --depth 1 --branch ${branch} ${cloneUrl} ${targetPath}`;
+      await dockerExec(container, cloneCommand);
+    } else {
+      // Clone into absolute path
+      const cloneCommand = `git clone --depth 1 --branch ${branch} ${cloneUrl} ${repoPath}`;
+      await dockerExec(container, cloneCommand);
+    }
     
     console.log(`✅ Successfully cloned ${cloneUrl}`);
   } catch (err) {
@@ -223,7 +247,7 @@ async function cloneRepository(container, repoInfo, workDir = '/src') {
 
 // Build prepared image with all dependencies and setup
 async function buildPreparedImage(config, tag, extraRepos) {
-  const { colors, sleep, fileExists, parseRepoSpec } = require('./utils');
+  const { colors, sleep, fileExists, parseRepoSpec, rel } = require('./utils');
   const { loadConfig } = require('./config');
   const { 
     findFilesToCopy, 
@@ -288,7 +312,7 @@ async function buildPreparedImage(config, tag, extraRepos) {
     }
 
     // Get working directory and user for file placement first
-    const workDir = config.container?.work_dir || '/src';
+    const workDir = config.container?.work_dir || '/workspace';
     const containerUser = config.container?.user || 'root';
     
     // Copy shared files FIRST so they're available for authentication

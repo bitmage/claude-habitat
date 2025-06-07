@@ -20,7 +20,8 @@ const { testRepositoryAccess, testGitHubCliAccess, parseRepoPath } = require('..
 
 class IntegrationTestRunner {
   constructor() {
-    this.projectRoot = path.join(__dirname, '../..');
+    const { rel } = require('../../src/utils');
+    this.projectRoot = rel();
     this.systemToolsPath = path.join(this.projectRoot, 'system/tools/bin');
     this.testResults = [];
   }

@@ -11,7 +11,7 @@ image:
 
 repositories:
   - url: https://github.com/bitmage/claude-habitat
-    path: /workspace/src
+    path: /workspace
     branch: main
     shallow: true
 
@@ -35,7 +35,7 @@ setup:
     run_as: node
     commands:
       - |
-        cd /workspace/src
+        cd /workspace
         echo "Installing Claude Habitat dependencies..."
         npm install
         echo "Running tests to verify setup..."
@@ -56,18 +56,18 @@ container:
 verify-fs:
   required_files:
     # Main claude-habitat source files at repository root
-    - /workspace/src/.git/config
-    - /workspace/src/CLAUDE.md
-    - /workspace/src/README.md
-    - /workspace/src/package.json
-    - /workspace/src/package-lock.json
-    - /workspace/src/claude-habitat
-    - /workspace/src/claude-habitat.js
-    - /workspace/src/claude-habitat.sh
-    - /workspace/src/habitats/base/config.yaml
-    - /workspace/src/habitats/discourse/config.yaml
-    - /workspace/src/test/unit/claude-habitat.test.js
-    - /workspace/src/node_modules/package.json
+    - /workspace/.git/config
+    - /workspace/CLAUDE.md
+    - /workspace/README.md
+    - /workspace/package.json
+    - /workspace/package-lock.json
+    - /workspace/claude-habitat
+    - /workspace/claude-habitat.js
+    - /workspace/claude-habitat.sh
+    - /workspace/habitats/base/config.yaml
+    - /workspace/habitats/discourse/config.yaml
+    - /workspace/test/unit/claude-habitat.test.js
+    - /workspace/node_modules/package.json
 
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)
 claude:

@@ -126,8 +126,8 @@ async function showTestMenu() {
   });
 
   if (choice === 'b') {
-    // Return to main menu
-    await returnToMainMenu();
+    // Return to main menu - exit to let parent process handle
+    process.exit(0);
     return;
   }
 
@@ -307,7 +307,7 @@ async function runSharedTests(habitatConfig = null, captureResults = false) {
 async function runHabitatTests(habitatName, captureResults = false) {
   console.log(colors.yellow(`Running tests for ${habitatName} habitat...\n`));
 
-  const habitatConfigPath = path.join(__dirname, '../habitats', habitatName, 'config.yaml');
+  const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
   if (!await fileExists(habitatConfigPath)) {
     console.error(colors.red(`Configuration file not found for ${habitatName}`));
     return captureResults ? [{ type: 'error', message: `Configuration file not found for ${habitatName}` }] : undefined;
@@ -355,7 +355,7 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
 
     if (!await dockerImageExists(preparedTag)) {
       console.log(colors.yellow('Prepared image not found. Building habitat for testing...'));
-      const { buildBaseImage, buildPreparedImage } = require('../claude-habitat');
+      const { buildBaseImage, buildPreparedImage } = require('./docker');
       await buildBaseImage(habitatConfig);
       await buildPreparedImage(habitatConfig, preparedTag, []);
       imageTag = preparedTag;
@@ -364,7 +364,7 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     console.log(`Using habitat image: ${imageTag}`);
 
     // Start test container with same configuration as normal habitat
-    const workDir = habitatConfig.container?.work_dir || '/src';
+    const workDir = habitatConfig.container?.work_dir || '/workspace';
     const containerUser = habitatConfig.container?.user || 'root';
 
     // Parse environment variables from config
@@ -606,8 +606,8 @@ async function showTestResults(results, habitatName, testChoice, duration) {
       break;
     case 'm':
     default:
-      const { returnToMainMenu } = require('../claude-habitat');
-      await returnToMainMenu();
+      // Return to main menu is handled by the parent process
+      process.exit(0);
       break;
   }
 }
