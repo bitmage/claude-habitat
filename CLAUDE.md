@@ -71,7 +71,7 @@ Your tasks:
 
 When launched in maintenance mode, you'll be in the claude-habitat directory itself. 
 
-**IMPORTANT**: First action should be to read and present the maintenance menu from `MAINTENANCE_MENU.md`.
+**IMPORTANT**: First action should be to read and present the maintenance menu from `claude/MAINTENANCE_MENU.md`.
 
 Your tasks may include:
 1. **Update existing configurations** - Improve or fix issues
@@ -83,8 +83,10 @@ Users can say "menu" at any time to see the options again.
 
 For further instructions about maintenance mode refer to these items in the claude/ directory:
 
-BEST_PRACTICES.md  MAINTENANCE.md  TROUBLESHOOTING.md
-INSTRUCTIONS.md
+claude/BEST_PRACTICES.md
+claude/MAINTENANCE.md
+claude/TROUBLESHOOTING.md
+claude/INSTRUCTIONS.md
 
 In addition you may use the claude/scratch directory for any temporary files you wish to create.
 

@@ -10,7 +10,7 @@ image:
   tag: claude-habitat-dev:latest
 
 repositories:
-  - url: https://github.com/bitmage/claude-habitat  
+  - url: https://github.com/bitmage/claude-habitat
     path: /workspace/src
     branch: main
     shallow: true
@@ -30,7 +30,7 @@ setup:
     - |
       # Fix Docker socket permissions for development
       chmod 666 /var/run/docker.sock || true
-      
+
   user:
     run_as: node
     commands:
