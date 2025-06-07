@@ -119,7 +119,11 @@ test('loadConfig loads and parses valid YAML file', async () => {
     },
     repositories: [
       { url: 'https://github.com/test/repo', path: '/src' }
-    ]
+    ],
+    container: {
+      work_dir: '/workspace',
+      user: 'root'
+    }
   };
   
   const configPath = await createTempConfig(testConfig);

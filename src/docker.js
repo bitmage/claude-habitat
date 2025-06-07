@@ -189,7 +189,10 @@ async function runSetupCommands(container, config) {
 }
 
 // Clone repository into container
-async function cloneRepository(container, repoInfo, workDir = '/workspace') {
+async function cloneRepository(container, repoInfo, workDir) {
+  if (!workDir) {
+    throw new Error('workDir parameter is required for cloneRepository');
+  }
   const { colors } = require('./utils');
   const { url, path: repoPath, branch = 'main' } = repoInfo;
   const cloneUrl = url;
@@ -311,9 +314,9 @@ async function buildPreparedImage(config, tag, extraRepos) {
       throw new Error(`Container exited unexpectedly:\n${logs}`);
     }
 
-    // Get working directory and user for file placement first
-    const workDir = config.container?.work_dir || '/workspace';
-    const containerUser = config.container?.user || 'root';
+    // Get working directory and user for file placement from config (validation ensures these exist)
+    const workDir = config.container.work_dir;
+    const containerUser = config.container.user;
     
     // Copy shared files FIRST so they're available for authentication
     const sharedDir = rel('shared');

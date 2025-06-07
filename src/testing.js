@@ -364,8 +364,8 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     console.log(`Using habitat image: ${imageTag}`);
 
     // Start test container with same configuration as normal habitat
-    const workDir = habitatConfig.container?.work_dir || '/workspace';
-    const containerUser = habitatConfig.container?.user || 'root';
+    const workDir = habitatConfig.container.work_dir; // Config validation ensures this exists
+    const containerUser = habitatConfig.container.user; // Config validation ensures this exists
 
     // Parse environment variables from config
     const envArgs = [];
