@@ -7,7 +7,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 
-const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('../src/docker');
+const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('../../src/docker');
 
 // Helper to check if Docker is available
 async function isDockerAvailable() {
