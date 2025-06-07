@@ -15,7 +15,7 @@
 
 const assert = require('assert');
 const path = require('path');
-const { testRepositoryAccess } = require('../src/github');
+const { testRepositoryAccess } = require('../../src/github');
 
 async function testGitHubSystemToolsFix() {
   console.log('🔧 Testing GitHub System Tools Fix\n');

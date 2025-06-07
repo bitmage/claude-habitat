@@ -1,8 +1,5 @@
 const path = require('path');
-const { promisify } = require('util');
-const { exec } = require('child_process');
-const execAsync = promisify(exec);
-const { fileExists, findPemFiles } = require('./utils');
+const { fileExists, findPemFiles, executeCommand, categorizeError, rel } = require('./utils');
 
 // Pure function: extract repo path from URL
 function parseRepoPath(repoUrl) {
@@ -16,6 +13,67 @@ function parseRepoPath(repoUrl) {
     return repoUrl.replace('https://github.com/', '').replace('.git', '');
   }
   return null;
+}
+
+// Pure function: create JWT header and payload for GitHub App
+function buildGitHubJWT(appId, issuedAt, expiresAt) {
+  const header = '{"alg":"RS256","typ":"JWT"}';
+  const payload = `{"iat":${issuedAt},"exp":${expiresAt},"iss":"${appId}"}`;
+  
+  // Base64 encode with URL-safe characters
+  const headerB64 = Buffer.from(header).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  const payloadB64 = Buffer.from(payload).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  
+  return { headerB64, payloadB64, unsignedToken: `${headerB64}.${payloadB64}` };
+}
+
+// Pure function: parse GitHub API response
+function parseGitHubApiResponse(responseBody, context = 'API call') {
+  try {
+    const data = JSON.parse(responseBody);
+    
+    if (data.message) {
+      return { accessible: false, error: `${context} failed: ${data.message}`, data };
+    }
+    
+    return { accessible: true, error: null, data };
+  } catch (err) {
+    return { accessible: false, error: `Invalid JSON response from ${context}: ${err.message}`, data: null };
+  }
+}
+
+// Pure function: categorize GitHub CLI errors
+function categorizeGitHubCliError(errorMessage) {
+  const categoryMap = {
+    'not logged into': { type: 'auth', message: 'GitHub CLI not authenticated - run `gh auth login`' },
+    'authentication': { type: 'auth', message: 'GitHub CLI not authenticated - run `gh auth login`' },
+    'auth': { type: 'auth', message: 'GitHub CLI not authenticated - run `gh auth login`' },
+    'Could not resolve to a Repository': { type: 'not_found', message: 'Repository not found or no access via GitHub CLI' },
+    'command not found': { type: 'missing_tool', message: 'GitHub CLI not found' }
+  };
+  
+  const result = categorizeError(errorMessage, categoryMap);
+  // Maintain original error message format for unknown errors
+  if (result.type === 'unknown') {
+    return { type: 'unknown', message: `GitHub CLI error: ${errorMessage}` };
+  }
+  return result;
+}
+
+// Pure function: categorize SSH errors
+function categorizeSSHError(errorMessage) {
+  const categoryMap = {
+    'Permission denied': { type: 'auth', message: 'SSH authentication failed' },
+    'publickey': { type: 'auth', message: 'SSH authentication failed' },
+    'Repository access denied': { type: 'access_denied', message: 'Repository access denied' }
+  };
+  
+  const result = categorizeError(errorMessage, categoryMap);
+  // Maintain original error message format for unknown errors
+  if (result.type === 'unknown') {
+    return { type: 'unknown', message: `Git access failed: ${errorMessage}` };
+  }
+  return result;
 }
 
 // Test GitHub App access to repository using direct API calls
@@ -32,25 +90,28 @@ async function testGitHubAppAccess(repoPath, sharedDir) {
     const appId = '1357221'; // From config
     
     // Generate JWT for GitHub App
-    const header = '{"alg":"RS256","typ":"JWT"}';
-    const payload = `{"iat":${Math.floor(Date.now() / 1000)},"exp":${Math.floor(Date.now() / 1000) + 600},"iss":"${appId}"}`;
-    
-    // Base64 encode
-    const headerB64 = Buffer.from(header).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-    const payloadB64 = Buffer.from(payload).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    const now = Math.floor(Date.now() / 1000);
+    const { unsignedToken } = buildGitHubJWT(appId, now, now + 600);
     
     // Create signature using openssl
-    const { stdout: signature } = await execAsync(
-      `echo -n "${headerB64}.${payloadB64}" | openssl dgst -sha256 -sign "${pemFile}" | base64 -w 0 | tr '+/' '-_' | tr -d '='`
+    const signResult = await executeCommand(
+      `echo -n "${unsignedToken}" | openssl dgst -sha256 -sign "${pemFile}" | base64 -w 0 | tr '+/' '-_' | tr -d '='`
     );
+    const signature = signResult.output;
     
-    const jwt = `${headerB64}.${payloadB64}.${signature.trim()}`;
+    const jwt = `${unsignedToken}.${signature.trim()}`;
     
-    // Get installations using system curl (faster than spawning gh for API calls)
+    // Get installations using system curl
     const installationsCmd = `curl -s -H "Authorization: Bearer ${jwt}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations"`;
-    const { stdout: installationsResponse } = await execAsync(installationsCmd);
-    const installations = JSON.parse(installationsResponse);
+    const installationsExecResult = await executeCommand(installationsCmd);
+    const installationsResponse = installationsExecResult.output;
+    const installationsResult = parseGitHubApiResponse(installationsResponse, 'Get installations');
     
+    if (!installationsResult.accessible) {
+      return installationsResult;
+    }
+    
+    const installations = installationsResult.data;
     if (!installations || installations.length === 0) {
       return { accessible: false, error: 'GitHub App has no installations' };
     }
@@ -59,50 +120,47 @@ async function testGitHubAppAccess(repoPath, sharedDir) {
     
     // Get installation token
     const tokenCmd = `curl -s -X POST -H "Authorization: Bearer ${jwt}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations/${installationId}/access_tokens"`;
-    const { stdout: tokenResponse } = await execAsync(tokenCmd);
-    const tokenData = JSON.parse(tokenResponse);
+    const tokenExecResult = await executeCommand(tokenCmd);
+    const tokenResponse = tokenExecResult.output;
+    const tokenResult = parseGitHubApiResponse(tokenResponse, 'Get installation token');
     
+    if (!tokenResult.accessible) {
+      return tokenResult;
+    }
+    
+    const tokenData = tokenResult.data;
     if (!tokenData.token) {
       return { accessible: false, error: `Failed to get installation token: ${tokenResponse}` };
     }
     
     // Test repository access
     const repoCmd = `curl -s -H "Authorization: token ${tokenData.token}" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/${repoPath}"`;
-    const { stdout: repoResponse } = await execAsync(repoCmd);
-    const repoData = JSON.parse(repoResponse);
+    const repoExecResult = await executeCommand(repoCmd);
+    const repoResponse = repoExecResult.output;
+    const repoResult = parseGitHubApiResponse(repoResponse, 'Repository access');
     
-    if (repoData.message) {
-      return { accessible: false, error: `Repository access failed: ${repoData.message}` };
-    }
-    
-    return { accessible: true, error: null };
+    return repoResult;
   } catch (err) {
     return { accessible: false, error: `GitHub App authentication failed: ${err.message}` };
   }
 }
 
-// Pure function: test GitHub CLI access (function of gh auth status and repo path)
+// Test GitHub CLI access (function of gh auth status and repo path)
 async function testGitHubCliAccess(repoPath, ghCommand = null) {
   try {
     // Use system gh tool if no command specified
-    const gh = ghCommand || path.join(__dirname, '../system/tools/bin/gh');
+    const gh = ghCommand || rel('system', 'tools', 'bin', 'gh');
     
     // Check if gh is authenticated
-    await execAsync(`${gh} auth status`, { timeout: 5000 });
+    await executeCommand(`${gh} auth status`, { timeout: 5000 });
     
     // Test repository access via gh CLI
-    await execAsync(`${gh} repo view ${repoPath}`, { timeout: 10000 });
+    await executeCommand(`${gh} repo view ${repoPath}`, { timeout: 10000 });
     
     return { accessible: true, error: null };
   } catch (err) {
-    if (err.message.includes('not logged into') || err.message.includes('authentication')) {
-      return { accessible: false, error: 'GitHub CLI not authenticated - run `gh auth login`' };
-    } else if (err.message.includes('Could not resolve to a Repository')) {
-      return { accessible: false, error: 'Repository not found or no access via GitHub CLI' };
-    } else if (err.message.includes('command not found')) {
-      return { accessible: false, error: `GitHub CLI not found` };
-    }
-    return { accessible: false, error: `GitHub CLI error: ${err.message}` };
+    const errorCategory = categorizeGitHubCliError(err.message);
+    return { accessible: false, error: errorCategory.message, errorType: errorCategory.type };
   }
 }
 
@@ -115,16 +173,12 @@ async function testGitAccess(repoPath, sshKeyPath) {
     
     // Test SSH connection to GitHub
     const testCmd = `ssh -i "${sshKeyPath}" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -T git@github.com`;
-    await execAsync(testCmd, { timeout: 10000 });
+    await executeCommand(testCmd, { timeout: 10000 });
     
     return { accessible: true, error: null };
   } catch (err) {
-    if (err.message.includes('Permission denied') || err.message.includes('publickey')) {
-      return { accessible: false, error: 'SSH authentication failed' };
-    } else if (err.message.includes('Repository access denied')) {
-      return { accessible: false, error: 'Repository access denied' };
-    }
-    return { accessible: false, error: `Git access failed: ${err.message}` };
+    const errorCategory = categorizeSSHError(err.message);
+    return { accessible: false, error: errorCategory.message, errorType: errorCategory.type };
   }
 }
 
@@ -137,7 +191,7 @@ async function testRepositoryAccess(repoUrl, accessMode = 'write', options = {})
     }
     
     // Test GitHub App access
-    const sharedDir = path.join(__dirname, '../shared');
+    const sharedDir = rel('shared');
     const appResult = await testGitHubAppAccess(repoPath, sharedDir);
     
     if (appResult.accessible) {
@@ -162,7 +216,14 @@ async function testRepositoryAccess(repoUrl, accessMode = 'write', options = {})
 }
 
 module.exports = {
+  // Pure functions (easily testable)
   parseRepoPath,
+  buildGitHubJWT,
+  parseGitHubApiResponse,
+  categorizeGitHubCliError,
+  categorizeSSHError,
+  
+  // Composed functions (integration testing)
   testGitAccess,
   testGitHubAppAccess,
   testGitHubCliAccess,

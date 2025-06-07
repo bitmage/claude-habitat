@@ -1,10 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { promisify } = require('util');
-const { exec } = require('child_process');
-const execAsync = promisify(exec);
 
-const { colors, sleep, fileExists, calculateCacheHash } = require('./utils');
+const { colors, sleep, fileExists, calculateCacheHash, executeCommand, setFilePermissions, manageContainer, rel } = require('./utils');
 const { dockerRun, dockerExec } = require('./docker');
 
 // File ignore patterns functionality
@@ -153,25 +150,21 @@ async function copyFileToContainer(container, srcPath, destPath, containerUser =
     const realSrcPath = await fs.realpath(srcPath);
     
     // Copy file using docker cp
-    await execAsync(`docker cp "${realSrcPath}" ${container}:${destPath}`);
+    await executeCommand(`docker cp "${realSrcPath}" ${container}:${destPath}`);
     
     // Get original file permissions
     const stat = await fs.stat(srcPath);
     const isExecutable = (stat.mode & parseInt('111', 8)) !== 0;
     
-    // Set appropriate permissions based on file type
-    if (isExecutable) {
-      await dockerExec(container, `chmod 755 ${destPath} 2>/dev/null || true`);
-    } else {
-      // Keep original permissions for sensitive files like .pem
-      const permissions = destPath.includes('.pem') || destPath.includes('_key') ? '600' : '644';
-      await dockerExec(container, `chmod ${permissions} ${destPath} 2>/dev/null || true`);
-    }
+    // Set appropriate permissions and ownership
+    const mode = isExecutable ? '755' : 
+                 (destPath.includes('.pem') || destPath.includes('_key') ? '600' : '644');
     
-    // Set ownership to container user if specified
-    if (containerUser && containerUser !== 'root') {
-      await dockerExec(container, `chown ${containerUser}:${containerUser} ${destPath} 2>/dev/null || true`);
-    }
+    await setFilePermissions(container, destPath, {
+      mode,
+      user: containerUser,
+      description: `Setting permissions for ${path.basename(destPath)}`
+    });
   } catch (err) {
     console.warn(`Warning: Failed to copy ${srcPath}: ${err.message}`);
   }
@@ -229,8 +222,8 @@ async function runFilesystemVerification(config) {
     const preparedTag = `claude-habitat-${config.name}:${cacheHash}`;
     
     // Try to use existing prepared image, or build if needed
-    const { stdout: images } = await execAsync(`docker images -q ${preparedTag}`);
-    if (!images.trim()) {
+    const imagesResult = await executeCommand(`docker images -q ${preparedTag}`);
+    if (!imagesResult.output.trim()) {
       console.log('No prepared image found, building...');
       const { buildPreparedImage } = require('../claude-habitat');
       await buildPreparedImage(config, preparedTag, []);
@@ -269,12 +262,8 @@ async function runFilesystemVerification(config) {
     throw err;
   } finally {
     // Cleanup
-    try {
-      await execAsync(`docker stop ${containerName}`);
-      await execAsync(`docker rm ${containerName}`);
-    } catch {
-      // Ignore cleanup errors
-    }
+    await manageContainer('stop', containerName, { ignoreErrors: true });
+    await manageContainer('remove', containerName, { ignoreErrors: true });
   }
 }
 

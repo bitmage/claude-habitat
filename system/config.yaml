@@ -36,27 +36,19 @@ setup:
     commands:
       - |
         # Set up GitHub App authentication using tools
-        echo "Debug: Current directory: $(pwd)"
-        echo "Debug: Available files: $(ls -la . 2>/dev/null || echo 'none')"
-        echo "Debug: Checking for tools..."
-        
-        if [ -x "./habitat/system/tools/bin/setup-github-auth" ]; then
-          echo "✅ Found tool at ./habitat/system/tools/bin/setup-github-auth"
-          echo "Setting up GitHub authentication..."
-          ./habitat/system/tools/bin/setup-github-auth
-        elif [ -x "./claude-habitat/system/tools/bin/setup-github-auth" ]; then
-          echo "✅ Found tool at ./claude-habitat/system/tools/bin/setup-github-auth"
-          echo "Setting up GitHub authentication..."
-          ./claude-habitat/system/tools/bin/setup-github-auth
-        elif [ -x "./system/tools/bin/setup-github-auth" ]; then
-          echo "✅ Found tool at ./system/tools/bin/setup-github-auth"
-          echo "Setting up GitHub authentication..."
-          ./system/tools/bin/setup-github-auth
-        else
-          echo "❌ GitHub auth setup tool not found"
-          echo "Debug: Checked paths:"
-          echo "  ./habitat/system/tools/bin/setup-github-auth (exists: $([ -f './habitat/system/tools/bin/setup-github-auth' ] && echo yes || echo no), executable: $([ -x './habitat/system/tools/bin/setup-github-auth' ] && echo yes || echo no))"
-          echo "  ./claude-habitat/system/tools/bin/setup-github-auth (exists: $([ -f './claude-habitat/system/tools/bin/setup-github-auth' ] && echo yes || echo no), executable: $([ -x './claude-habitat/system/tools/bin/setup-github-auth' ] && echo yes || echo no))"
-          echo "  ./system/tools/bin/setup-github-auth (exists: $([ -f './system/tools/bin/setup-github-auth' ] && echo yes || echo no), executable: $([ -x './system/tools/bin/setup-github-auth' ] && echo yes || echo no))"
-          echo "⚠️  Skipping authentication setup"
-        fi
+        echo "Setting up GitHub authentication..."
+        ./habitat/system/tools/bin/setup-github-auth
+
+# Filesystem verification structure
+verify-fs:
+  required_files:
+    # Core system tools
+    - ./habitat/system/tools/bin/setup-github-auth
+    - ./habitat/system/tools/bin/rg
+    - ./habitat/system/tools/bin/fd
+    - ./habitat/system/tools/bin/jq
+    - ./habitat/system/tools/bin/yq
+    - ./habitat/system/tools/bin/gh
+    - ./habitat/system/tools/install-tools.sh
+    - ./habitat/system/tools/regenerate-github-token.sh
+    - ./habitat/system/tools/tools.yaml

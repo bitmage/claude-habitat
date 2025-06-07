@@ -7,13 +7,12 @@
     "claude-habitat": "./claude-habitat.js"
   },
   "scripts": {
-    "test": "node --test test/unit/**/*.test.js",
-    "test:unit": "node --test test/unit/**/*.test.js",
-    "test:integration": "node --test test/integration/**/*.test.js test/github-system-tools.test.js",
-    "test:e2e": "node --test test/e2e/**/*.test.js",
-    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
-    "test:watch": "node --test --watch test/unit/**/*.test.js",
-    "test:github-fix": "node test/github-system-tools.test.js"
+    "test": "node --test 'test/unit/**/*.test.js'",
+    "test:unit": "node --test 'test/unit/**/*.test.js'",
+    "test:e2e": "node --test 'test/e2e/**/*.test.js'",
+    "test:habitat": "./claude-habitat test base --system",
+    "test:all": "npm run test:unit && npm run test:e2e",
+    "test:watch": "node --test --watch 'test/unit/**/*.test.js'"
   },
   "keywords": [
     "claude",

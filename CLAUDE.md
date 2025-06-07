@@ -31,20 +31,20 @@ Your tasks:
    ```yaml
    name: [habitat-name]
    description: [purpose from user]
-   
+
    image:
      dockerfile: ./dockerfiles/[habitat-name]/Dockerfile
      tag: claude-habitat-[habitat-name]:latest
-   
+
    repositories:
      - url: [main-project-url]
        path: /appropriate/path
        branch: main
      # Additional repos for plugins/modules
-   
+
    environment:
      - KEY=value
-   
+
    setup:
      root:
        - System-level setup commands
@@ -52,12 +52,12 @@ Your tasks:
        run_as: appropriate-user
        commands:
          - Project setup commands
-   
+
    container:
      work_dir: /path/to/work
      user: appropriate-user
      startup_delay: 10  # seconds
-   
+
    claude:
      command: claude
    ```
@@ -69,13 +69,13 @@ Your tasks:
 
 ### 2. Maintenance Mode
 
-When launched in maintenance mode, you'll be in the claude-habitat directory itself. 
+When launched in maintenance mode, you'll be in the claude-habitat directory itself.
 
 **IMPORTANT**: First action should be to read and present the maintenance menu from `claude/MAINTENANCE_MENU.md`.
 
 Your tasks may include:
 1. **Update existing configurations** - Improve or fix issues
-2. **Troubleshoot problems** - Debug Docker or setup issues  
+2. **Troubleshoot problems** - Debug Docker or setup issues
 3. **Enhance the tool** - Add features or improve code
 4. **Create pull requests** - Use git/gh to contribute improvements
 
@@ -121,20 +121,10 @@ In addition you may use the claude/scratch directory for any temporary files you
 
 ## Common Patterns
 
-### Ruby/Rails Projects:
-- Base: `ruby:3.x` image
-- Services: PostgreSQL, Redis
-- Setup: `bundle install`, `rails db:create db:migrate`
-
 ### Node.js Projects:
-- Base: `node:20` image  
+- Base: `node:20` image
 - Services: MongoDB, Redis
 - Setup: `npm install`, database initialization
-
-### Python Projects:
-- Base: `python:3.x` image
-- Services: PostgreSQL, Celery, Redis
-- Setup: `pip install -r requirements.txt`, migrations
 
 ## Special Considerations
 

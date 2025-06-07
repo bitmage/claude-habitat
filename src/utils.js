@@ -5,6 +5,9 @@ const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
 
+// Project root relative path helper
+const rel = (...segments) => path.join(__dirname, '..', ...segments);
+
 // Terminal colors for output
 const colors = {
   red: (text) => `\x1b[31m${text}\x1b[0m`,
@@ -99,6 +102,134 @@ const parseCommands = (commandList) => {
   return commandList.filter(cmd => cmd && typeof cmd === 'string').map(cmd => cmd.replace(/^- /, ''));
 };
 
+// Command execution pattern helper
+const executeCommand = async (command, options = {}) => {
+  const { promisify } = require('util');
+  const { exec } = require('child_process');
+  const execAsync = promisify(exec);
+  
+  const { timeout = 30000, ignoreErrors = false, description } = options;
+  
+  if (description) {
+    console.log(description);
+  }
+  
+  try {
+    const result = await execAsync(command, { timeout });
+    return { success: true, output: result.stdout.trim(), error: null };
+  } catch (err) {
+    if (ignoreErrors) {
+      return { success: false, output: '', error: err.message };
+    }
+    throw err;
+  }
+};
+
+// Container management pattern helper
+const manageContainer = async (action, containerName, options = {}) => {
+  const { image, runArgs = [], user } = options;
+  
+  const commandMap = {
+    start: () => {
+      const args = ['run', '-d', '--name', containerName, ...runArgs];
+      if (image) args.push(image);
+      return args;
+    },
+    stop: () => ['stop', containerName],
+    remove: () => ['rm', containerName],
+    exec: () => {
+      const args = ['exec'];
+      if (user) args.push('-u', user);
+      args.push(containerName);
+      return args;
+    },
+    exists: () => ['ps', '-q', '-f', `name=${containerName}`],
+    running: () => ['ps', '-q', '-f', `name=${containerName}`]
+  };
+  
+  const args = commandMap[action]();
+  if (!args) {
+    throw new Error(`Unknown container action: ${action}`);
+  }
+  
+  return executeCommand(`docker ${args.join(' ')}`, { ignoreErrors: options.ignoreErrors });
+};
+
+// File permission and ownership pattern helper
+const setFilePermissions = async (container, filePath, options = {}) => {
+  const { mode = '644', user, description } = options;
+  
+  if (description) {
+    console.log(`  ${description}`);
+  }
+  
+  const commands = [];
+  
+  // Set file permissions
+  commands.push(`chmod ${mode} ${filePath} 2>/dev/null || true`);
+  
+  // Set ownership if user specified
+  if (user && user !== 'root') {
+    commands.push(`chown ${user}:${user} ${filePath} 2>/dev/null || true`);
+  }
+  
+  for (const cmd of commands) {
+    await executeCommand(`docker exec ${container} ${cmd}`, { ignoreErrors: true });
+  }
+};
+
+// Error categorization pattern helper
+const categorizeError = (errorMessage, categoryMap) => {
+  for (const [pattern, category] of Object.entries(categoryMap)) {
+    if (errorMessage.toLowerCase().includes(pattern.toLowerCase())) {
+      return typeof category === 'function' ? category(errorMessage) : category;
+    }
+  }
+  
+  return { type: 'unknown', message: `Unknown error: ${errorMessage}` };
+};
+
+// Configuration processing pattern helper
+const processConfig = (config, processors = {}) => {
+  const processed = { ...config };
+  
+  for (const [key, processor] of Object.entries(processors)) {
+    if (config[key] !== undefined) {
+      processed[key] = processor(config[key]);
+    }
+  }
+  
+  return processed;
+};
+
+// Test result processing pattern helper
+const processTestResults = (output, parsers = {}) => {
+  const results = [];
+  const lines = output.split('\n');
+  
+  for (const line of lines) {
+    let processed = false;
+    
+    for (const [pattern, parser] of Object.entries(parsers)) {
+      const regex = new RegExp(pattern);
+      const match = line.match(regex);
+      
+      if (match) {
+        results.push(parser(line, match));
+        processed = true;
+        break;
+      }
+    }
+    
+    // Default handler for unmatched lines
+    if (!processed && line.trim()) {
+      results.push({ type: 'info', message: line.trim(), details: line });
+    }
+  }
+  
+  return results.length > 0 ? results : [{ type: 'info', message: 'No structured output found', details: output }];
+};
+
 module.exports = {
   colors,
   omit,
@@ -107,5 +238,16 @@ module.exports = {
   findPemFiles,
   calculateCacheHash,
   parseRepoSpec,
-  parseCommands
+  parseCommands,
+  
+  // Path helper
+  rel,
+  
+  // New parameterized helpers
+  executeCommand,
+  manageContainer,
+  setFilePermissions,
+  categorizeError,
+  processConfig,
+  processTestResults
 };

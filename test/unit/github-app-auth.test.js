@@ -10,7 +10,7 @@ const execAsync = promisify(exec);
 // It's for manual verification of GitHub App authentication
 // Run with: node --test test/github-app-auth.test.js
 
-const SHARED_DIR = path.join(__dirname, '../shared');
+const SHARED_DIR = path.join(__dirname, '../../shared');
 const APP_ID = '1357221'; // From config
 
 async function generateJWT(pemFile, appId) {

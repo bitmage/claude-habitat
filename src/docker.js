@@ -61,9 +61,11 @@ async function execDockerCommand(args) {
 
 // Infrastructure function: execute shell command
 async function execShellCommand(command) {
+  const { executeCommand } = require('./utils');
+  
   try {
-    const { stdout } = await execAsync(command);
-    return { success: true, output: stdout.trim() };
+    const result = await executeCommand(command, { ignoreErrors: true });
+    return { success: result.success, output: result.output, error: result.error };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -99,7 +101,7 @@ const createDockerClient = () => ({
 
 // Build base Docker image from Dockerfile
 async function buildBaseImage(config) {
-  const { colors, sleep, fileExists, calculateCacheHash, parseRepoSpec, parseCommands } = require('./utils');
+  const { colors, sleep, fileExists, calculateCacheHash, parseRepoSpec, parseCommands, rel } = require('./utils');
   const { loadConfig } = require('./config');
   
   const { image } = config;
@@ -267,12 +269,9 @@ async function buildPreparedImage(config, tag, extraRepos) {
   // Cleanup function
   const cleanup = async () => {
     console.log('Cleaning up temporary container...');
-    try {
-      await execAsync(`docker stop ${tempContainer}`);
-      await execAsync(`docker rm ${tempContainer}`);
-    } catch {
-      // Ignore errors
-    }
+    const { manageContainer } = require('./utils');
+    await manageContainer('stop', tempContainer, { ignoreErrors: true });
+    await manageContainer('remove', tempContainer, { ignoreErrors: true });
   };
 
   try {
@@ -282,7 +281,9 @@ async function buildPreparedImage(config, tag, extraRepos) {
 
     // Check if container is still running
     if (!await dockerIsRunning(tempContainer)) {
-      const { stdout: logs } = await execAsync(`docker logs ${tempContainer} --tail 20`).catch(() => ({ stdout: 'No logs available' }));
+      const { executeCommand } = require('./utils');
+      const logsResult = await executeCommand(`docker logs ${tempContainer} --tail 20`, { ignoreErrors: true });
+      const logs = logsResult.output || 'No logs available';
       throw new Error(`Container exited unexpectedly:\n${logs}`);
     }
 
@@ -291,7 +292,7 @@ async function buildPreparedImage(config, tag, extraRepos) {
     const containerUser = config.container?.user || 'root';
     
     // Copy shared files FIRST so they're available for authentication
-    const sharedDir = path.join(__dirname, '../shared');
+    const sharedDir = rel('shared');
     const sharedConfigPath = path.join(sharedDir, 'config.yaml');
     
     if (await fileExists(sharedConfigPath)) {
@@ -328,7 +329,7 @@ async function buildPreparedImage(config, tag, extraRepos) {
     console.log('GitHub authentication setup delegated to system tools');
 
     // Process system configuration and files BEFORE repository cloning
-    const systemDir = path.join(__dirname, '../system');
+    const systemDir = rel('system');
     const systemConfigPath = path.join(systemDir, 'config.yaml');
     
     if (await fileExists(systemConfigPath)) {
@@ -437,8 +438,8 @@ async function buildPreparedImage(config, tag, extraRepos) {
     if (!config.claude?.disable_habitat_instructions && !config.claude?.bypass_habitat_construction) {
       console.log('Setting up Claude instructions...');
       try {
-        const systemClaudePath = path.join(__dirname, '../system/CLAUDE.md');
-        const sharedClaudePath = path.join(__dirname, '../shared/CLAUDE.md');
+        const systemClaudePath = rel('system', 'CLAUDE.md');
+        const sharedClaudePath = rel('shared', 'CLAUDE.md');
         const habitatDir = path.dirname(config._configPath);
         const habitatClaudePath = path.join(habitatDir, 'CLAUDE.md');
         
@@ -522,13 +523,16 @@ async function buildPreparedImage(config, tag, extraRepos) {
 
     // Check if container is still running
     if (!await dockerIsRunning(tempContainer)) {
-      const { stdout: logs } = await execAsync(`docker logs ${tempContainer} --tail 30`).catch(() => ({ stdout: 'No logs available' }));
+      const { executeCommand } = require('./utils');
+      const logsResult = await executeCommand(`docker logs ${tempContainer} --tail 30`, { ignoreErrors: true });
+      const logs = logsResult.output || 'No logs available';
       throw new Error(`Container exited during setup:\n${logs}`);
     }
 
     // Commit changes to new image
     console.log('Committing prepared image...');
-    await execAsync(`docker commit ${tempContainer} ${tag}`);
+    const { executeCommand } = require('./utils');
+    await executeCommand(`docker commit ${tempContainer} ${tag}`);
     
     console.log(`✅ Prepared image built successfully: ${tag}`);
     return tag;

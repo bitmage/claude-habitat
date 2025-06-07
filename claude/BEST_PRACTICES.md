@@ -148,46 +148,59 @@ async function testRepositoryAccess(repoPath, ghCommand = 'system/tools/bin/gh')
 
 ### 1. Test Organization by Performance
 
-**Unit Tests (< 1 second):**
+**Unit Tests (< 5 seconds total):**
 - Pure functions and business logic only
 - No external dependencies (file system, network, Docker)
 - Run on every code change during development
 - Located in `test/unit/`
+- Examples: `command-builders.test.js`, `github-pure.test.js`
 
-**Integration Tests (10-30 seconds):**
-- System tools integration and user workflows  
-- May download tools or access external APIs
-- Run before commits or after significant changes
-- Located in `test/integration/`
-
-**E2E Tests (30+ seconds):**
-- Full Docker workflows and container operations
-- Heavy operations like image downloads
-- Run before releases only
+**E2E Tests (< 5 minutes total):**
+- System integration, Docker workflows, and repository access
+- Heavy operations like container creation and GitHub API calls
+- Run before commits or releases
 - Located in `test/e2e/`
+- Examples: `github-functions.test.js`, `repository-access.test.js`
+
+**Habitat Tests (< 15 seconds for required tests):**
+- Infrastructure validation within specific habitats
+- Run via `./claude-habitat test base --system`
+- Split into required (fast) and optional (slower) categories
+- Examples: system tool availability, shared configuration
 
 ### 2. Development Workflow Testing
 
 ```bash
 # During development (fast feedback)
-npm test                    # Unit tests only
+npm test                    # Unit tests only (< 5 seconds)
 npm run test:watch         # Continuous unit testing
 
 # Before commits (verify integration)
-npm run test:integration   # Include system dependencies
+npm run test:e2e           # E2E tests (< 5 minutes)
+npm run test:habitat       # Habitat system tests (< 15 seconds)
 
-# Before releases (full validation)
-npm run test:all          # Complete test suite
+# Complete validation
+npm run test:all           # Unit + E2E tests
 ```
 
 ### 3. Regression Prevention
 
 **Process:**
 1. Manual testing reveals issue
-2. Create automated test immediately (in appropriate category)
+2. Create automated test immediately (choose category by performance):
+   - Unit test if logic can be isolated
+   - E2E test if it requires integration
+   - Habitat test if it's infrastructure-related
 3. Fix the issue
 4. Verify test passes
 5. Commit both fix and test
+
+**Test Category Guidelines:**
+- Pure functions → Unit tests
+- Command builders and data parsers → Unit tests  
+- GitHub API integration → E2E tests
+- Docker workflows → E2E tests
+- System tool availability → Habitat tests
 
 ### 4. Test Maintenance
 
@@ -196,21 +209,41 @@ npm run test:all          # Complete test suite
 - Test names describe the scenario
 - Clean up test artifacts
 - Mock external dependencies in unit tests
-- Real dependencies acceptable in integration/e2e tests
+- Real dependencies required in E2E and habitat tests
+- Refactor similar test patterns into parameterized helpers
+
+**Code Reuse Patterns:**
+- Use parameterized helpers from `utils.js` for common operations
+- Extract pure functions for better testability
+- Standardize error categorization patterns
+- Reuse command execution and container management helpers
 
 ## Code Quality Standards
 
 ### 1. Error Handling
 
-**Pattern:**
+**Standardized Pattern:**
 ```javascript
-try {
-  const result = await operation();
-  return { success: true, data: result };
-} catch (error) {
-  return { success: false, error: error.message };
-}
+// Use parameterized error categorization
+const categoryMap = {
+  'permission denied': { type: 'auth', message: 'Authentication failed' },
+  'not found': { type: 'missing', message: 'Resource not found' }
+};
+const error = categorizeError(errorMessage, categoryMap);
+
+// Use consistent command execution
+const result = await executeCommand(command, { 
+  timeout: 10000,
+  ignoreErrors: false,
+  description: 'Testing GitHub access'
+});
 ```
+
+**Benefits:**
+- Eliminates code duplication (reduced ~300 lines of similar patterns)
+- Standardizes error handling across modules
+- Improves testability through parameterization
+- Centralizes common operations in `utils.js`
 
 ### 2. Logging and Debugging
 

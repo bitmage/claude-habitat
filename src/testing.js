@@ -4,7 +4,7 @@ const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
 
-const { colors, sleep, fileExists, calculateCacheHash } = require('./utils');
+const { colors, sleep, fileExists, calculateCacheHash, executeCommand, processTestResults, manageContainer, rel } = require('./utils');
 const { dockerRun, dockerImageExists } = require('./docker');
 const { loadConfig } = require('./config');
 const { askToContinue } = require('./cli');
@@ -21,7 +21,7 @@ async function runTestMode(testType, testTarget) {
     await showTestMenu();
   } else if (testTarget) {
     // Run tests for specific habitat
-    const habitatConfigPath = path.join(__dirname, 'habitats', testTarget, 'config.yaml');
+    const habitatConfigPath = rel('habitats', testTarget, 'config.yaml');
     if (!await fileExists(habitatConfigPath)) {
       console.error(colors.red(`Habitat ${testTarget} not found`));
       process.exit(1);
@@ -37,6 +37,7 @@ async function runTestMode(testType, testTarget) {
       await runSharedTests(habitatConfig);
     } else if (testType === 'verify-fs') {
       console.log(`Running filesystem verification for ${testTarget} habitat...`);
+      const { runFilesystemVerification } = require('./filesystem');
       await runFilesystemVerification(habitatConfig);
     } else if (testType === 'habitat') {
       console.log(`Running ${testTarget}-specific tests...`);
@@ -56,7 +57,7 @@ async function runTestMode(testType, testTarget) {
 }
 
 async function showTestMenu() {
-  const habitatsDir = path.join(__dirname, 'habitats');
+  const habitatsDir = rel('habitats');
   let habitats = [];
 
   try {
@@ -209,7 +210,7 @@ async function showHabitatTestMenu(habitatName) {
     testResults = await runSharedTests(null, true);
   } else if (choice === 'h') {
     // Run only habitat-specific tests
-    const habitatConfigPath = path.join(__dirname, '../habitats', habitatName, 'config.yaml');
+    const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
     const habitatConfig = await loadConfig(habitatConfigPath);
 
     if (habitatConfig.tests && habitatConfig.tests.length > 0) {
@@ -221,11 +222,11 @@ async function showHabitatTestMenu(habitatName) {
     }
   } else if (choice === 'f') {
     // Run filesystem verification for this habitat
-    const habitatConfigPath = path.join(__dirname, '../habitats', habitatName, 'config.yaml');
+    const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
     const habitatConfig = await loadConfig(habitatConfigPath);
 
     console.log(`Running filesystem verification for ${habitatName}...\n`);
-    const { runFilesystemVerification } = require('../claude-habitat');
+    const { runFilesystemVerification } = require('./filesystem');
     await runFilesystemVerification(habitatConfig);
     testResults = [{ type: 'info', message: 'Filesystem verification completed' }];
   } else {
@@ -252,7 +253,7 @@ async function runAllTests() {
   await runSharedTests();
 
   // Run tests for all habitats
-  const habitatsDir = path.join(__dirname, '../habitats');
+  const habitatsDir = rel('habitats');
   try {
     const dirs = await fs.readdir(habitatsDir);
     for (const dir of dirs) {
@@ -272,11 +273,11 @@ async function runSystemTests(habitatConfig = null, captureResults = false) {
 
   // If no habitat provided, use the base habitat
   if (!habitatConfig) {
-    const baseConfigPath = path.join(__dirname, '../habitats/base/config.yaml');
+    const baseConfigPath = rel('habitats', 'base', 'config.yaml');
     habitatConfig = await loadConfig(baseConfigPath);
   }
 
-  const systemConfig = await loadConfig(path.join(__dirname, '../system/config.yaml'));
+  const systemConfig = await loadConfig(rel('system', 'config.yaml'));
   if (systemConfig.tests && systemConfig.tests.length > 0) {
     return await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig, captureResults);
   } else {
@@ -290,11 +291,11 @@ async function runSharedTests(habitatConfig = null, captureResults = false) {
 
   // If no habitat provided, use the base habitat
   if (!habitatConfig) {
-    const baseConfigPath = path.join(__dirname, '../habitats/base/config.yaml');
+    const baseConfigPath = rel('habitats', 'base', 'config.yaml');
     habitatConfig = await loadConfig(baseConfigPath);
   }
 
-  const sharedConfig = await loadConfig(path.join(__dirname, '../shared/config.yaml'));
+  const sharedConfig = await loadConfig(rel('shared', 'config.yaml'));
   if (sharedConfig.tests && sharedConfig.tests.length > 0) {
     return await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig, captureResults);
   } else {
@@ -625,7 +626,7 @@ function getTestTypeName(choice) {
 async function saveTestResults(results, habitatName, testChoice, duration) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `test-results-${habitatName}-${getTestTypeName(testChoice).replace(/\s+/g, '-').toLowerCase()}-${timestamp}.json`;
-  const filepath = path.join(__dirname, '../test-results', filename);
+  const filepath = rel('test-results', filename);
 
   // Ensure test-results directory exists
   await fs.mkdir(path.dirname(filepath), { recursive: true });
