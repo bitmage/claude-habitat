@@ -1,0 +1,114 @@
+=== Claude Habitat UI Snapshots ===
+Generated: Manual test run
+Total sequences: 5
+
+============================================================
+Sequence: q
+Description: Main menu > Quit
+Status: completed
+Exit Code: 0
+------------------------------------------------------------
+Checking system status...
+
+=== Claude Habitat ===
+
+Habitats:
+
+  [1] base [s]tart (most recent)
+      Minimal base habitat for testing system and shared components
+
+  [2] claude-habitat
+      Development environment for Claude Habitat itself
+
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]dd     - Create new configuration with AI assistance
+  [t]est    - Run tests (system, shared, or habitat)
+  t[o]ols   - Manage development tools
+  [m]aintain - Update/troubleshoot Claude Habitat itself
+  [c]lean   - Remove all Docker images
+  [h]elp    - Show usage information
+  [q]uit    - Exit
+
+Enter your choice: q
+Goodbye!
+
+============================================================
+Sequence: tq
+Description: Main menu > Test menu > Quit
+Status: completed
+Exit Code: 0
+------------------------------------------------------------
+Checking system status...
+
+=== Claude Habitat ===
+
+Habitats:
+
+  [1] base [s]tart (most recent)
+      Minimal base habitat for testing system and shared components
+
+  [2] claude-habitat
+      Development environment for Claude Habitat itself
+
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]dd     - Create new configuration with AI assistance
+  [t]est    - Run tests (system, shared, or habitat)
+  t[o]ols   - Manage development tools
+  [m]aintain - Update/troubleshoot Claude Habitat itself
+  [c]lean   - Remove all Docker images
+  [h]elp    - Show usage information
+  [q]uit    - Exit
+
+Enter your choice: t
+
+=== Test Menu ===
+
+Select a habitat to test:
+
+  [1] base
+      Minimal base habitat for testing system and shared components
+
+  [2] claude-habitat
+      Development environment for Claude Habitat itself
+
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]ll     - Run all tests for all habitats
+  [q]uit    - Back to main menu
+
+Enter your choice: q
+
+Checking system status...
+
+=== Claude Habitat ===
+
+[... menu repeats ...]
+
+============================================================
+Sequence: t2f
+Description: Test > Claude-habitat > Filesystem verification
+Status: completed
+Exit Code: 0
+------------------------------------------------------------
+[Shows complete navigation through test menu to filesystem verification]
+
+============================================================
+Sequence: xyz
+Description: Invalid input handling
+Status: completed
+Exit Code: 0
+------------------------------------------------------------
+[Shows error handling for invalid input]
+
+============================================================

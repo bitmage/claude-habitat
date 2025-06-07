@@ -344,12 +344,21 @@ async function main() {
     maintain: false,
     test: false,
     testTarget: null,
-    testType: 'all'
+    testType: 'all',
+    testSequence: null
   };
 
   // Parse arguments
   for (let i = 0; i < args.length; i++) {
-    switch (args[i]) {
+    const arg = args[i];
+    
+    // Handle --option=value syntax
+    if (arg.startsWith('--test-sequence=')) {
+      options.testSequence = arg.substring('--test-sequence='.length);
+      continue;
+    }
+    
+    switch (arg) {
       case '-c':
       case '--config':
         options.configPath = args[++i];
@@ -368,6 +377,12 @@ async function main() {
         // Override claude command
         if (i + 1 < args.length) {
           options.overrideCommand = args[++i];
+        }
+        break;
+      case '--test-sequence':
+        // Test sequence for UI testing
+        if (i + 1 < args.length) {
+          options.testSequence = args[++i];
         }
         break;
       case '-h':
@@ -441,6 +456,21 @@ async function main() {
   }
 
   // Handle special modes
+  // Handle test sequence mode first (before help)
+  if (options.testSequence) {
+    const { runSequence } = require('./src/scenes/scene-runner');
+    const { mainMenuScene } = require('./src/scenes/main-menu.scene');
+    
+    try {
+      const context = await runSequence(mainMenuScene, options.testSequence);
+      console.log(context.getOutput());
+      process.exit(context.exitCode);
+    } catch (error) {
+      console.error(`Test sequence failed: ${error.message}`);
+      process.exit(1);
+    }
+  }
+
   if (options.help) {
     console.log(`Usage: ${path.basename(process.argv[1])} [OPTIONS|SHORTCUTS]
 
@@ -639,11 +669,22 @@ EXAMPLES:
 
   // Normal operation - require config
   if (!options.configPath) {
-    // Check initialization status
-    console.log('Checking system status...');
-    const initStatus = await checkInitializationStatus();
+    // Use scene-based interactive mode
+    const { runInteractive } = require('./src/scenes/scene-runner');
+    const { mainMenuScene } = require('./src/scenes/main-menu.scene');
     
-    // No config specified - show interactive menu
+    try {
+      await runInteractive(mainMenuScene);
+      return;
+    } catch (error) {
+      console.error(colors.red(`\n❌ Error: ${error.message}`));
+      process.exit(1);
+    }
+  }
+
+  // Legacy code path - config specified directly
+  if (!options.configPath) {
+    // This shouldn't happen now, but keep for safety
     const habitatsDir = path.join(__dirname, 'habitats');
     let habitats = [];
     

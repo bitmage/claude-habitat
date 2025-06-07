@@ -142,8 +142,64 @@ In addition you may use the claude/scratch directory for any temporary files you
 - You can create production-ready configurations
 - You can troubleshoot complex issues
 
+## Testing Lifecycle
+
+When developing features, always run the full test suite to ensure nothing is broken:
+
+### 1. Unit Tests
+```bash
+npm test                    # Run all unit tests
+npm run test:unit          # Same as above
+npm run test:watch         # Run tests in watch mode
+```
+
+### 2. E2E Tests
+```bash
+npm run test:e2e           # Run end-to-end tests
+```
+
+### 3. UI Testing
+```bash
+npm run test:ui            # Generate UI snapshots
+npm run test:ui:view       # Generate and view snapshots
+```
+
+### 4. Habitat Tests
+```bash
+npm run test:habitat       # Run base habitat system tests
+./claude-habitat test base --system    # Manual habitat testing
+```
+
+### 5. Complete Test Suite
+```bash
+npm run test:all           # Run unit + e2e tests
+```
+
+## UI Snapshot Review
+
+After making changes that affect the user interface, always check the UI snapshots:
+
+1. **Generate snapshots**: `npm run test:ui`
+2. **Review the output**: Check `test/ui-snapshots.txt` (gitignored)
+3. **Look for issues**:
+   - Crashes or errors in any sequence
+   - Broken menu formatting
+   - Missing options or incorrect navigation
+   - Error messages that don't make sense
+
+## Common Test Sequences
+
+Use these to quickly test specific functionality:
+
+- `./claude-habitat --test-sequence="q"` - Test main menu
+- `./claude-habitat --test-sequence="tq"` - Test navigation to test menu
+- `./claude-habitat --test-sequence="t2f"` - Test filesystem verification
+- `./claude-habitat --test-sequence="h"` - Test help display
+
 ## Additional Guidelines
 
 - Always check the user experience to ensure it complies with intended design
+- Use UI snapshots to verify that changes don't break the interface
+- Test both successful and error scenarios
 
 Remember: The goal is to create a perfect, isolated development environment that "just works" when developers run it!
