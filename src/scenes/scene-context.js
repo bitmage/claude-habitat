@@ -6,12 +6,13 @@ const { colors } = require('../utils');
  * Handles input/output for both interactive and test modes
  */
 class SceneContext {
-  constructor(mode = 'interactive', sequence = '') {
+  constructor(mode = 'interactive', sequence = '', options = {}) {
     this.mode = mode;
     this.sequence = sequence;
     this.sequenceIndex = 0;
     this.output = [];
     this.captureOutput = mode === 'test';
+    this.preserveColors = options.preserveColors || false;
     this.rl = null;
     this.exitCode = 0;
     this.status = 'running';
@@ -56,10 +57,11 @@ class SceneContext {
     const text = args.join(' ');
     
     if (this.captureOutput) {
-      // Strip ANSI color codes for snapshots
-      const stripped = text.replace(/\x1b\[[0-9;]*m/g, '');
+      // Strip ANSI color codes for snapshots by default
+      const stripped = this.preserveColors ? text : text.replace(/\x1b\[[0-9;]*m/g, '');
       this.output.push(stripped);
     } else {
+      // Interactive mode - always show colors
       console.log(...args);
     }
   }

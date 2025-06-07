@@ -192,9 +192,10 @@ After making changes that affect the user interface, always check the UI snapsho
 Use these to quickly test specific functionality:
 
 - `./claude-habitat --test-sequence="q"` - Test main menu
-- `./claude-habitat --test-sequence="tq"` - Test navigation to test menu
+- `./claude-habitat --test-sequence="tq"` - Test navigation to test menu  
 - `./claude-habitat --test-sequence="t2f"` - Test filesystem verification
 - `./claude-habitat --test-sequence="h"` - Test help display
+- `./claude-habitat --test-sequence="q" --preserve-colors` - Test with colors preserved
 
 ## Additional Guidelines
 

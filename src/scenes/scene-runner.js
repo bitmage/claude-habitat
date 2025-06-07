@@ -25,8 +25,8 @@ async function runInteractive(startScene) {
 /**
  * Run scenes with a test sequence
  */
-async function runSequence(startScene, sequence) {
-  const context = new SceneContext('test', sequence);
+async function runSequence(startScene, sequence, options = {}) {
+  const context = new SceneContext('test', sequence, options);
   let currentScene = startScene;
   let timeout;
 

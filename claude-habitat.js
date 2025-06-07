@@ -357,6 +357,10 @@ async function main() {
       options.testSequence = arg.substring('--test-sequence='.length);
       continue;
     }
+    if (arg.startsWith('--preserve-colors')) {
+      options.preserveColors = true;
+      continue;
+    }
     
     switch (arg) {
       case '-c':
@@ -462,7 +466,9 @@ async function main() {
     const { mainMenuScene } = require('./src/scenes/main-menu.scene');
     
     try {
-      const context = await runSequence(mainMenuScene, options.testSequence);
+      const context = await runSequence(mainMenuScene, options.testSequence, {
+        preserveColors: options.preserveColors
+      });
       console.log(context.getOutput());
       process.exit(context.exitCode);
     } catch (error) {
@@ -481,6 +487,8 @@ OPTIONS:
     --cmd COMMAND          Override the claude command for this session
     --clean                 Remove all Claude Habitat Docker images
     --list-configs          List available configuration files
+    --test-sequence=SEQ    Run UI test sequence (e.g., "t2f" for test>claude-habitat>filesystem)
+    --preserve-colors      Preserve ANSI color codes in test sequence output
     -h, --help             Display this help message
 
 SHORTCUTS:

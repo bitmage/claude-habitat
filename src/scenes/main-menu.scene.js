@@ -54,16 +54,16 @@ async function mainMenuScene(context) {
     const habitatRepoStatus = await checkHabitatRepositories(habitatsDir);
     
     // Show welcome screen
-    context.log('\n=== Claude Habitat ===\n');
+    context.log(colors.green('\n=== Claude Habitat ===\n'));
     
     // Show initialization status if incomplete
     if (initStatus.completedSteps < initStatus.totalSteps) {
       if (initStatus.completedSteps === 0) {
-        context.log('⚠️  First time setup required');
-        context.log('   [i] Initialize Claude Habitat\n');
+        context.log(colors.red('⚠️  First time setup required'));
+        context.log(`   ${colors.yellow('[i]')} Initialize Claude Habitat\n`);
       } else {
-        context.log(`⚠️  Setup incomplete (${initStatus.completedSteps}/${initStatus.totalSteps} steps done)`);
-        context.log('   [i] Complete initialization\n');
+        context.log(colors.yellow(`⚠️  Setup incomplete (${initStatus.completedSteps}/${initStatus.totalSteps} steps done)`));
+        context.log(`   ${colors.yellow('[i]')} Complete initialization\n`);
       }
     }
     
@@ -94,12 +94,12 @@ async function mainMenuScene(context) {
         
         // Check if this is the most recent habitat
         const isLastUsed = habitat.name === lastUsedHabitat;
-        const startOption = isLastUsed ? ' [s]tart (most recent)' : '';
+        const startOption = isLastUsed ? ` ${colors.yellow('[s]')}tart (most recent)` : '';
         
         try {
           const content = require('fs').readFileSync(habitat.path, 'utf8');
           const parsed = yaml.load(content);
-          context.log(`  [${key}] ${habitat.name}${statusWarning}${startOption}`);
+          context.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}${startOption}`);
           if (parsed.description) {
             context.log(`      ${parsed.description}`);
           }
@@ -108,7 +108,7 @@ async function mainMenuScene(context) {
           }
           context.log('');
         } catch (err) {
-          context.log(`  [${key}] ${habitat.name}${statusWarning}${startOption}`);
+          context.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}${startOption}`);
           context.log(`      (configuration error: ${err.message})`);
           context.log('');
         }
@@ -118,15 +118,15 @@ async function mainMenuScene(context) {
     // Add action options with clear categories
     context.log('Actions:\n');
     if (initStatus.completedSteps < initStatus.totalSteps) {
-      context.log('  [i]nitialize - Set up authentication and verify system');
+      context.log(`  ${colors.yellow('[i]')}nitialize - Set up authentication and verify system`);
     }
-    context.log('  [a]dd     - Create new configuration with AI assistance');
-    context.log('  [t]est    - Run tests (system, shared, or habitat)');
-    context.log('  t[o]ols   - Manage development tools');
-    context.log('  [m]aintain - Update/troubleshoot Claude Habitat itself');
-    context.log('  [c]lean   - Remove all Docker images');
-    context.log('  [h]elp    - Show usage information');
-    context.log('  [q]uit    - Exit\n');
+    context.log(`  ${colors.yellow('[a]')}dd     - Create new configuration with AI assistance`);
+    context.log(`  ${colors.yellow('[t]')}est    - Run tests (system, shared, or habitat)`);
+    context.log(`  t${colors.yellow('[o]')}ols   - Manage development tools`);
+    context.log(`  ${colors.yellow('[m]')}aintain - Update/troubleshoot Claude Habitat itself`);
+    context.log(`  ${colors.yellow('[c]')}lean   - Remove all Docker images`);
+    context.log(`  ${colors.yellow('[h]')}elp    - Show usage information`);
+    context.log(`  ${colors.yellow('[q]')}uit    - Exit\n`);
     
     // Get user choice
     const choice = await context.getInput('Enter your choice: ');
@@ -205,7 +205,7 @@ async function mainMenuScene(context) {
           }
         }
         
-        context.log('\n❌ Invalid choice');
+        context.log(colors.red('\n❌ Invalid choice'));
         context.log('Use number keys 1-9, tilde sequences (~1, ~~2), or letter commands');
         context.log('Returning to main menu...\n');
         return mainMenuScene; // Loop back
