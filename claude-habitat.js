@@ -22,7 +22,7 @@ const returnToMainMenu = async () => {
 };
 
 
-async function runHabitat(configPath, extraRepos = []) {
+async function runHabitat(configPath, extraRepos = [], overrideCommand = null) {
   const config = await loadConfig(configPath);
   const hash = calculateCacheHash(config, extraRepos);
   const preparedTag = `claude-habitat-${config.name}:${hash}`;
@@ -57,7 +57,7 @@ async function runHabitat(configPath, extraRepos = []) {
   }
 
   // Run the container
-  await runContainer(preparedTag, config, envVars);
+  await runContainer(preparedTag, config, envVars, overrideCommand);
 }
 
 // Internal functions (no validation needed)
@@ -791,11 +791,11 @@ async function buildPreparedImage(config, tag, extraRepos) {
   return tag;
 }
 
-async function runContainer(tag, config, envVars) {
+async function runContainer(tag, config, envVars, overrideCommand = null) {
   const containerName = `${config.name}_${Date.now()}_${process.pid}`;
   const workDir = config.container?.work_dir || '/src';
   const containerUser = config.container?.user || 'root';
-  const claudeCommand = config.claude?.command || 'claude';
+  const claudeCommand = overrideCommand || config.claude?.command || 'claude';
 
   console.log(`Creating container from prepared image: ${containerName}`);
 
@@ -1881,6 +1881,12 @@ async function main() {
       case '--list-configs':
         options.listConfigs = true;
         break;
+      case '--cmd':
+        // Override claude command
+        if (i + 1 < args.length) {
+          options.overrideCommand = args[++i];
+        }
+        break;
       case '-h':
       case '--help':
         options.help = true;
@@ -1888,6 +1894,10 @@ async function main() {
       case 's':
       case 'start':
         options.start = true;
+        // Next argument might be habitat name
+        if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+          options.habitatName = args[++i];
+        }
         break;
       case 'a':
       case 'add':
@@ -1949,12 +1959,13 @@ OPTIONS:
     -c, --config FILE       Path to configuration YAML file
     -r, --repo REPO_SPEC    Additional repository to clone (format: URL:PATH[:BRANCH])
                            Can be specified multiple times
+    --cmd COMMAND          Override the claude command for this session
     --clean                 Remove all Claude Habitat Docker images
     --list-configs          List available configuration files
     -h, --help             Display this help message
 
 SHORTCUTS:
-    s, start               Start last used configuration (or first available)
+    s, start [HABITAT]     Start habitat (last used if no name given)
     a, add                 Create new configuration with AI assistance
     m, maintain            Update/troubleshoot Claude Habitat itself
     test [HABITAT] [TYPE]  Run tests (show menu if no args)
@@ -1972,6 +1983,12 @@ TEST OPTIONS:
 EXAMPLES:
     # Start with shortcut
     ${path.basename(process.argv[1])} s
+
+    # Start specific habitat
+    ${path.basename(process.argv[1])} start discourse
+
+    # Start with custom command
+    ${path.basename(process.argv[1])} start claude-habitat --cmd "claude -p 'do some stuff'"
 
     # Use a configuration file
     ${path.basename(process.argv[1])} --config discourse.yaml
@@ -2052,31 +2069,45 @@ EXAMPLES:
 
   // Handle shortcut commands
   if (options.start) {
-    const lastConfig = await getLastUsedConfig();
     const habitatsDir = path.join(__dirname, 'habitats');
     
-    if (lastConfig) {
-      options.configPath = lastConfig;
-      console.log(`Starting: ${path.basename(path.dirname(lastConfig))}\n`);
+    // If habitat name is provided, use it
+    if (options.habitatName) {
+      const configPath = path.join(habitatsDir, options.habitatName, 'config.yaml');
+      if (await fileExists(configPath)) {
+        options.configPath = configPath;
+        console.log(`Starting: ${options.habitatName}\n`);
+      } else {
+        console.error(colors.red(`Habitat '${options.habitatName}' not found`));
+        process.exit(1);
+      }
     } else {
-      // Use first available habitat
-      try {
-        const dirs = await fs.readdir(habitatsDir);
-        for (const dir of dirs) {
-          const configPath = path.join(habitatsDir, dir, 'config.yaml');
-          if (await fileExists(configPath)) {
-            options.configPath = configPath;
-            console.log(`Starting: ${dir}\n`);
-            break;
+      // Use last config or first available
+      const lastConfig = await getLastUsedConfig();
+      
+      if (lastConfig) {
+        options.configPath = lastConfig;
+        console.log(`Starting: ${path.basename(path.dirname(lastConfig))}\n`);
+      } else {
+        // Use first available habitat
+        try {
+          const dirs = await fs.readdir(habitatsDir);
+          for (const dir of dirs) {
+            const configPath = path.join(habitatsDir, dir, 'config.yaml');
+            if (await fileExists(configPath)) {
+              options.configPath = configPath;
+              console.log(`Starting: ${dir}\n`);
+              break;
+            }
           }
-        }
-        if (!options.configPath) {
-          console.error(colors.red('No habitats available'));
+          if (!options.configPath) {
+            console.error(colors.red('No habitats available'));
+            process.exit(1);
+          }
+        } catch {
+          console.error(colors.red('No configurations available'));
           process.exit(1);
         }
-      } catch {
-        console.error(colors.red('No configurations available'));
-        process.exit(1);
       }
     }
   } else if (options.add) {
@@ -2537,7 +2568,7 @@ EXAMPLES:
       }
       
       await saveLastUsedConfig(options.configPath);
-      await runHabitat(options.configPath, options.extraRepos);
+      await runHabitat(options.configPath, options.extraRepos, options.overrideCommand);
     } catch (err) {
       console.error(colors.red(`\n❌ Error starting habitat: ${err.message}`));
       if (err.validationErrors) {
