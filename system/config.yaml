@@ -2,6 +2,11 @@
 name: system-setup  
 description: Core infrastructure setup for all claude-habitat containers
 
+# Container settings for system setup
+container:
+  work_dir: /workspace
+  user: root
+
 # System tests (run with: claude-habitat test --system)
 tests:
   - tests/test-core-tools.sh

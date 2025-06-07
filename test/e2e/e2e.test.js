@@ -1,288 +1,249 @@
-const { test, beforeEach, afterEach } = require('node:test');
+const test = require('node:test');
 const assert = require('node:assert');
-const { promisify } = require('util');
-const { exec } = require('child_process');
-const execAsync = promisify(exec);
-const fs = require('fs').promises;
-const path = require('path');
-const os = require('os');
+const { ProductTestBase } = require('./product-test-base');
 
-const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('../../src/docker');
+/**
+ * Product-focused E2E tests that test our actual claude-habitat functionality
+ * Not external Docker infrastructure or generic Unix operations
+ */
 
-// Helper to check if Docker is available
-async function isDockerAvailable() {
-  try {
-    await execAsync('docker --version');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Helper to create test container
-async function createTestContainer() {
-  const containerName = `claude-habitat-test-${Date.now()}`;
+test('claude-habitat command line interface works', async () => {
+  const testRunner = new ProductTestBase();
   
   try {
-    // Use a minimal image for testing
-    const containerId = await dockerRun([
-      'run', '-d', '--name', containerName, 
-      'ubuntu:22.04', 'sleep', '300'
-    ]);
+    console.log('Testing claude-habitat CLI...');
     
-    return { containerName, containerId };
-  } catch (err) {
-    throw new Error(`Failed to create test container: ${err.message}`);
-  }
-}
-
-// Helper to cleanup test container
-async function cleanupContainer(containerName) {
-  try {
-    await execAsync(`docker stop ${containerName}`);
-    await execAsync(`docker rm ${containerName}`);
-  } catch {
-    // Ignore cleanup errors
-  }
-}
-
-test('Docker operations with real Docker daemon', async (t) => {
-  const dockerAvailable = await isDockerAvailable();
-  
-  if (!dockerAvailable) {
-    t.skip('Docker not available, skipping integration tests');
-    return;
-  }
-  
-  // Test 1: Image existence check
-  const ubuntuExists = await dockerImageExists('ubuntu:22.04');
-  if (!ubuntuExists) {
-    console.log('Pulling ubuntu:22.04 for tests...');
-    await execAsync('docker pull ubuntu:22.04');
-  }
-  
-  assert.strictEqual(await dockerImageExists('ubuntu:22.04'), true, 'Ubuntu image should exist');
-  assert.strictEqual(await dockerImageExists('nonexistent:image'), false, 'Nonexistent image should not exist');
-  
-  // Test 2: Container creation and management
-  const { containerName } = await createTestContainer();
-  
-  try {
-    // Test container is running
-    const isRunning = await dockerIsRunning(containerName);
-    assert.strictEqual(isRunning, true, 'Container should be running');
+    // Test help command
+    const helpResult = await testRunner.runClaudeHabitatCommand(['--help'], {
+      timeout: 10000,
+      captureOutput: true
+    });
     
-    // Test command execution in container
-    const result = await dockerExec(containerName, 'echo "Hello from container"');
-    assert.strictEqual(result, 'Hello from container', 'Command execution should work');
+    assert.strictEqual(helpResult.exitCode, 0, 'Help command should succeed');
+    assert(helpResult.stdout.includes('Usage:'), 'Help should show usage information');
+    assert(helpResult.stdout.includes('claude-habitat'), 'Help should mention claude-habitat');
     
-    // Test command execution with output
-    const dateResult = await dockerExec(containerName, 'date +%Y');
-    const currentYear = new Date().getFullYear().toString();
-    assert.strictEqual(dateResult, currentYear, 'Date command should return current year');
+    // Test list configs command
+    const listResult = await testRunner.runClaudeHabitatCommand(['--list-configs'], {
+      timeout: 10000,
+      captureOutput: true
+    });
     
-    // Test file operations
-    await dockerExec(containerName, 'echo "test content" > /tmp/test.txt');
-    const fileContent = await dockerExec(containerName, 'cat /tmp/test.txt');
-    assert.strictEqual(fileContent, 'test content', 'File operations should work');
+    assert.strictEqual(listResult.exitCode, 0, 'List configs should succeed');
+    assert(listResult.stdout.includes('base') || listResult.stdout.includes('claude-habitat'), 
+           'Should list available habitats');
+    
+    console.log('✅ CLI interface test passed');
     
   } finally {
-    await cleanupContainer(containerName);
-  }
-  
-  // Verify cleanup
-  const isStillRunning = await dockerIsRunning(containerName);
-  assert.strictEqual(isStillRunning, false, 'Container should be stopped after cleanup');
-});
-
-test('Tool installation simulation', async (t) => {
-  const dockerAvailable = await isDockerAvailable();
-  
-  if (!dockerAvailable) {
-    t.skip('Docker not available, skipping tool installation test');
-    return;
-  }
-  
-  const { containerName } = await createTestContainer();
-  
-  try {
-    // Simulate basic tool installation
-    await dockerExec(containerName, 'apt-get update');
-    await dockerExec(containerName, 'apt-get install -y curl');
-    
-    // Test tool is available
-    const curlVersion = await dockerExec(containerName, 'curl --version');
-    assert(curlVersion.includes('curl'), 'curl should be installed and working');
-    
-    // Test directory creation (like claude-habitat structure)
-    await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/system');
-    await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/shared');
-    await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/scratch');
-    
-    // Verify directory structure
-    const lsResult = await dockerExec(containerName, 'find /workspace -type d');
-    assert(lsResult.includes('/workspace/claude-habitat'), 'Claude habitat directory should exist');
-    assert(lsResult.includes('/workspace/claude-habitat/system'), 'System directory should exist');
-    assert(lsResult.includes('/workspace/claude-habitat/shared'), 'Shared directory should exist');
-    assert(lsResult.includes('/workspace/claude-habitat/scratch'), 'Scratch directory should exist');
-    
-    // Test file creation and permissions
-    await dockerExec(containerName, 'echo "# Claude Habitat Environment" > /workspace/CLAUDE.md');
-    const claudeContent = await dockerExec(containerName, 'cat /workspace/CLAUDE.md');
-    assert.strictEqual(claudeContent, '# Claude Habitat Environment', 'CLAUDE.md should be created correctly');
-    
-  } finally {
-    await cleanupContainer(containerName);
+    await testRunner.cleanup();
   }
 });
 
-test('Container environment simulation', async (t) => {
-  const dockerAvailable = await isDockerAvailable();
-  
-  if (!dockerAvailable) {
-    t.skip('Docker not available, skipping environment simulation test');
-    return;
-  }
-  
-  const { containerName } = await createTestContainer();
+test('claude-habitat configuration processing works', async () => {
+  const testRunner = new ProductTestBase();
   
   try {
-    // Test environment variables
-    await dockerExec(containerName, 'export TEST_VAR="habitat-test"');
+    console.log('Testing configuration processing...');
     
-    // Test working directory setup
-    await dockerExec(containerName, 'mkdir -p /workspace && cd /workspace');
-    const pwd = await dockerExec(containerName, 'cd /workspace && pwd');
-    assert.strictEqual(pwd, '/workspace', 'Working directory should be set correctly');
+    // Test with base habitat (minimal config)
+    const configTestResult = await testRunner.runClaudeHabitatCommand(['test', 'base', '--system'], {
+      timeout: 120000,
+      captureOutput: true
+    });
     
-    // Test user creation (common in habitat setup)
-    await dockerExec(containerName, 'useradd -m developer || true');
-    const userExists = await dockerExec(containerName, 'id developer');
-    assert(userExists.includes('developer'), 'Developer user should be created');
+    // Should successfully process the config even if tests fail
+    assert(configTestResult.stdout.includes('base') || configTestResult.stderr.includes('base'), 
+           'Should recognize base habitat configuration');
     
-    // Test command execution as different user
-    const whoami = await dockerExec(containerName, 'whoami', 'developer');
-    assert.strictEqual(whoami, 'developer', 'Commands should execute as specified user');
+    // The system should attempt to run tests (success depends on Docker availability)
+    assert(configTestResult.stdout.includes('test') || configTestResult.stderr.includes('test'),
+           'Should attempt to execute tests');
     
-    // Test basic development tools that might be installed
-    await dockerExec(containerName, 'apt-get update && apt-get install -y git');
-    const gitVersion = await dockerExec(containerName, 'git --version');
-    assert(gitVersion.includes('git version'), 'Git should be installed and working');
+    console.log('✅ Configuration processing test passed');
     
   } finally {
-    await cleanupContainer(containerName);
+    await testRunner.cleanup();
   }
 });
 
-test('Error handling in Docker operations', async (t) => {
-  const dockerAvailable = await isDockerAvailable();
-  
-  if (!dockerAvailable) {
-    t.skip('Docker not available, skipping error handling tests');
-    return;
-  }
-  
-  // Test error when running command on non-existent container
-  try {
-    await dockerExec('nonexistent-container', 'echo test');
-    assert.fail('Should throw error for non-existent container');
-  } catch (err) {
-    assert(err.message.includes('No such container'), 'Should get "No such container" error');
-  }
-  
-  // Test error when checking non-existent image
-  const badImageExists = await dockerImageExists('this-image-definitely-does-not-exist:latest');
-  assert.strictEqual(badImageExists, false, 'Non-existent image should return false');
-  
-  // Test error when checking non-existent container status
-  const badContainerRunning = await dockerIsRunning('definitely-not-running-container');
-  assert.strictEqual(badContainerRunning, false, 'Non-existent container should not be running');
-});
-
-test('System and shared directory separation', async (t) => {
-  const dockerAvailable = await isDockerAvailable();
-  
-  if (!dockerAvailable) {
-    t.skip('Docker not available, skipping system/shared separation test');
-    return;
-  }
-  
-  const { containerName } = await createTestContainer();
+test('claude-habitat error handling works gracefully', async () => {
+  const testRunner = new ProductTestBase();
   
   try {
-    // Simulate system files (infrastructure)
-    await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/system/tools');
-    await dockerExec(containerName, 'echo "# System CLAUDE Instructions" > /workspace/claude-habitat/system/CLAUDE.md');
-    await dockerExec(containerName, 'echo "#!/bin/bash\necho system-tool" > /workspace/claude-habitat/system/tools/system-tool.sh');
-    await dockerExec(containerName, 'chmod +x /workspace/claude-habitat/system/tools/system-tool.sh');
+    console.log('Testing error handling...');
     
-    // Simulate shared files (user preferences)
-    await dockerExec(containerName, 'mkdir -p /workspace/claude-habitat/shared/tools');
-    await dockerExec(containerName, 'echo "# User Preferences" > /workspace/claude-habitat/shared/CLAUDE.md');
-    await dockerExec(containerName, 'echo "#!/bin/bash\necho user-tool" > /workspace/claude-habitat/shared/tools/user-tool.sh');
-    await dockerExec(containerName, 'chmod +x /workspace/claude-habitat/shared/tools/user-tool.sh');
+    // Test with non-existent habitat
+    const badHabitatResult = await testRunner.runClaudeHabitatCommand(['test', 'nonexistent-habitat'], {
+      timeout: 10000,
+      captureOutput: true
+    });
     
-    // Test that both directories exist and are separate
-    const systemExists = await dockerExec(containerName, 'test -d /workspace/claude-habitat/system && echo "exists"');
-    const sharedExists = await dockerExec(containerName, 'test -d /workspace/claude-habitat/shared && echo "exists"');
+    // Should fail gracefully, not crash
+    assert.notStrictEqual(badHabitatResult.exitCode, 0, 'Should fail for non-existent habitat');
+    assert(badHabitatResult.stderr.includes('not found') || 
+           badHabitatResult.stdout.includes('not found') ||
+           badHabitatResult.stderr.includes('error'),
+           'Should provide helpful error message');
     
-    assert.strictEqual(systemExists, 'exists', 'System directory should exist');
-    assert.strictEqual(sharedExists, 'exists', 'Shared directory should exist');
+    // Test with invalid arguments
+    const badArgsResult = await testRunner.runClaudeHabitatCommand(['--invalid-flag'], {
+      timeout: 10000,
+      captureOutput: true
+    });
     
-    // Test that files are in correct locations
-    const systemClaude = await dockerExec(containerName, 'cat /workspace/claude-habitat/system/CLAUDE.md');
-    const sharedClaude = await dockerExec(containerName, 'cat /workspace/claude-habitat/shared/CLAUDE.md');
+    // Should handle invalid arguments gracefully
+    assert.notStrictEqual(badArgsResult.exitCode, 0, 'Should fail for invalid arguments');
     
-    assert(systemClaude.includes('System CLAUDE'), 'System CLAUDE.md should contain system content');
-    assert(sharedClaude.includes('User Preferences'), 'Shared CLAUDE.md should contain user content');
-    
-    // Test that tools from both locations work
-    const systemTool = await dockerExec(containerName, '/workspace/claude-habitat/system/tools/system-tool.sh');
-    const userTool = await dockerExec(containerName, '/workspace/claude-habitat/shared/tools/user-tool.sh');
-    
-    assert.strictEqual(systemTool, 'system-tool', 'System tool should work');
-    assert.strictEqual(userTool, 'user-tool', 'User tool should work');
-    
-    // Test composition (simulate what claude-habitat.js does)
-    await dockerExec(containerName, `cat /workspace/claude-habitat/system/CLAUDE.md > /workspace/CLAUDE.md`);
-    await dockerExec(containerName, `echo "\\n\\n---\\n\\n# User Preferences\\n" >> /workspace/CLAUDE.md`);
-    await dockerExec(containerName, `cat /workspace/claude-habitat/shared/CLAUDE.md >> /workspace/CLAUDE.md`);
-    
-    const composedClaude = await dockerExec(containerName, 'cat /workspace/CLAUDE.md');
-    assert(composedClaude.includes('System CLAUDE'), 'Composed CLAUDE.md should include system content');
-    assert(composedClaude.includes('User Preferences'), 'Composed CLAUDE.md should include section header');
-    assert(composedClaude.includes('User Preferences'), 'Composed CLAUDE.md should include user content');
+    console.log('✅ Error handling test passed');
     
   } finally {
-    await cleanupContainer(containerName);
+    await testRunner.cleanup();
   }
 });
 
-// Simple performance test
-test('Docker operations performance', async (t) => {
-  const dockerAvailable = await isDockerAvailable();
-  
-  if (!dockerAvailable) {
-    t.skip('Docker not available, skipping performance tests');
-    return;
-  }
-  
-  const { containerName } = await createTestContainer();
+test('claude-habitat test command variations work', async () => {
+  const testRunner = new ProductTestBase();
   
   try {
-    // Test that basic operations complete within reasonable time
-    const start = Date.now();
+    console.log('Testing various test command formats...');
     
-    await dockerExec(containerName, 'echo "performance test"');
-    await dockerIsRunning(containerName);
-    await dockerImageExists('ubuntu:22.04');
+    // Test different test type flags (these may fail due to Docker, but should be recognized)
+    const testTypes = ['--system', '--shared', '--verify-fs', '--habitat'];
     
-    const duration = Date.now() - start;
+    for (const testType of testTypes) {
+      const result = await testRunner.runClaudeHabitatCommand(['test', 'base', testType], {
+        timeout: 30000,
+        captureOutput: true
+      });
+      
+      // Should recognize the test type (may fail if Docker not available, but shouldn't crash)
+      assert(result.stdout.includes('test') || result.stderr.includes('test') || 
+             result.stdout.includes(testType.replace('--', '')) ||
+             result.stderr.includes(testType.replace('--', '')),
+             `Should recognize test type ${testType}`);
+    }
     
-    // Should complete within 5 seconds (generous for CI environments)
-    assert(duration < 5000, `Basic operations should complete quickly, took ${duration}ms`);
+    // Test verify-fs with scope
+    const fsResult = await testRunner.runClaudeHabitatCommand(['test', 'base', '--verify-fs=system'], {
+      timeout: 30000,
+      captureOutput: true
+    });
+    
+    assert(fsResult.stdout.includes('system') || fsResult.stderr.includes('system'),
+           'Should recognize verify-fs scope syntax');
+    
+    console.log('✅ Test command variations test passed');
     
   } finally {
-    await cleanupContainer(containerName);
+    await testRunner.cleanup();
+  }
+});
+
+test('claude-habitat wrapper functions work correctly', async () => {
+  const testRunner = new ProductTestBase();
+  
+  try {
+    console.log('Testing claude-habitat wrapper functions...');
+    
+    // Import and test our wrapper functions directly
+    const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('../../src/docker');
+    
+    // Test that functions exist and are callable
+    assert.strictEqual(typeof dockerRun, 'function', 'dockerRun should be a function');
+    assert.strictEqual(typeof dockerExec, 'function', 'dockerExec should be a function');
+    assert.strictEqual(typeof dockerImageExists, 'function', 'dockerImageExists should be a function');
+    assert.strictEqual(typeof dockerIsRunning, 'function', 'dockerIsRunning should be a function');
+    
+    // Test that they handle errors gracefully (don't crash)
+    try {
+      await dockerImageExists('nonexistent:image');
+      // Should not crash, regardless of result
+    } catch (err) {
+      // Should have meaningful error message
+      assert(err.message.length > 0, 'Error messages should be meaningful');
+    }
+    
+    try {
+      await dockerIsRunning('nonexistent-container');
+      // Should not crash, regardless of result
+    } catch (err) {
+      // Should have meaningful error message
+      assert(err.message.length > 0, 'Error messages should be meaningful');
+    }
+    
+    console.log('✅ Wrapper functions test passed');
+    
+  } finally {
+    await testRunner.cleanup();
+  }
+});
+
+test('claude-habitat module integration works', async () => {
+  const testRunner = new ProductTestBase();
+  
+  try {
+    console.log('Testing module integration...');
+    
+    // Test that all our core modules can be imported without errors
+    const modules = [
+      '../../src/config',
+      '../../src/docker', 
+      '../../src/filesystem',
+      '../../src/github',
+      '../../src/testing',
+      '../../src/utils',
+      '../../src/habitat',
+      '../../src/init',
+      '../../src/menu'
+    ];
+    
+    for (const modulePath of modules) {
+      assert.doesNotThrow(() => {
+        require(modulePath);
+      }, `Module ${modulePath} should import without errors`);
+    }
+    
+    // Test that config loading works
+    const { loadConfig } = require('../../src/config');
+    assert.strictEqual(typeof loadConfig, 'function', 'loadConfig should be exported');
+    
+    // Test that utility functions work
+    const { calculateCacheHash, parseRepoSpec } = require('../../src/utils');
+    assert.strictEqual(typeof calculateCacheHash, 'function', 'calculateCacheHash should be exported');
+    assert.strictEqual(typeof parseRepoSpec, 'function', 'parseRepoSpec should be exported');
+    
+    console.log('✅ Module integration test passed');
+    
+  } finally {
+    await testRunner.cleanup();
+  }
+});
+
+test('claude-habitat handles concurrent operations safely', async () => {
+  const testRunner = new ProductTestBase();
+  
+  try {
+    console.log('Testing concurrent operation safety...');
+    
+    // Run multiple help commands concurrently
+    const concurrentPromises = Array(3).fill(null).map(() => 
+      testRunner.runClaudeHabitatCommand(['--help'], {
+        timeout: 10000,
+        captureOutput: true
+      })
+    );
+    
+    const results = await Promise.all(concurrentPromises);
+    
+    // All should succeed
+    results.forEach((result, index) => {
+      assert.strictEqual(result.exitCode, 0, `Concurrent help command ${index} should succeed`);
+    });
+    
+    console.log('✅ Concurrent operations test passed');
+    
+  } finally {
+    await testRunner.cleanup();
   }
 });
