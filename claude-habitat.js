@@ -754,7 +754,7 @@ EXAMPLES:
         }
         
         // Check if this habitat has repository issues
-        const habitatStatus = habitatRepoStatus.find(h => h.name === habitat.name);
+        const habitatStatus = habitatRepoStatus.get(habitat.name);
         const statusWarning = habitatStatus?.hasIssues ? ' ⚠️' : '';
         
         // Check if this is the most recent habitat
