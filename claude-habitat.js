@@ -882,6 +882,18 @@ async function main() {
         err.validationErrors.forEach(e => console.error(colors.red(`  - ${e}`)));
       }
       
+      // If this was invoked via CLI (start command), exit with error code
+      if (options.start) {
+        console.log('\nHabitat startup failed.');
+        console.log('This could be due to:');
+        console.log('• Configuration file errors');
+        console.log('• Docker connectivity issues'); 
+        console.log('• Repository access problems');
+        console.log('• Missing dependencies');
+        process.exit(1);
+      }
+      
+      // Interactive mode - show recovery options
       console.log('\nThis could be due to:');
       console.log('• Configuration file errors');
       console.log('• Docker connectivity issues'); 
