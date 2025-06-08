@@ -21,9 +21,9 @@ tests:
 files:
   # Copy Claude credentials from host to container during build
   - src: ~/.claude/.credentials.json
-    dest: /home/developer/.claude/.credentials.json
+    dest: ~/.claude/.credentials.json
     mode: 600
-    owner: developer
+    owner: "{container.user}"
     description: "Claude credentials for authentication"
   # Future examples:
   # - src: bashrc-additions

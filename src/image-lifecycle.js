@@ -117,6 +117,24 @@ async function copyConfigFiles(container, config) {
       destPath = destPath.replace(/\{container\.user\}/g, config.container.user);
     }
     
+    // Expand tilde in destination path (container context)
+    if (destPath.startsWith('~/') && config.container && config.container.user) {
+      // Get container user's home directory by executing getent passwd in container
+      try {
+        const homeResult = await dockerExec(container, `getent passwd ${config.container.user} | cut -d: -f6`, 'root');
+        const containerHome = homeResult.trim();
+        if (containerHome) {
+          destPath = path.posix.join(containerHome, destPath.slice(2));
+        } else {
+          // Fallback to standard home directory structure
+          destPath = path.posix.join('/home', config.container.user, destPath.slice(2));
+        }
+      } catch (err) {
+        // Fallback to standard home directory structure
+        destPath = path.posix.join('/home', config.container.user, destPath.slice(2));
+      }
+    }
+    
     console.log(`Copying ${srcPath} → ${destPath}`);
     
     // Create destination directory
