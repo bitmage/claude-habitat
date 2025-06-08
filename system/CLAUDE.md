@@ -16,10 +16,10 @@ You are "Habitat" Claude running in a Claude Habitat - an isolated Docker develo
 ## File Organization
 
 - **Project code**: Your current working directory contains the main project
-- **System infrastructure**: `./claude-habitat/system/` - tools, base configuration (managed by Claude Habitat)
-- **User preferences**: `./claude-habitat/shared/` - your personal configs, keys, scripts
-- **Local habitat files**: `./claude-habitat/local/` - habitat-specific files and scripts
-- **Scratch space**: `./claude-habitat/scratch/` - create this for your temporary files and notes
+- **System infrastructure**: `./habitat/system/` - tools, base configuration (managed by Claude Habitat)
+- **User preferences**: `./habitat/shared/` - your personal configs, keys, scripts
+- **Local habitat files**: `./habitat/local/` - habitat-specific files and scripts
+- **Scratch space**: `./habitat/scratch/` - create this for your temporary files and notes
 - **Development tools**: Available in PATH from both system and user tool installations
 
 ## GitHub Authentication Recovery
@@ -28,7 +28,7 @@ If you encounter git authentication failures (token expired), you can regenerate
 
 ```bash
 # Regenerate GitHub App token if authentication fails
-./claude-habitat/system/tools/regenerate-github-token.sh
+./habitat/system/tools/regenerate-github-token.sh
 ```
 
 This ensures the habitat never gets stuck unable to push code. The script uses the most recent GitHub App private key and generates a fresh installation token.
@@ -145,10 +145,10 @@ Create `./claude-habitat/scratch/` for:
 
 Example:
 ```bash
-mkdir -p ./claude-habitat/scratch
-echo "# Project Analysis" > ./claude-habitat/scratch/notes.md
-echo "Found these main components:" >> ./claude-habitat/scratch/notes.md
-fd ".*\.(rb|js|py)$" --exec wc -l | sort -nr > ./claude-habitat/scratch/file-sizes.txt
+mkdir -p ./habitat/scratch
+echo "# Project Analysis" > ./habitat/scratch/notes.md
+echo "Found these main components:" >> ./habitat/scratch/notes.md
+fd ".*\.(rb|js|py)$" --exec wc -l | sort -nr > ./habitat/scratch/file-sizes.txt
 ```
 
 ## Important Guidelines
@@ -159,7 +159,7 @@ fd ".*\.(rb|js|py)$" --exec wc -l | sort -nr > ./claude-habitat/scratch/file-siz
 - **Work efficiently** - You're isolated and safe to experiment and iterate quickly
 
 ### Best Practices
-- **Reference `./claude-habitat/shared/BEST_PRACTICES.md`** for development standards and lessons learned
+- **Reference `./habitat/shared/BEST_PRACTICES.md`** for development standards and lessons learned
 - **Follow functional programming principles** - Write pure functions and use dependency injection
 - **Create tests for discoveries** - If you find bugs through manual testing, write regression tests immediately
 - **Always run tests** - Execute test suites before and after changes
@@ -172,8 +172,8 @@ fd ".*\.(rb|js|py)$" --exec wc -l | sort -nr > ./claude-habitat/scratch/file-siz
 
 ### Security & Best Practices
 - **No secrets in code**: Use environment variables and config files
-- **Use helper scripts**: Check `./claude-habitat/shared/` before writing new utilities
-- **Organize work**: Keep temporary files in `./claude-habitat/scratch/`
+- **Use helper scripts**: Check `./habitat/shared/` before writing new utilities
+- **Organize work**: Keep temporary files in `./habitat/scratch/`
 - **Clean commits**: Make atomic, well-described commits
 
 ### Communication
@@ -187,8 +187,8 @@ fd ".*\.(rb|js|py)$" --exec wc -l | sort -nr > ./claude-habitat/scratch/file-siz
 1. **Orient yourself**: `pwd`, `ls -la`, `git status`
 2. **Understand the project**: Find README, check package.json/Gemfile
 3. **Run tests**: Find and execute the test suite
-4. **Check helper files**: Explore `./claude-habitat/shared/`
-5. **Create scratch space**: `mkdir -p ./claude-habitat/scratch`
+4. **Check helper files**: Explore `./habitat/shared/`
+5. **Create scratch space**: `mkdir -p ./habitat/scratch`
 6. **Plan your work**: Document your approach in scratch notes
 
 ## Need Help?
@@ -196,6 +196,6 @@ fd ".*\.(rb|js|py)$" --exec wc -l | sort -nr > ./claude-habitat/scratch/file-siz
 - **Tool usage**: Use `--help` flag: `rg --help`, `fd --help`
 - **Git workflows**: `git status`, `git log`, `gh --help`
 - **Project tools**: Check `package.json`, `Makefile`, `Rakefile` for available commands
-- **Shared utilities**: Explore `./claude-habitat/shared/` for project-specific helpers
+- **Shared utilities**: Explore `./habitat/shared/` for project-specific helpers
 
 ---

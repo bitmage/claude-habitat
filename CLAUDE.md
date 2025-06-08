@@ -40,7 +40,7 @@ Code should reflect the domain model defined in `docs/TERMINOLOGY.md`:
    startSession(habitat, repositories)
    prepareWorkspace(sessionConfig)
    validateSessionAccess(habitat)
-   
+
    // Avoid: Technical implementation names
    runContainer(config, repos)
    buildImage(cfg)
@@ -53,7 +53,7 @@ Code should reflect the domain model defined in `docs/TERMINOLOGY.md`:
    function calculateCacheHash(config, extraRepos) {
      return sha256(JSON.stringify({ config, extraRepos }));
    }
-   
+
    // Avoid: Stateful operations mixed with logic
    function updateAndGetHash() {
      this.config.lastUsed = Date.now();
@@ -69,7 +69,7 @@ Code should reflect the domain model defined in `docs/TERMINOLOGY.md`:
      prepareWorkspace,
      startSession
    );
-   
+
    // Avoid: Complex class hierarchies
    class HabitatManager extends BaseManager {
      constructor() { super(); }
@@ -103,7 +103,7 @@ Code should reflect the domain model defined in `docs/TERMINOLOGY.md`:
    ```bash
    # Test complete user journeys as sequences:
    ./claude-habitat --test-sequence="t2f"  # Test > Claude-habitat > Filesystem
-   
+
    # What this validates:
    # - User can navigate from main menu to test menu
    # - Test menu displays correctly with all options
@@ -314,16 +314,66 @@ After making changes that affect the user interface, always check the UI snapsho
    - Broken menu formatting
    - Missing options or incorrect navigation
    - Error messages that don't make sense
+   - Different screen than you expected to be on
 
-## Common Test Sequences
+## Generate UI Snapshots
 
-Use these to quickly test specific functionality:
+Use these to quickly Generate UI Snapshots from a simulated sequence of key presses:
 
 - `./claude-habitat --test-sequence="q"` - Test main menu
-- `./claude-habitat --test-sequence="tq"` - Test navigation to test menu  
+- `./claude-habitat --test-sequence="tq"` - Test navigation to test menu
 - `./claude-habitat --test-sequence="t2f"` - Test filesystem verification
 - `./claude-habitat --test-sequence="h"` - Test help display
 - `./claude-habitat --test-sequence="q" --preserve-colors` - Test with colors preserved
+
+## Coding Guidelines
+
+### Explicit Configuration Over Magic Detection
+
+**NEVER** implement logic that changes fundamental system behavior based on innocuous inference. This drives users insane.
+
+**❌ Bad Examples:**
+```javascript
+// DON'T: Magic string detection for TTY behavior
+// a -p in the command line leading to a non interactive TTY is completely random from a user perspective
+const isNonInteractive = claudeCommand.includes('-p') || claudeCommand.includes('--prompt');
+const dockerFlags = isNonInteractive ? ['-i'] : ['-it'];
+```
+
+**✅ Good Examples:**
+```yaml
+# DO: Explicit configuration in habitat config
+container:
+  tty: true           # or false - explicit and clear
+  user: developer
+  work_dir: /workspace
+
+# DO: Feature flags and explicit options
+ui:
+  colors: true
+  verbose: false
+```
+
+### Configuration Design Principles
+
+1. **Explicit over implicit** - All behavior should be configurable in config files
+2. **Predictable defaults** - Default values should work for 90% of use cases
+3. **No hidden dependencies** - Behavior should not depend on parsing command content
+4. **Clear documentation** - Every config option should be documented
+5. **Backward compatibility** - New options should have sensible defaults
+
+### TTY Configuration
+
+TTY allocation should be explicit in habitat configuration:
+
+```yaml
+container:
+  tty: true    # Default: true for interactive applications
+               # Set to false for headless/batch operations
+```
+
+**Default behavior:** Interactive TTY enabled (`docker exec -it`)
+**When to disable:** Batch jobs, CI/CD, non-interactive automation
 
 ## Additional Guidelines
 

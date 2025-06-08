@@ -23,7 +23,7 @@ echo "✅ Environment check passed"
 echo ""
 echo "Testing claude-habitat inception: running base --system tests from within claude-habitat"
 
-cd /workspace/src
+cd /workspace
 
 # Run the inception test: claude-habitat test base --system
 echo "Running: ./claude-habitat test base --system"

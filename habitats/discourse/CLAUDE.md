@@ -8,7 +8,7 @@
 - **Tests**: `/discourse/spec/` (Ruby), `/discourse/test/javascripts/` (JS)
 - **Database**: PostgreSQL with Redis for caching
 - **Working Directory**: `/discourse` - Main Discourse codebase
-- **Infrastructure**: `./claude-habitat/` - System tools, user preferences, and habitat configuration
+- **Infrastructure**: `./habitat/` - System tools, user preferences, and habitat configuration
 
 ## Discourse-Specific Tools
 

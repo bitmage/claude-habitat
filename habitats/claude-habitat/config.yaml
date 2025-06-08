@@ -67,6 +67,10 @@ setup:
         echo "Claude directory permissions set for user: $(whoami)"
         ls -la ~/.claude
         
+        # Set up GitHub App authentication using system tools (Meta Claude's structure)
+        echo "Setting up GitHub authentication..."
+        ./system/tools/bin/setup-github-auth
+        
         echo "Claude Habitat setup complete"
 
 container:
@@ -75,7 +79,7 @@ container:
   init_command: /sbin/init
   startup_delay: 5
 
-# Filesystem verification structure (bypass mode - just the repository)
+# Filesystem verification structure (bypass mode - Meta Claude structure)
 verify-fs:
   required_files:
     # Main claude-habitat source files at repository root
@@ -91,8 +95,20 @@ verify-fs:
     - /workspace/habitats/discourse/config.yaml
     - /workspace/test/unit/claude-habitat.test.js
     - /workspace/node_modules/package.json
+    # System tools (Meta Claude's structure)
+    - /workspace/system/tools/bin/setup-github-auth
+    - /workspace/system/tools/bin/rg
+    - /workspace/system/tools/bin/fd
+    - /workspace/system/tools/bin/jq
+    - /workspace/system/tools/bin/yq
+    - /workspace/system/tools/bin/gh
+    - /workspace/system/tools/install-tools.sh
+    - /workspace/system/tools/regenerate-github-token.sh
+    - /workspace/system/tools/tools.yaml
     # Claude workspace directory (created by files section)
     - /home/node/.claude/.keep
+    # Claude credentials (mounted from host)
+    - ~/.claude/.credentials.json
 
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)
 claude:

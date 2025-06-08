@@ -282,8 +282,12 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
     
     console.log(`Running filesystem verification (scope: ${scope})...`);
     
+    // Determine correct path based on bypass mode
+    const isBypassHabitat = config?.claude?.bypass_habitat_construction || false;
+    const scriptPath = isBypassHabitat ? './system/tools/bin/verify-fs' : './habitat/system/tools/bin/verify-fs';
+    
     // Run the verify-fs script inside the container
-    const command = `cd ${workDir} && WORKSPACE_ROOT=${workDir} TAP_MODE=true ./claude-habitat/system/tools/bin/verify-fs ${scope}`;
+    const command = `cd ${workDir} && WORKSPACE_ROOT=${workDir} TAP_MODE=true ${scriptPath} ${scope}`;
     const result = await dockerExec(containerName, command, containerUser);
     
     // Parse TAP output

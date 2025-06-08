@@ -30,9 +30,21 @@ async function runTestMode(testType, testTarget) {
     const habitatConfig = await loadConfig(habitatConfigPath);
 
     if (testType === 'system') {
+      // Check if habitat bypasses system/shared infrastructure
+      if (habitatConfig.claude?.bypass_habitat_construction) {
+        console.log(colors.yellow(`❌ System tests are not available for ${testTarget} habitat`));
+        console.log(colors.yellow(`This habitat uses bypass_habitat_construction and manages its own infrastructure.`));
+        return;
+      }
       console.log(`Running system tests in ${testTarget} habitat...`);
       await runSystemTests(habitatConfig);
     } else if (testType === 'shared') {
+      // Check if habitat bypasses system/shared infrastructure
+      if (habitatConfig.claude?.bypass_habitat_construction) {
+        console.log(colors.yellow(`❌ Shared tests are not available for ${testTarget} habitat`));
+        console.log(colors.yellow(`This habitat uses bypass_habitat_construction and manages its own infrastructure.`));
+        return;
+      }
       console.log(`Running shared tests in ${testTarget} habitat...`);
       await runSharedTests(habitatConfig);
     } else if (testType === 'verify-fs') {

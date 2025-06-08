@@ -7,6 +7,23 @@ async function testTypeScene(context, habitatName = 'base') {
   try {
     context.log(`\n=== Testing ${habitatName} ===\n`);
     
+    // Load habitat config to check for bypass_habitat_construction
+    let habitatConfig = null;
+    let isBypassHabitat = false;
+    if (habitatName !== 'all') {
+      try {
+        const { loadConfig } = require('../config');
+        const { rel, fileExists } = require('../utils');
+        const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
+        if (await fileExists(habitatConfigPath)) {
+          habitatConfig = await loadConfig(habitatConfigPath);
+          isBypassHabitat = habitatConfig.claude?.bypass_habitat_construction || false;
+        }
+      } catch (err) {
+        // Continue without config if it can't be loaded
+      }
+    }
+    
     if (habitatName === 'all') {
       context.log('Running all tests for all habitats...\n');
       
@@ -26,12 +43,21 @@ async function testTypeScene(context, habitatName = 'base') {
     }
     
     context.log('Select test type:\n');
-    context.log('  [s]ystem   - System infrastructure tests');
-    context.log('  s[h]ared   - Shared configuration tests');
+    if (isBypassHabitat) {
+      context.log('  [s]ystem   - System infrastructure tests (unavailable - bypass habitat)');
+      context.log('  s[h]ared   - Shared configuration tests (unavailable - bypass habitat)');
+    } else {
+      context.log('  [s]ystem   - System infrastructure tests');
+      context.log('  s[h]ared   - Shared configuration tests');
+    }
     context.log('  [h]abitat  - Habitat-specific tests');
     context.log('  [f]ilesystem - Filesystem verification');
     context.log('  [a]ll      - Run all test types');
     context.log('  [q]uit     - Back to test menu\n');
+    
+    if (isBypassHabitat) {
+      context.log('ℹ️  This habitat uses bypass_habitat_construction and manages its own infrastructure.\n');
+    }
     
     const choice = await context.getInput('Enter your choice: ');
     
@@ -42,6 +68,11 @@ async function testTypeScene(context, habitatName = 'base') {
         return testMenuScene;
         
       case 's':
+        if (isBypassHabitat) {
+          context.log('\n❌ System tests are not available for bypass habitats');
+          context.log('This habitat manages its own infrastructure.\n');
+          return testTypeScene(context, habitatName);
+        }
         testType = 'system';
         break;
         
@@ -52,6 +83,11 @@ async function testTypeScene(context, habitatName = 'base') {
         context.log('  [2] [h]abitat tests');
         const clarification = await context.getInput('Choice: ');
         if (clarification === '1') {
+          if (isBypassHabitat) {
+            context.log('\n❌ Shared tests are not available for bypass habitats');
+            context.log('This habitat manages its own infrastructure.\n');
+            return testTypeScene(context, habitatName);
+          }
           testType = 'shared';
         } else if (clarification === '2') {
           testType = 'habitat';
