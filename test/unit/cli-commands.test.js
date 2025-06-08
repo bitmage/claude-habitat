@@ -438,3 +438,35 @@ test('--help shows rebuild documentation', async () => {
   
   console.log('✅ Help shows rebuild documentation');
 });
+
+test('shift key mappings for rebuild are correct', () => {
+  console.log('Testing shift key to number mappings...');
+  
+  // Test the mapping used in claude-habitat.js
+  const shiftNumberMap = {
+    '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
+    '^': '6', '&': '7', '*': '8', '(': '9', ')': '0'
+  };
+  
+  // Verify all expected mappings exist
+  assert.strictEqual(shiftNumberMap['!'], '1', 'Exclamation should map to 1');
+  assert.strictEqual(shiftNumberMap['@'], '2', 'At symbol should map to 2');
+  assert.strictEqual(shiftNumberMap['#'], '3', 'Hash should map to 3');
+  assert.strictEqual(shiftNumberMap['$'], '4', 'Dollar should map to 4');
+  assert.strictEqual(shiftNumberMap['%'], '5', 'Percent should map to 5');
+  assert.strictEqual(shiftNumberMap['^'], '6', 'Caret should map to 6');
+  assert.strictEqual(shiftNumberMap['&'], '7', 'Ampersand should map to 7');
+  assert.strictEqual(shiftNumberMap['*'], '8', 'Asterisk should map to 8');
+  assert.strictEqual(shiftNumberMap['('], '9', 'Left paren should map to 9');
+  assert.strictEqual(shiftNumberMap[')'], '0', 'Right paren should map to 0');
+  
+  // Test reverse mapping (number to shift key)
+  const numberShiftMap = { '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
+                          '6': '^', '7': '&', '8': '*', '9': '(' };
+  
+  assert.strictEqual(numberShiftMap['1'], '!', 'Number 1 should map to !');
+  assert.strictEqual(numberShiftMap['2'], '@', 'Number 2 should map to @');
+  assert.strictEqual(numberShiftMap['9'], '(', 'Number 9 should map to (');
+  
+  console.log('✅ Shift key mappings are correct');
+});

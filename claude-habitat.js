@@ -555,16 +555,21 @@ async function main() {
       
       // Show all habitats with appropriate hotkeys
       habitats.forEach((habitat, index) => {
-        let key;
+        let key, shiftKey;
         if (index < 9) {
           // Direct number keys for first 9
           key = (index + 1).toString();
+          // Map to shift+number for rebuild
+          const shiftMap = { '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
+                            '6': '^', '7': '&', '8': '*', '9': '(' };
+          shiftKey = shiftMap[key];
         } else {
           // Tilde prefix system for 10+
           const adjusted = index - 9; // 0-based for items 10+
           const tildeCount = Math.floor(adjusted / 9) + 1;
           const digit = (adjusted % 9) + 1;
           key = '~'.repeat(tildeCount) + digit;
+          shiftKey = null; // No shift support for tilde sequences initially
         }
         
         // Check if this habitat has repository issues
@@ -575,10 +580,13 @@ async function main() {
         const isLastUsed = habitat.name === lastUsedHabitat;
         const startOption = isLastUsed ? ` ${colors.yellow('[s]')}tart (most recent)` : '';
         
+        // Add rebuild option for first 9 habitats
+        const rebuildOption = shiftKey ? ` ${colors.cyan(`[${shiftKey}]`)}rebuild` : '';
+        
         try {
           const content = require('fs').readFileSync(habitat.path, 'utf8');
           const parsed = yaml.load(content);
-          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}${startOption}`);
+          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}${startOption}${rebuildOption}`);
           if (parsed.description) {
             console.log(`      ${parsed.description}`);
           }
@@ -607,6 +615,8 @@ async function main() {
     console.log(`  ${colors.yellow('[h]')}elp    - Show usage information`);
     console.log(`  ${colors.yellow('[q]')}uit    - Exit\n`);
     
+    console.log(`${colors.dim('💡 Tip: Use')} ${colors.cyan('Shift+number')} ${colors.dim('(like !, @, #) to rebuild habitats without cache')}`);
+    
     // Get user choice with single keypress or tilde sequences
     const choice = await new Promise(resolve => {
       let tildeBuffer = '';
@@ -622,6 +632,21 @@ async function main() {
           process.exit(0);
         }
         
+        // Detect shift+number keys for rebuild
+        const shiftNumberMap = {
+          '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
+          '^': '6', '&': '7', '*': '8', '(': '9', ')': '0'
+        };
+        
+        if (shiftNumberMap[key]) {
+          const numberKey = shiftNumberMap[key];
+          process.stdin.setRawMode(false);
+          process.stdin.pause();
+          process.stdin.removeListener('data', onKeypress);
+          resolve({ choice: numberKey, rebuild: true });
+          return;
+        }
+        
         // Handle tilde sequences
         if (key === '~') {
           tildeBuffer += '~';
@@ -634,7 +659,7 @@ async function main() {
           process.stdin.setRawMode(false);
           process.stdin.pause();
           process.stdin.removeListener('data', onKeypress);
-          resolve(finalChoice);
+          resolve({ choice: finalChoice, rebuild: false });
           return;
         }
         
@@ -642,24 +667,34 @@ async function main() {
         process.stdin.setRawMode(false);
         process.stdin.pause();
         process.stdin.removeListener('data', onKeypress);
-        resolve(key.toLowerCase());
+        resolve({ choice: key.toLowerCase(), rebuild: false });
       };
       
       process.stdin.on('data', onKeypress);
     });
     
+    // Extract choice and rebuild flag (support both old string and new object format)
+    let choiceKey, rebuild = false;
+    if (typeof choice === 'object' && choice.choice !== undefined) {
+      choiceKey = choice.choice;
+      rebuild = choice.rebuild || false;
+    } else {
+      choiceKey = choice;
+      rebuild = false;
+    }
+    
     // Handle choice
-    if (choice === 'q') {
+    if (choiceKey === 'q') {
       process.exit(0);
-    } else if (choice === 'i') {
+    } else if (choiceKey === 'i') {
       // Initialize/complete setup
       await runInitialization();
       process.exit(0);
-    } else if (choice === 'h') {
+    } else if (choiceKey === 'h') {
       options.help = true;
-    } else if (choice === 'c') {
+    } else if (choiceKey === 'c') {
       options.clean = true;
-    } else if (choice === 's') {
+    } else if (choiceKey === 's') {
       // Start - use last config or default
       const lastConfig = await getLastUsedConfig();
       if (lastConfig) {
@@ -672,34 +707,38 @@ async function main() {
         console.error(colors.red('\nNo configurations available'));
         process.exit(1);
       }
-    } else if (choice === 'a') {
+    } else if (choiceKey === 'a') {
       // Add new configuration with AI
       await addNewConfiguration();
       process.exit(0);
-    } else if (choice === 't') {
+    } else if (choiceKey === 't') {
       // Test mode - show test menu
       await runTestMode(null, null);
       await returnToMainMenu();
       return;
-    } else if (choice === 'o') {
+    } else if (choiceKey === 'o') {
       // Tools management
       await runToolsManagement();
       await returnToMainMenu();
       return;
-    } else if (choice === 'm') {
+    } else if (choiceKey === 'm') {
       // Maintenance mode
       await runMaintenanceMode();
       process.exit(0);
     } else {
       // Check if it's a direct number (1-9)
-      const directIndex = parseInt(choice) - 1;
+      const directIndex = parseInt(choiceKey) - 1;
       if (!isNaN(directIndex) && directIndex >= 0 && directIndex < 9 && directIndex < habitats.length) {
         options.configPath = habitats[directIndex].path;
-        console.log(`\nSelected: ${habitats[directIndex].name}\n`);
-      } else if (choice.startsWith('~')) {
+        if (rebuild) {
+          console.log(`\n🔄 Rebuilding: ${habitats[directIndex].name}\n`);
+        } else {
+          console.log(`\nSelected: ${habitats[directIndex].name}\n`);
+        }
+      } else if (choiceKey.startsWith('~')) {
         // Handle tilde prefix sequences (~1, ~~2, etc.)
-        const tildeCount = choice.match(/^~+/)[0].length;
-        const digit = choice.slice(tildeCount);
+        const tildeCount = choiceKey.match(/^~+/)[0].length;
+        const digit = choiceKey.slice(tildeCount);
         const digitNum = parseInt(digit);
         
         if (!isNaN(digitNum) && digitNum >= 1 && digitNum <= 9) {
@@ -708,7 +747,11 @@ async function main() {
           
           if (habitatIndex < habitats.length) {
             options.configPath = habitats[habitatIndex].path;
-            console.log(`\nSelected: ${habitats[habitatIndex].name}\n`);
+            if (rebuild) {
+              console.log(`\n🔄 Rebuilding: ${habitats[habitatIndex].name}\n`);
+            } else {
+              console.log(`\nSelected: ${habitats[habitatIndex].name}\n`);
+            }
           } else {
             console.error(colors.red('\n❌ Invalid habitat selection'));
             console.log('Returning to main menu...\n');
@@ -725,7 +768,7 @@ async function main() {
         }
       } else {
         console.error(colors.red('\n❌ Invalid choice'));
-        console.log('Use number keys 1-9, tilde sequences (~1, ~~2), or letter commands');
+        console.log('Use number keys 1-9, tilde sequences (~1, ~~2), shift+number (!@#) for rebuild, or letter commands');
         console.log('Returning to main menu...\n');
         await sleep(2000);
         await returnToMainMenu();
@@ -875,7 +918,7 @@ async function main() {
       }
       
       await saveLastUsedConfig(options.configPath);
-      await startSession(options.configPath, options.extraRepos, options.overrideCommand, { rebuild: options.rebuild });
+      await startSession(options.configPath, options.extraRepos, options.overrideCommand, { rebuild: options.rebuild || rebuild });
     } catch (err) {
       console.error(colors.red(`\n❌ Error starting habitat: ${err.message}`));
       if (err.validationErrors) {
