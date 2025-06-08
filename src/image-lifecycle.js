@@ -9,7 +9,7 @@ const { spawn } = require('child_process');
 const { colors, fileExists, sleep } = require('./utils');
 const { getHabitatInfrastructurePath } = require('./path-helpers');
 const { dockerRun, dockerExec, dockerImageExists } = require('./container-operations');
-const { copyFilesDirectory } = require('./filesystem');
+const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
 
 /**
  * Build the base Docker image from Dockerfile
@@ -88,6 +88,17 @@ async function runSetupCommands(container, config) {
 }
 
 /**
+ * Copy a directory and its contents to a container
+ */
+async function copyDirectoryToContainer(container, srcDir, destDir) {
+  const filesToCopy = await findFilesToCopy(srcDir, destDir, true);
+  
+  for (const { src, dest } of filesToCopy) {
+    await copyFileToContainer(container, src, dest);
+  }
+}
+
+/**
  * Clone a repository inside the container
  */
 async function cloneRepository(container, repoInfo, workDir) {
@@ -96,8 +107,12 @@ async function cloneRepository(container, repoInfo, workDir) {
   const parentDir = path.dirname(repoInfo.path);
   await dockerExec(container, `mkdir -p ${parentDir}`, 'root');
   
+  // Check if directory already exists and remove it if so
+  const repoName = path.basename(repoInfo.path);
+  await dockerExec(container, `cd ${parentDir} && rm -rf ${repoName}`, 'root');
+  
   // Clone the repository
-  let cloneCmd = `cd ${parentDir} && git clone ${repoInfo.url} ${path.basename(repoInfo.path)}`;
+  let cloneCmd = `cd ${parentDir} && git clone ${repoInfo.url} ${repoName}`;
   if (repoInfo.branch && repoInfo.branch !== 'main' && repoInfo.branch !== 'master') {
     cloneCmd += ` -b ${repoInfo.branch}`;
   }
@@ -139,7 +154,7 @@ async function prepareWorkspace(config, tag, extraRepos) {
       console.log('Copying system files to container...');
       const containerSystemPath = getHabitatInfrastructurePath(config.container.work_dir, 'system');
       await dockerExec(tempContainer, `mkdir -p ${containerSystemPath}`, 'root');
-      await copyFilesDirectory(systemPath, tempContainer, containerSystemPath);
+      await copyDirectoryToContainer(tempContainer, systemPath, containerSystemPath);
     }
     
     // Copy shared files
@@ -148,7 +163,7 @@ async function prepareWorkspace(config, tag, extraRepos) {
       console.log('Copying shared files to container...');
       const containerSharedPath = getHabitatInfrastructurePath(config.container.work_dir, 'shared');
       await dockerExec(tempContainer, `mkdir -p ${containerSharedPath}`, 'root');
-      await copyFilesDirectory(sharedPath, tempContainer, containerSharedPath);
+      await copyDirectoryToContainer(tempContainer, sharedPath, containerSharedPath);
     }
     
     // Copy local habitat files
@@ -157,7 +172,7 @@ async function prepareWorkspace(config, tag, extraRepos) {
       console.log('Copying habitat files to container...');
       const containerLocalPath = getHabitatInfrastructurePath(config.container.work_dir, 'local');
       await dockerExec(tempContainer, `mkdir -p ${containerLocalPath}`, 'root');
-      await copyFilesDirectory(habitatPath, tempContainer, containerLocalPath);
+      await copyDirectoryToContainer(tempContainer, habitatPath, containerLocalPath);
     }
     
     // Clone repositories

@@ -6,8 +6,8 @@ tests:
   - tests/test-claude-habitat-inception.sh
 
 image:
-  dockerfile: Dockerfile
-  tag: claude-habitat-dev:latest
+  dockerfile: ./habitats/claude-habitat/Dockerfile
+  tag: claude-habitat-claude-habitat:latest
 
 repositories:
   - url: https://github.com/bitmage/claude-habitat
@@ -18,6 +18,14 @@ repositories:
 environment:
   - NODE_ENV=development
   - DOCKER_HOST=unix:///var/run/docker.sock
+
+# Directory and file setup
+files:
+  # Create .claude directory structure for Claude to use
+  - src: /dev/null
+    dest: /home/{container.user}/.claude/.keep
+    mode: 644
+    description: "Ensure .claude directory exists for Claude workspace"
 
 volumes:
   # Mount Docker socket for container management
@@ -44,6 +52,12 @@ setup:
         /usr/bin/docker --version && echo "Docker CLI available" || echo "Docker not accessible"
         echo "Testing Docker socket..."
         /usr/bin/docker ps > /dev/null 2>&1 && echo "Docker socket accessible" || echo "Docker socket not accessible"
+        
+        # Ensure .claude directory has proper permissions for the container user
+        chown -R $(whoami):$(id -gn) ~/.claude
+        chmod 755 ~/.claude
+        echo "Claude directory permissions set for user: $(whoami)"
+        
         echo "Claude Habitat setup complete"
 
 container:
@@ -68,6 +82,8 @@ verify-fs:
     - /workspace/habitats/discourse/config.yaml
     - /workspace/test/unit/claude-habitat.test.js
     - /workspace/node_modules/package.json
+    # Claude workspace directory (created by files section)
+    - /home/node/.claude/.keep
 
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)
 claude:

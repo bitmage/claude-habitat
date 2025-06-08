@@ -142,9 +142,9 @@ async function copyFileToContainer(container, srcPath, destPath, containerUser =
   console.log(`  Copying ${path.basename(srcPath)} to ${destPath}`);
   
   try {
-    // Create destination directory
+    // Create destination directory as root to ensure permissions
     const destDir = path.dirname(destPath);
-    await dockerExec(container, `mkdir -p ${destDir}`);
+    await dockerExec(container, `mkdir -p ${destDir}`, 'root');
     
     // Resolve symlinks before copying to avoid Docker cp issues
     const realSrcPath = await fs.realpath(srcPath);
@@ -340,9 +340,11 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
   console.log(`Starting filesystem verification container...`);
   
   try {
-    // Verify image exists
+    // Build image if it doesn't exist
     if (!await dockerImageExists(preparedTag)) {
-      throw new Error(`Prepared image not found: ${preparedTag}`);
+      console.log(`Prepared image not found. Building habitat for verification...`);
+      const { prepareWorkspace } = require('./image-lifecycle');
+      await prepareWorkspace(config, preparedTag, []);
     }
     
     // Start a temporary container for verification

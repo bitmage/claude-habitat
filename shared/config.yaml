@@ -27,7 +27,7 @@ files:
 # Setup commands that run after file operations
 setup:
   user:
-    run_as: "{container_user}"
+    run_as: "{container.user}"
     commands:
       - |
         # Configure git for container user

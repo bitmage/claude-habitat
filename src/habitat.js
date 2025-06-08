@@ -183,7 +183,50 @@ async function runContainer(tag, config, envVars, overrideCommand = null) {
     ...envVars.flatMap(env => ['-e', env])
   ];
 
-  // Add volume mounts if specified
+  // Add volume mounts from system config and habitat config
+  const systemConfigPath = path.join(__dirname, '..', 'system', 'config.yaml');
+  let systemVolumes = [];
+  
+  // Load system volumes if system config exists
+  let systemConfig = null;
+  if (await fileExists(systemConfigPath)) {
+    try {
+      const { loadConfig } = require('./config');
+      systemConfig = await loadConfig(systemConfigPath);
+      if (systemConfig.volumes && Array.isArray(systemConfig.volumes)) {
+        systemVolumes = systemConfig.volumes;
+      }
+    } catch (err) {
+      console.warn(`Warning: Could not load system config: ${err.message}`);
+    }
+  }
+  
+  // Resolve placeholder values in system volumes using dot notation
+  const resolvedSystemVolumes = systemVolumes.map(volume => {
+    let resolved = volume;
+    
+    // Find all {path.to.value} placeholders and resolve them
+    const placeholderRegex = /\{([^}]+)\}/g;
+    resolved = resolved.replace(placeholderRegex, (match, path) => {
+      // Resolve path like "container.user" to actual config value
+      const value = path.split('.').reduce((obj, key) => obj?.[key], config);
+      return value || match; // Return original if value not found
+    });
+    
+    // Expand ~ to actual home directory
+    if (resolved.startsWith('~/')) {
+      const os = require('os');
+      resolved = resolved.replace('~', os.homedir());
+    }
+    return resolved;
+  });
+  
+  // Add system volumes first
+  resolvedSystemVolumes.forEach(volume => {
+    runArgs.push('-v', volume);
+  });
+  
+  // Add habitat-specific volumes
   if (config.volumes && Array.isArray(config.volumes)) {
     config.volumes.forEach(volume => {
       runArgs.push('-v', volume);
@@ -246,9 +289,12 @@ async function runContainer(tag, config, envVars, overrideCommand = null) {
     console.log('Launching Claude Code...');
     console.log('');
 
-    // Launch Claude Code interactively
+    // Launch Claude Code - use -i only if not running with -p flag
+    const isNonInteractive = claudeCommand.includes('-p') || claudeCommand.includes('--prompt');
+    const dockerFlags = isNonInteractive ? ['-i'] : ['-it'];
+    
     const claudeProcess = spawn('docker', [
-      'exec', '-it',
+      'exec', ...dockerFlags,
       '-u', containerUser,
       '-w', workDir,
       containerName,

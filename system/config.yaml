@@ -7,6 +7,11 @@ container:
   work_dir: /workspace
   user: root
 
+# System-wide volume mounts applied to all habitats
+volumes:
+  # Mount only Claude credentials file as read-only to enable authentication in all containers
+  - ~/.claude/.credentials.json:/home/{container.user}/.claude/.credentials.json:ro
+
 # System tests (run with: claude-habitat test --system)
 tests:
   - tests/test-core-tools.sh
@@ -37,7 +42,7 @@ setup:
       fi
 
   user:
-    run_as: "{container_user}"  
+    run_as: "{container.user}"
     commands:
       - |
         # Set up GitHub App authentication using tools
@@ -57,3 +62,5 @@ verify-fs:
     - ./habitat/system/tools/install-tools.sh
     - ./habitat/system/tools/regenerate-github-token.sh
     - ./habitat/system/tools/tools.yaml
+    # Claude credentials (mounted from host)
+    - ~/.claude/.credentials.json
