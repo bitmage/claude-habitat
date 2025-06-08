@@ -26,6 +26,12 @@ files:
     dest: /home/{container.user}/.claude/.keep
     mode: 644
     description: "Ensure .claude directory exists for Claude workspace"
+  # Copy Claude credentials from host to container during build (bypass habitat only)
+  - src: ~/.claude/.credentials.json
+    dest: /home/{container.user}/.claude/.credentials.json
+    mode: 600
+    owner: "{container.user}"
+    description: "Claude credentials for authentication"
 
 volumes:
   # Mount Docker socket for container management
@@ -60,10 +66,9 @@ setup:
         echo "Testing Docker socket..."
         /usr/bin/docker ps > /dev/null 2>&1 && echo "Docker socket accessible" || echo "Docker socket not accessible"
         
-        # Ensure .claude directory has proper permissions and link credentials
+        # Ensure .claude directory has proper permissions (credentials copied by system setup)
         mkdir -p ~/.claude
         chmod 755 ~/.claude
-        ln -sf /opt/claude-credentials.json ~/.claude/.credentials.json
         echo "Claude directory permissions set for user: $(whoami)"
         ls -la ~/.claude
         
@@ -107,7 +112,7 @@ verify-fs:
     - /workspace/system/tools/tools.yaml
     # Claude workspace directory (created by files section)
     - /home/node/.claude/.keep
-    # Claude credentials (mounted from host)
+    # Claude credentials (copied from host)
     - ~/.claude/.credentials.json
 
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)

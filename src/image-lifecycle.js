@@ -85,6 +85,66 @@ async function buildBaseImage(config, options = {}) {
 }
 
 /**
+ * Copy files specified in the files section of config
+ */
+async function copyConfigFiles(container, config) {
+  if (!config.files || !Array.isArray(config.files)) return;
+  
+  console.log('Copying configuration files...');
+  
+  for (const fileSpec of config.files) {
+    if (!fileSpec.src || !fileSpec.dest) {
+      console.log(`Skipping invalid file spec: ${JSON.stringify(fileSpec)}`);
+      continue;
+    }
+    
+    // Expand tilde in source path
+    let srcPath = fileSpec.src;
+    if (srcPath.startsWith('~/')) {
+      const os = require('os');
+      srcPath = path.join(os.homedir(), srcPath.slice(2));
+    }
+    
+    // Check if source file exists
+    if (!await fileExists(srcPath)) {
+      console.log(`⚠️  Source file not found: ${srcPath} - skipping ${fileSpec.description || fileSpec.dest}`);
+      continue;
+    }
+    
+    // Replace variables in destination path
+    let destPath = fileSpec.dest;
+    if (config.container && config.container.user) {
+      destPath = destPath.replace(/\{container\.user\}/g, config.container.user);
+    }
+    
+    console.log(`Copying ${srcPath} → ${destPath}`);
+    
+    // Create destination directory
+    const destDir = path.dirname(destPath);
+    await dockerExec(container, `mkdir -p ${destDir}`, 'root');
+    
+    // Copy the file
+    await copyFileToContainer(container, srcPath, destPath);
+    
+    // Set ownership if specified
+    if (fileSpec.owner) {
+      let owner = fileSpec.owner;
+      if (config.container && config.container.user) {
+        owner = owner.replace(/\{container\.user\}/g, config.container.user);
+      }
+      await dockerExec(container, `chown ${owner}:${owner} ${destPath}`, 'root');
+    }
+    
+    // Set permissions if specified
+    if (fileSpec.mode) {
+      await dockerExec(container, `chmod ${fileSpec.mode} ${destPath}`, 'root');
+    }
+    
+    console.log(`✓ ${fileSpec.description || destPath}`);
+  }
+}
+
+/**
  * Run setup commands inside a container
  */
 async function runSetupCommands(container, config) {
@@ -287,6 +347,9 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
         systemConfig.container.work_dir = config.container.work_dir;
         systemConfig.container.user = config.container.user;
         
+        // Copy system-level files first (before setup commands)
+        await copyConfigFiles(tempContainer, systemConfig);
+        
         console.log('Running system setup commands...');
         await runSetupCommands(tempContainer, systemConfig);
       }
@@ -308,6 +371,9 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     for (const repo of allRepos) {
       await cloneRepository(tempContainer, repo, config.container.work_dir, config.container.user);
     }
+    
+    // Copy habitat-level files first (before setup commands)
+    await copyConfigFiles(tempContainer, config);
     
     // Run habitat setup commands
     await runSetupCommands(tempContainer, config);
@@ -338,5 +404,6 @@ module.exports = {
   prepareWorkspace,
   buildPreparedImage: prepareWorkspace, // Backward compatibility alias
   runSetupCommands,
+  copyConfigFiles,
   cloneRepository
 };

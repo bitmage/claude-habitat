@@ -8,9 +8,8 @@ container:
   user: root
 
 # System-wide volume mounts applied to all habitats
-volumes:
-  # Mount Claude credentials to a different location and symlink it
-  - ~/.claude/.credentials.json:/opt/claude-credentials.json:ro
+# volumes:
+  # Claude credentials are now copied during build instead of mounted
 
 # System tests (run with: claude-habitat test --system)
 tests:
@@ -20,6 +19,12 @@ tests:
 
 # System-level file operations
 files:
+  # Copy Claude credentials from host to container during build
+  - src: ~/.claude/.credentials.json
+    dest: /home/developer/.claude/.credentials.json
+    mode: 600
+    owner: developer
+    description: "Claude credentials for authentication"
   # Future examples:
   # - src: bashrc-additions
   #   dest: /etc/bash.bashrc.d/claude-habitat
@@ -62,5 +67,5 @@ verify-fs:
     - ./habitat/system/tools/install-tools.sh
     - ./habitat/system/tools/regenerate-github-token.sh
     - ./habitat/system/tools/tools.yaml
-    # Claude credentials (mounted from host)
+    # Claude credentials (copied from host during build)
     - ~/.claude/.credentials.json
