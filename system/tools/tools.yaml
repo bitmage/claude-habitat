@@ -40,12 +40,8 @@ tools:
     binary: "bat"
     extract_path: "bat-v{version}-x86_64-unknown-linux-musl/bat"
 
-  - name: tree
-    description: "tree - directory structure visualization"
-    url: "http://mama.indstate.edu/users/ice/tree/src/tree-2.1.1.tgz"
-    binary: "tree"
-    extract_path: "tree-2.1.1/tree"
-    make_required: true
+  # Note: tree is now installed via apt in Dockerfile instead
+  # The original URL http://mama.indstate.edu is unreliable
 
   - name: delta
     description: "delta - enhanced git diffs"

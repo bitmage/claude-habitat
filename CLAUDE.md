@@ -279,6 +279,35 @@ In addition you may use the claude/scratch directory for any temporary files you
 - You can create production-ready configurations
 - You can troubleshoot complex issues
 
+## Tool Locations in claude-habitat
+
+When working in the claude-habitat environment, tools are available in these locations:
+
+### System Tools (installed via apt)
+- `/usr/bin/gh` - GitHub CLI 
+- `/usr/bin/tree` - Directory tree viewer
+- `/usr/bin/jq` - JSON processor (also available via install-tools.sh)
+- `/usr/bin/git` - Git version control
+- `/usr/bin/docker` - Docker CLI
+
+### Claude Habitat Tools (installed via install-tools.sh)
+- `/workspace/system/tools/bin/rg` - ripgrep for fast searching
+- `/workspace/system/tools/bin/fd` - fd for file finding
+- `/workspace/system/tools/bin/jq` - JSON processor
+- `/workspace/system/tools/bin/yq` - YAML processor
+- `/workspace/system/tools/bin/bat` - Enhanced cat with syntax highlighting (optional)
+
+### Configuration Files
+- `~/.gitconfig` - Git configuration (copied from /workspace/shared/gitconfig)
+- `~/.claude/.credentials.json` - Claude credentials (copied from host)
+- `/workspace/shared/gitconfig` - Shared git configuration template
+
+### Important Paths
+- Working directory: `/workspace` (the claude-habitat repository)
+- System tools: `/workspace/system/tools/bin/`
+- Shared configs: `/workspace/shared/`
+- Local habitat files: `/workspace/local/`
+
 ## Testing Lifecycle
 
 When developing features, always run the full test suite to ensure nothing is broken:

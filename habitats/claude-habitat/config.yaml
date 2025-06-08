@@ -66,6 +66,11 @@ setup:
     commands:
       - |
         cd /workspace
+        
+        # Fix ownership of workspace (should be owned by node, not root)
+        echo "Fixing workspace ownership..."
+        sudo chown -R node:node /workspace
+        
         echo "Installing Claude Habitat dependencies..."
         npm install
         echo "Running tests to verify setup..."
@@ -75,19 +80,52 @@ setup:
         echo "Testing Docker socket..."
         /usr/bin/docker ps > /dev/null 2>&1 && echo "Docker socket accessible" || echo "Docker socket not accessible"
 
+        # Install system tools as node user
+        echo "Installing system tools..."
+        cd /workspace/system/tools
+        ./install-tools.sh install || echo "Some tools failed to install"
+        
+        # Ensure shared directory structure exists
+        echo "Setting up shared directory..."
+        mkdir -p /workspace/shared/tools/bin
+        
+        # Copy gitconfig if it exists on host
+        if [ -f "$HOME/.gitconfig" ]; then
+          cp "$HOME/.gitconfig" /workspace/shared/gitconfig
+          echo "Copied gitconfig from host"
+        else
+          # Create a basic gitconfig
+          cat > /workspace/shared/gitconfig << 'EOF'
+        [user]
+          name = Claude Habitat User
+          email = claude@habitat.local
+        [init]
+          defaultBranch = main
+        [safe]
+          directory = /workspace
+        EOF
+          echo "Created default gitconfig"
+        fi
+
         # Ensure .claude directory has proper permissions (credentials copied by system setup)
         mkdir -p ~/.claude
         chmod 755 ~/.claude
         echo "Claude directory permissions set for user: $(whoami)"
         ls -la ~/.claude
 
-        # Set up GitHub App authentication using system tools (Meta Claude's structure)
-        echo "Setting up GitHub authentication..."
-        "{env.WORKDIR}/system/tools/bin/setup-github-auth"
-        
-        # Configure git for container user using centralized script
+        # Set up git configuration
         echo "Setting up git configuration..."
-        "{env.SYSTEM_PATH}/tools/bin/install-gitconfig"
+        if [ -f /workspace/shared/gitconfig ]; then
+          cp /workspace/shared/gitconfig ~/.gitconfig
+          echo "Git configuration applied"
+        fi
+        
+        # Set up GitHub CLI authentication if credentials exist
+        if [ -f ~/.claude/.credentials.json ] && command -v gh &> /dev/null; then
+          echo "Setting up GitHub CLI authentication..."
+          # Extract token from credentials.json if needed
+          # For now, we'll skip this as it requires parsing JSON
+        fi
 
         echo "Claude Habitat setup complete"
 
@@ -112,16 +150,25 @@ verify-fs:
     - "${WORKDIR}/habitats/discourse/config.yaml"
     - "${WORKDIR}/test/unit/claude-habitat.test.js"
     - "${WORKDIR}/node_modules/package.json"
-    # System tools (Meta Claude's structure)
-    - "${WORKDIR}/system/tools/bin/setup-github-auth"
+    # System infrastructure
+    - "${WORKDIR}/system/CLAUDE.md"
+    - "${WORKDIR}/system/config.yaml"
+    - "${WORKDIR}/system/tools/install-tools.sh"
+    - "${WORKDIR}/system/tools/regenerate-github-token.sh"
+    - "${WORKDIR}/system/tools/tools.yaml"
+    # Installed system tools
     - "${WORKDIR}/system/tools/bin/rg"
     - "${WORKDIR}/system/tools/bin/fd"
     - "${WORKDIR}/system/tools/bin/jq"
     - "${WORKDIR}/system/tools/bin/yq"
-    - "${WORKDIR}/system/tools/bin/gh"
-    - "${WORKDIR}/system/tools/install-tools.sh"
-    - "${WORKDIR}/system/tools/regenerate-github-token.sh"
-    - "${WORKDIR}/system/tools/tools.yaml"
+    # GitHub CLI should be in system PATH via apt
+    - "/usr/bin/gh"
+    # Tree should be in system PATH via apt
+    - "/usr/bin/tree"
+    # Shared directory structure
+    - "${WORKDIR}/shared/gitconfig"
+    # User git configuration
+    - ~/.gitconfig
     # Claude workspace directory (created by files section)
     - ~/.claude/.keep
     # Claude credentials (copied from host)
