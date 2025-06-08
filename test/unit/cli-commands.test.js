@@ -239,12 +239,12 @@ test('start command with invalid habitat exits with code 1', async () => {
   console.log('✅ Start command with invalid habitat exits with error code 1');
 });
 
-test('start command with failing container exits with code 1', async () => {
-  console.log('Testing start command with failing container...');
+test('start command with runtime exit shows improved messaging', async () => {
+  console.log('Testing start command with runtime exit...');
   
   const scriptPath = path.join(__dirname, '../../claude-habitat.js');
   
-  // Use a command that will definitely fail
+  // Use a command that will exit after startup (runtime exit, not startup failure)
   const result = await new Promise((resolve, reject) => {
     const child = spawn('node', [scriptPath, 'start', 'claude-habitat', '--cmd', 'exit 42'], {
       stdio: 'pipe'
@@ -275,14 +275,15 @@ test('start command with failing container exits with code 1', async () => {
     }, 30000);
   });
   
-  // Should exit with code 1 when container fails
-  assert.strictEqual(result.code, 1, `Failed container should exit with code 1, got ${result.code}`);
+  // Runtime exits should now exit cleanly with code 0 (improved error handling)
+  assert.strictEqual(result.code, 0, `Runtime exit should exit with code 0, got ${result.code}`);
   
-  // Should show habitat startup failed message (not interactive menu)
-  assert.ok(result.stdout.includes('Habitat startup failed') || result.stderr.includes('Error starting habitat'), 
-           'Should show habitat startup failed message');
+  // Should show runtime exit message with meaningful exit code interpretation
+  assert.ok(result.stdout.includes('Habitat exited with code 42') || 
+           result.stdout.includes('General error'), 
+           'Should show runtime exit message with exit code interpretation');
   
-  // Should NOT show interactive menu prompts
+  // Should NOT show interactive menu prompts in CLI mode
   assert.ok(!result.stdout.includes('[t] Try a different habitat') && 
            !result.stdout.includes('[m] Go back to main menu'), 
            'Should not show interactive menu options in CLI mode');
@@ -290,8 +291,8 @@ test('start command with failing container exits with code 1', async () => {
   console.log('✅ Start command with failing container exits with error code 1');
 });
 
-test('start command does not hang on container failure', async () => {
-  console.log('Testing start command completes quickly on failure...');
+test('start command does not hang on runtime exit', async () => {
+  console.log('Testing start command completes quickly on runtime exit...');
   
   const scriptPath = path.join(__dirname, '../../claude-habitat.js');
   
@@ -316,15 +317,15 @@ test('start command does not hang on container failure', async () => {
   ]);
   
   // Should complete, not timeout
-  assert.ok(result.completed, 'Start command should complete on failure, not hang');
-  assert.strictEqual(result.code, 1, 'Should exit with error code');
+  assert.ok(result.completed, 'Start command should complete on runtime exit, not hang');
+  assert.strictEqual(result.code, 0, 'Runtime exit should exit with code 0 (improved error handling)');
   assert.ok(result.duration < 45000, `Should complete within timeout, took ${result.duration}ms`);
   
-  console.log(`✅ Start command completes quickly on failure (${result.duration}ms)`);
+  console.log(`✅ Start command completes quickly on runtime exit (${result.duration}ms)`);
 });
 
-test('start command shows CLI-appropriate error messages', async () => {
-  console.log('Testing start command error message format...');
+test('start command shows improved runtime exit messages', async () => {
+  console.log('Testing start command improved error messaging...');
   
   const scriptPath = path.join(__dirname, '../../claude-habitat.js');
   
@@ -360,17 +361,13 @@ test('start command shows CLI-appropriate error messages', async () => {
   
   const allOutput = result.stdout + result.stderr;
   
-  // Should show appropriate error context
-  assert.ok(allOutput.includes('Configuration file errors') || 
-           allOutput.includes('Docker connectivity issues') ||
-           allOutput.includes('Repository access problems') ||
-           allOutput.includes('Missing dependencies'),
-           'Should show diagnostic information');
+  // Should show runtime exit message with exit code interpretation
+  assert.ok(allOutput.includes('Habitat exited with code 1') || 
+           allOutput.includes('General error'),
+           'Should show runtime exit message with code interpretation');
   
-  // Should show failure message
-  assert.ok(allOutput.includes('Habitat startup failed') || 
-           allOutput.includes('Error starting habitat'),
-           'Should show clear failure message');
+  // With improved error handling, runtime exits should exit cleanly
+  assert.strictEqual(result.code, 0, 'Runtime exit should exit with code 0 (improved error handling)');
   
   // Should NOT ask for user input in CLI mode
   assert.ok(!allOutput.includes('Would you like to:'),

@@ -173,12 +173,29 @@ async function setupHabitatEnvironment(habitatName, config) {
   return true;
 }
 
+// Helper function to interpret exit codes
+function interpretExitCode(exitCode) {
+  const exitCodes = {
+    0: 'Success',
+    1: 'General error',
+    2: 'Misuse of shell command',
+    126: 'Command not executable',
+    127: 'Command not found',
+    130: 'Terminated by user (ctrl-c)',
+    137: 'Killed (SIGKILL)',
+    143: 'Terminated (SIGTERM)'
+  };
+  
+  return exitCodes[exitCode] || `Unknown exit code ${exitCode}`;
+}
+
 // Run container (internal function)
 async function runContainer(tag, config, envVars, overrideCommand = null, ttyOverride = null) {
   const containerName = `${config.name}_${Date.now()}_${process.pid}`;
   const workDir = config.container.work_dir; // Config validation ensures this exists
   const containerUser = config.container.user; // Config validation ensures this exists
   const claudeCommand = overrideCommand || config.claude?.command || 'claude';
+  let startupCompleted = false; // Track whether startup completed successfully
 
   console.log(`Creating container from prepared image: ${containerName}`);
 
@@ -295,6 +312,9 @@ async function runContainer(tag, config, envVars, overrideCommand = null, ttyOve
     console.log('Launching Claude Code...');
     console.log('');
 
+    // Mark startup as completed - container is ready and command is starting
+    startupCompleted = true;
+
     // Launch Claude Code with TTY allocation based on explicit configuration
     // Default to TTY enabled since Claude is an interactive tool that needs proper output display
     let enableTTY;
@@ -323,14 +343,49 @@ async function runContainer(tag, config, envVars, overrideCommand = null, ttyOve
       stdio: 'inherit'
     });
 
-    // Wait for Claude to exit
+    // Wait for Claude to exit with improved error handling
     await new Promise((resolve, reject) => {
       claudeProcess.on('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`Claude Code exited with code ${code}`));
+        // Since startup completed, this is a runtime exit
+        if (code === 0) {
+          console.log(colors.green('✅ Habitat completed successfully'));
+          resolve();
+        } else if (code === 130) {
+          console.log(colors.cyan('ℹ️  Habitat interrupted by user (ctrl-c)'));
+          resolve();
+        } else {
+          const exitMeaning = interpretExitCode(code);
+          console.log(colors.yellow(`ℹ️  Habitat exited with code ${code} (${exitMeaning})`));
+          resolve(); // Don't reject runtime exits, they're normal
+        }
       });
-      claudeProcess.on('error', reject);
+      
+      claudeProcess.on('error', (error) => {
+        // This is a process error during execution, not an exit code
+        reject(new Error(`Process error: ${error.message}`));
+      });
     });
+  } catch (error) {
+    // Handle startup vs runtime errors appropriately
+    if (!startupCompleted) {
+      // True startup failure - container/environment setup failed
+      console.error(colors.red(`❌ Habitat startup failed: ${error.message}`));
+      
+      // Provide additional context for common startup issues
+      if (error.message.includes('Container exited unexpectedly')) {
+        console.error(colors.yellow('💡 This usually indicates a problem with the container configuration or base image.'));
+        console.error(colors.yellow('   Try running with --rebuild to rebuild the environment from scratch.'));
+      } else if (error.message.includes('Work directory') && error.message.includes('not found')) {
+        console.error(colors.yellow('💡 The workspace directory is missing from the prepared image.'));
+        console.error(colors.yellow('   This may indicate a configuration or build issue.'));
+      }
+      
+      throw error; // Re-throw startup errors
+    } else {
+      // Runtime error after successful startup
+      console.log(colors.yellow(`ℹ️  Runtime error: ${error.message}`));
+      // Don't throw runtime errors - they're expected in some cases
+    }
   } finally {
     await cleanup();
   }
