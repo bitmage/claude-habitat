@@ -730,6 +730,7 @@ async function main() {
       const directIndex = parseInt(choiceKey) - 1;
       if (!isNaN(directIndex) && directIndex >= 0 && directIndex < 9 && directIndex < habitats.length) {
         options.configPath = habitats[directIndex].path;
+        options.rebuild = rebuild; // Set rebuild option from interactive choice
         if (rebuild) {
           console.log(`\n🔄 Rebuilding: ${habitats[directIndex].name}\n`);
         } else {
@@ -747,6 +748,7 @@ async function main() {
           
           if (habitatIndex < habitats.length) {
             options.configPath = habitats[habitatIndex].path;
+            options.rebuild = rebuild; // Set rebuild option from interactive choice
             if (rebuild) {
               console.log(`\n🔄 Rebuilding: ${habitats[habitatIndex].name}\n`);
             } else {
@@ -918,7 +920,7 @@ async function main() {
       }
       
       await saveLastUsedConfig(options.configPath);
-      await startSession(options.configPath, options.extraRepos, options.overrideCommand, { rebuild: options.rebuild || rebuild });
+      await startSession(options.configPath, options.extraRepos, options.overrideCommand, { rebuild: options.rebuild });
     } catch (err) {
       console.error(colors.red(`\n❌ Error starting habitat: ${err.message}`));
       if (err.validationErrors) {
