@@ -12,52 +12,28 @@ This habitat uses the `bypass_habitat_construction` flag, which fundamentally ch
 - Use system-wide infrastructure from `system/config.yaml`
 - Use shared user preferences from `shared/config.yaml`
 - Get tools, setup scripts, and configurations from the Claude Habitat infrastructure
-- Have a standardized `./habitat/` directory structure inside containers
+- Have a standardized `./habitat/` directory structure inside their workspace
 
 **Claude-Habitat (Bypass Mode):**
 - **Ignores** `system/config.yaml` and `shared/config.yaml` completely
-- Uses Meta Claude's directory structure directly (the current working directory)
+- Uses Meta Claude's directory structure directly (this project's working directory)
 - References tools and scripts from Meta Claude's actual paths like `./system/tools/bin/rg`
 - Self-contains all necessary setup in `habitats/claude-habitat/config.yaml`
-
-## Directory Structure
-
-### Meta Claude's Structure (Host)
-```
-claude-habitat/
-├── system/tools/bin/        # System tools (rg, fd, jq, yq, gh, etc.)
-├── shared/                  # User preferences and configs
-├── habitats/claude-habitat/ # This habitat's configuration
-├── src/                     # Claude Habitat source code
-├── test/                    # Test suites
-└── docs/                    # Documentation
-```
-
-### Container Structure
-```
-/workspace/                  # Meta Claude's project root (cloned)
-├── system/tools/bin/        # Same as Meta Claude
-├── shared/                  # Same as Meta Claude  
-├── habitats/claude-habitat/ # This habitat's config
-├── src/                     # Claude Habitat source
-├── test/                    # Test suites
-└── docs/                    # Documentation
-```
 
 ## Key Differences
 
 ### 1. **No Infrastructure Separation**
-- Normal habitats get infrastructure copied to `./habitat/system/` and `./habitat/shared/`
+- Normal habitats get files and tools copied to `./habitat/system/` and `./habitat/shared/`
 - Claude-habitat uses Meta Claude's structure directly at `/workspace/`
 
-### 2. **Self-Contained Setup** 
+### 2. **Self-Contained Setup**
 - All required setup is defined in `habitats/claude-habitat/config.yaml`
 - Includes GitHub auth setup: `./system/tools/bin/setup-github-auth`
 - Includes system tool references via Meta Claude paths
 
 ### 3. **Test Restrictions**
 - **System tests**: Unavailable (manages its own infrastructure)
-- **Shared tests**: Unavailable (manages its own infrastructure)  
+- **Shared tests**: Unavailable (manages its own infrastructure)
 - **Habitat tests**: Available (tests specific to claude-habitat)
 - **Filesystem verification**: Available (verifies Meta Claude structure)
 
@@ -70,26 +46,22 @@ The `verify-fs` section checks for:
 
 ## Why This Design?
 
-### Development Efficiency
-- Developers work on Claude Habitat using Claude Habitat itself
-- Changes to infrastructure are immediately available
-- No need to rebuild infrastructure when working on claude-habitat core
-
-### Meta-Development Safety
-- Claude can safely modify claude-habitat source code
-- Container isolation prevents breaking the host Meta Claude
+### Self Host FTW
+- Wanted to let parallel Claude's work on the code base
+- Need container isolation in order to do so
+- Self-host to reap the same benefits that others are getting
 - Full git workflow available (branches, PRs, testing)
-
-### Consistency Testing
-- Tests claude-habitat's ability to self-host
-- Validates that bypass mode works correctly
-- Ensures the tool can be used to develop itself
+- Great for a dog fooding test case - why not?
 
 ## Usage
 
 ### Starting the Environment
 ```bash
+# interactive
 ./claude-habitat start claude-habitat
+
+# non-interactive
+./claude-habitat start claude-habitat --cmd "claude --dangerously-skip-permissions -p 'I like cats'"
 ```
 
 ### Running Tests
@@ -97,7 +69,7 @@ The `verify-fs` section checks for:
 # Only habitat-specific tests available
 ./claude-habitat test claude-habitat --habitat
 
-# Filesystem verification  
+# Filesystem verification
 ./claude-habitat test claude-habitat --verify-fs
 
 # System/shared tests are unavailable:

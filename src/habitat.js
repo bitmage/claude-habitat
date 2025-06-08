@@ -295,9 +295,9 @@ async function runContainer(tag, config, envVars, overrideCommand = null) {
     console.log('Launching Claude Code...');
     console.log('');
 
-    // Launch Claude Code - use -i only if not running with -p flag
-    const isNonInteractive = claudeCommand.includes('-p') || claudeCommand.includes('--prompt');
-    const dockerFlags = isNonInteractive ? ['-i'] : ['-it'];
+    // Launch Claude Code - always use -i for non-TTY environments
+    // TTY should be explicitly configured, not detected from command content
+    const dockerFlags = ['-i'];
     
     const claudeProcess = spawn('docker', [
       'exec', ...dockerFlags,

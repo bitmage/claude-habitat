@@ -138,15 +138,35 @@ async function cloneRepository(container, repoInfo, workDir) {
   
   // Check if directory already exists and remove it if so
   const repoName = path.basename(repoInfo.path);
-  await dockerExec(container, `cd ${parentDir} && rm -rf ${repoName}`, 'root');
+  // Remove and recreate to avoid Docker WORKDIR issues
+  await dockerExec(container, `rm -rf ${repoInfo.path} && mkdir -p ${repoInfo.path}`, 'root');
   
-  // Clone the repository
-  let cloneCmd = `cd ${parentDir} && git clone ${repoInfo.url} ${repoName}`;
+  // Clone the repository (use . to clone into existing directory)
+  let cloneCmd = `cd ${repoInfo.path} && git clone ${repoInfo.url} .`;
   if (repoInfo.branch && repoInfo.branch !== 'main' && repoInfo.branch !== 'master') {
     cloneCmd += ` -b ${repoInfo.branch}`;
   }
   
-  await dockerExec(container, cloneCmd, 'root');
+  console.log(`Executing clone command: ${cloneCmd}`);
+  try {
+    // Execute with explicit bash to avoid working directory issues
+    const result = await dockerExec(container, `bash -c "${cloneCmd}"`, 'root');
+    if (result) {
+      console.log(`Clone output: ${result.substring(0, 200)}`);
+    }
+  } catch (err) {
+    console.error(`Clone failed with error: ${err.message}`);
+    throw err;
+  }
+  
+  // Verify the clone worked
+  try {
+    await dockerExec(container, `test -d ${repoInfo.path}/.git`, 'root');
+    console.log(`✓ Repository cloned successfully to ${repoInfo.path}`);
+  } catch (err) {
+    console.error(`❌ Repository clone verification failed for ${repoInfo.path}`);
+    throw new Error(`Failed to clone repository to ${repoInfo.path}`);
+  }
   
   // If branch wasn't specified during clone, checkout now
   if (repoInfo.branch && (repoInfo.branch === 'main' || repoInfo.branch === 'master')) {
@@ -192,31 +212,38 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     // Wait for container to be ready
     await sleep(2000);
     
-    // Copy system files first
-    const systemPath = path.join(process.cwd(), 'system');
-    if (await fileExists(systemPath)) {
-      console.log('Copying system files to container...');
-      const containerSystemPath = getHabitatInfrastructurePath(config.container.work_dir, 'system');
-      await dockerExec(tempContainer, `mkdir -p ${containerSystemPath}`, 'root');
-      await copyDirectoryToContainer(tempContainer, systemPath, containerSystemPath);
+    // Skip infrastructure copying for bypass habitats
+    const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
+    
+    if (!isBypassHabitat) {
+      // Copy system files first
+      const systemPath = path.join(process.cwd(), 'system');
+      if (await fileExists(systemPath)) {
+        console.log('Copying system files to container...');
+        const containerSystemPath = getHabitatInfrastructurePath(config.container.work_dir, 'system');
+        await dockerExec(tempContainer, `mkdir -p ${containerSystemPath}`, 'root');
+        await copyDirectoryToContainer(tempContainer, systemPath, containerSystemPath);
+      }
     }
     
-    // Copy shared files
-    const sharedPath = path.join(process.cwd(), 'shared');
-    if (await fileExists(sharedPath)) {
-      console.log('Copying shared files to container...');
-      const containerSharedPath = getHabitatInfrastructurePath(config.container.work_dir, 'shared');
-      await dockerExec(tempContainer, `mkdir -p ${containerSharedPath}`, 'root');
-      await copyDirectoryToContainer(tempContainer, sharedPath, containerSharedPath);
-    }
-    
-    // Copy local habitat files
-    const habitatPath = path.dirname(config._configPath);
-    if (await fileExists(habitatPath)) {
-      console.log('Copying habitat files to container...');
-      const containerLocalPath = getHabitatInfrastructurePath(config.container.work_dir, 'local');
-      await dockerExec(tempContainer, `mkdir -p ${containerLocalPath}`, 'root');
-      await copyDirectoryToContainer(tempContainer, habitatPath, containerLocalPath);
+    if (!isBypassHabitat) {
+      // Copy shared files
+      const sharedPath = path.join(process.cwd(), 'shared');
+      if (await fileExists(sharedPath)) {
+        console.log('Copying shared files to container...');
+        const containerSharedPath = getHabitatInfrastructurePath(config.container.work_dir, 'shared');
+        await dockerExec(tempContainer, `mkdir -p ${containerSharedPath}`, 'root');
+        await copyDirectoryToContainer(tempContainer, sharedPath, containerSharedPath);
+      }
+      
+      // Copy local habitat files
+      const habitatPath = path.dirname(config._configPath);
+      if (await fileExists(habitatPath)) {
+        console.log('Copying habitat files to container...');
+        const containerLocalPath = getHabitatInfrastructurePath(config.container.work_dir, 'local');
+        await dockerExec(tempContainer, `mkdir -p ${containerLocalPath}`, 'root');
+        await copyDirectoryToContainer(tempContainer, habitatPath, containerLocalPath);
+      }
     }
     
     // Clone repositories
