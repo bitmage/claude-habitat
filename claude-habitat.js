@@ -38,6 +38,35 @@ const { runInitialization, checkInitializationStatus, hasGitHubAppAuth } = requi
 const { parseCliArguments, validateCliOptions } = require('./src/cli-parser');
 const { executeCliCommand } = require('./src/command-executor');
 
+/**
+ * Load config with environment variable chain: system → shared → habitat
+ */
+async function loadConfigWithEnvironmentChain(habitatConfigPath) {
+  const { rel } = require('./src/utils');
+  
+  // Start with empty environment
+  let accumulatedEnv = {};
+  
+  // 1. Load system config first (sets foundational variables like WORKDIR)
+  const systemConfigPath = rel('system', 'config.yaml');
+  if (await fileExists(systemConfigPath)) {
+    const systemConfig = await loadConfig(systemConfigPath, accumulatedEnv, false); // Don't validate as habitat
+    accumulatedEnv = { ...accumulatedEnv, ...systemConfig._environment };
+  }
+  
+  // 2. Load shared config second (can reference system variables and add user-specific ones)
+  const sharedConfigPath = rel('shared', 'config.yaml');
+  if (await fileExists(sharedConfigPath)) {
+    const sharedConfig = await loadConfig(sharedConfigPath, accumulatedEnv, false); // Don't validate as habitat
+    accumulatedEnv = { ...accumulatedEnv, ...sharedConfig._environment };
+  }
+  
+  // 3. Load habitat config last (can reference system and shared variables)
+  const habitatConfig = await loadConfig(habitatConfigPath, accumulatedEnv, true); // Validate as habitat
+  
+  return habitatConfig;
+}
+
 const returnToMainMenu = async () => {
   console.log('\nReturning to main menu...\n');
   await main();
@@ -801,7 +830,9 @@ async function main() {
     try {
       // Pre-flight repository access check
       console.log('Pre-flight check...');
-      const config = await loadConfig(options.configPath);
+      
+      // Load config with environment variable chain: system → shared → habitat
+      const config = await loadConfigWithEnvironmentChain(options.configPath);
       const problemRepos = [];
       
       if (config.repositories && Array.isArray(config.repositories)) {

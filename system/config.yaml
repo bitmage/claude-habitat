@@ -2,9 +2,17 @@
 name: system-setup  
 description: Core infrastructure setup for all claude-habitat containers
 
+# Default environment variables (can be overridden by shared/habitat configs)
+environment:
+  - WORKDIR=/workspace
+  - HABITAT_PATH=${WORKDIR}/claude-habitat
+  - SYSTEM_PATH=${HABITAT_PATH}/system
+  - SHARED_PATH=${HABITAT_PATH}/shared
+  - LOCAL_PATH=${HABITAT_PATH}/local
+
 # Container settings for system setup
 container:
-  work_dir: /workspace
+  work_dir: ${WORKDIR}
   user: root
 
 # System-wide volume mounts applied to all habitats
@@ -52,20 +60,20 @@ setup:
       - |
         # Set up GitHub App authentication using tools
         echo "Setting up GitHub authentication..."
-        ${work_dir}/claude-habitat/system/tools/bin/setup-github-auth
+        "{env.SYSTEM_PATH}/tools/bin/setup-github-auth"
 
 # Filesystem verification structure
 verify-fs:
   required_files:
     # Core system tools
-    - ./habitat/system/tools/bin/setup-github-auth
-    - ./habitat/system/tools/bin/rg
-    - ./habitat/system/tools/bin/fd
-    - ./habitat/system/tools/bin/jq
-    - ./habitat/system/tools/bin/yq
-    - ./habitat/system/tools/bin/gh
-    - ./habitat/system/tools/install-tools.sh
-    - ./habitat/system/tools/regenerate-github-token.sh
-    - ./habitat/system/tools/tools.yaml
+    - "{env.SYSTEM_PATH}/tools/bin/setup-github-auth"
+    - "{env.SYSTEM_PATH}/tools/bin/rg"
+    - "{env.SYSTEM_PATH}/tools/bin/fd"
+    - "{env.SYSTEM_PATH}/tools/bin/jq"
+    - "{env.SYSTEM_PATH}/tools/bin/yq"
+    - "{env.SYSTEM_PATH}/tools/bin/gh"
+    - "{env.SYSTEM_PATH}/tools/install-tools.sh"
+    - "{env.SYSTEM_PATH}/tools/regenerate-github-token.sh"
+    - "{env.SYSTEM_PATH}/tools/tools.yaml"
     # Claude credentials (copied from host during build)
     - ~/.claude/.credentials.json

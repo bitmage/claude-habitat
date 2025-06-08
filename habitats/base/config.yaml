@@ -9,7 +9,7 @@ image:
 # No repositories needed for base habitat
 repositories: []
 
-# Minimal environment
+# Environment configuration (inherits WORKDIR from system, adds base-specific variables)
 environment:
   - GITHUB_APP_ID=1357221
 
@@ -18,7 +18,6 @@ setup: {}
 
 # Container configuration
 container:
-  work_dir: /workspace
   user: root
   init_command: /sbin/init
   startup_delay: 2

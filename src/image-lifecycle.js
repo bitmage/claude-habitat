@@ -164,55 +164,32 @@ async function copyConfigFiles(container, config) {
 
 /**
  * Run setup commands inside a container
+ * Note: Config is already fully expanded with environment variables and container values
  */
 async function runSetupCommands(container, config) {
   if (!config.setup) return;
   
   console.log('Running setup commands...');
   
-  // Helper function to replace variables in commands
-  const replaceVariables = (cmd) => {
-    let result = cmd;
-    // Replace work_dir (new standard)
-    if (config.container && config.container.work_dir) {
-      result = result.replace(/\${work_dir}/g, config.container.work_dir);
-    }
-    // Replace container.work_dir (legacy support)
-    if (config.container && config.container.work_dir) {
-      result = result.replace(/\${container\.work_dir}/g, config.container.work_dir);
-    }
-    // Replace container.user
-    if (config.container && config.container.user) {
-      result = result.replace(/\${container\.user}/g, config.container.user);
-    }
-    return result;
-  };
-  
   // Run root setup commands
   if (config.setup.root && config.setup.root.length > 0) {
     console.log('Running root setup commands...');
     for (const cmd of config.setup.root) {
       if (cmd && cmd.trim()) {
-        const processedCmd = replaceVariables(cmd);
-        console.log(`  ${processedCmd}`);
-        await dockerExec(container, processedCmd, 'root');
+        console.log(`  ${cmd}`);
+        await dockerExec(container, cmd, 'root');
       }
     }
   }
   
   // Run user setup commands
   if (config.setup.user && config.setup.user.commands && config.setup.user.commands.length > 0) {
-    let runAsUser = config.setup.user.run_as || config.container.user;
-    // Replace variables in run_as user
-    if (runAsUser === '{container.user}') {
-      runAsUser = config.container.user;
-    }
+    const runAsUser = config.setup.user.run_as || config.container.user;
     console.log(`Running user setup commands as ${runAsUser}...`);
     for (const cmd of config.setup.user.commands) {
       if (cmd && cmd.trim()) {
-        const processedCmd = replaceVariables(cmd);
-        console.log(`  ${processedCmd}`);
-        await dockerExec(container, processedCmd, runAsUser);
+        console.log(`  ${cmd}`);
+        await dockerExec(container, cmd, runAsUser);
       }
     }
   }
@@ -354,16 +331,17 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
       const systemConfigPath = rel('system', 'config.yaml');
       if (await fileExists(systemConfigPath)) {
         console.log('Loading system configuration...');
-        const yaml = require('js-yaml');
-        const systemConfigContent = await fs.readFile(systemConfigPath, 'utf8');
-        const systemConfig = yaml.load(systemConfigContent);
+        const { loadConfig } = require('./config');
         
-        // Ensure the system config has the correct work_dir
+        // Load system config with environment variable processing
+        const systemConfig = await loadConfig(systemConfigPath);
+        
+        // Ensure the system config has the correct work_dir and user from habitat config
         if (!systemConfig.container) {
           systemConfig.container = {};
         }
-        systemConfig.container.work_dir = config.container.work_dir;
-        systemConfig.container.user = config.container.user;
+        systemConfig.container.work_dir = config.container?.work_dir || systemConfig._environment?.WORKDIR || '/workspace';
+        systemConfig.container.user = config.container?.user || 'root';
         
         // Copy system-level files first (before setup commands)
         await copyConfigFiles(tempContainer, systemConfig);

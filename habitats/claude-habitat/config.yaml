@@ -16,6 +16,11 @@ repositories:
     shallow: true
 
 environment:
+  - WORKDIR=/workspace
+  - HABITAT_PATH=${WORKDIR}/claude-habitat
+  - SYSTEM_PATH=${HABITAT_PATH}/system
+  - SHARED_PATH=${HABITAT_PATH}/shared
+  - LOCAL_PATH=${HABITAT_PATH}/local
   - NODE_ENV=development
   - DOCKER_HOST=unix:///var/run/docker.sock
 
@@ -74,12 +79,11 @@ setup:
         
         # Set up GitHub App authentication using system tools (Meta Claude's structure)
         echo "Setting up GitHub authentication..."
-        ./system/tools/bin/setup-github-auth
+        "{env.WORKDIR}/system/tools/bin/setup-github-auth"
         
         echo "Claude Habitat setup complete"
 
 container:
-  work_dir: /workspace
   user: node
   init_command: /sbin/init
   startup_delay: 5
@@ -88,28 +92,28 @@ container:
 verify-fs:
   required_files:
     # Main claude-habitat source files at repository root
-    - /workspace/.git/config
-    - /workspace/CLAUDE.md
-    - /workspace/README.md
-    - /workspace/package.json
-    - /workspace/package-lock.json
-    - /workspace/claude-habitat
-    - /workspace/claude-habitat.js
-    - /workspace/claude-habitat.sh
-    - /workspace/habitats/base/config.yaml
-    - /workspace/habitats/discourse/config.yaml
-    - /workspace/test/unit/claude-habitat.test.js
-    - /workspace/node_modules/package.json
+    - "{env.WORKDIR}/.git/config"
+    - "{env.WORKDIR}/CLAUDE.md"
+    - "{env.WORKDIR}/README.md"
+    - "{env.WORKDIR}/package.json"
+    - "{env.WORKDIR}/package-lock.json"
+    - "{env.WORKDIR}/claude-habitat"
+    - "{env.WORKDIR}/claude-habitat.js"
+    - "{env.WORKDIR}/claude-habitat.sh"
+    - "{env.WORKDIR}/habitats/base/config.yaml"
+    - "{env.WORKDIR}/habitats/discourse/config.yaml"
+    - "{env.WORKDIR}/test/unit/claude-habitat.test.js"
+    - "{env.WORKDIR}/node_modules/package.json"
     # System tools (Meta Claude's structure)
-    - /workspace/system/tools/bin/setup-github-auth
-    - /workspace/system/tools/bin/rg
-    - /workspace/system/tools/bin/fd
-    - /workspace/system/tools/bin/jq
-    - /workspace/system/tools/bin/yq
-    - /workspace/system/tools/bin/gh
-    - /workspace/system/tools/install-tools.sh
-    - /workspace/system/tools/regenerate-github-token.sh
-    - /workspace/system/tools/tools.yaml
+    - "{env.WORKDIR}/system/tools/bin/setup-github-auth"
+    - "{env.WORKDIR}/system/tools/bin/rg"
+    - "{env.WORKDIR}/system/tools/bin/fd"
+    - "{env.WORKDIR}/system/tools/bin/jq"
+    - "{env.WORKDIR}/system/tools/bin/yq"
+    - "{env.WORKDIR}/system/tools/bin/gh"
+    - "{env.WORKDIR}/system/tools/install-tools.sh"
+    - "{env.WORKDIR}/system/tools/regenerate-github-token.sh"
+    - "{env.WORKDIR}/system/tools/tools.yaml"
     # Claude workspace directory (created by files section)
     - /home/node/.claude/.keep
     # Claude credentials (copied from host)

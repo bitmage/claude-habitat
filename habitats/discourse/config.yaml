@@ -12,8 +12,13 @@ image:
   build_args:
     - "DISCOURSE_IMAGE=discourse/discourse_dev:release"
 
-# Environment variables
+# Environment variables (discourse uses /discourse instead of default /workspace)
 environment:
+  - WORKDIR=/discourse
+  - HABITAT_PATH=${WORKDIR}/habitat
+  - SYSTEM_PATH=${HABITAT_PATH}/system
+  - SHARED_PATH=${HABITAT_PATH}/shared
+  - LOCAL_PATH=${HABITAT_PATH}/local
   - RAILS_ENV=test
   - RUBY_GLOBAL_METHOD_CACHE_SIZE=131072
   - LD_PRELOAD=/usr/lib/libjemalloc.so
@@ -83,7 +88,6 @@ setup:
 
 # Container configuration
 container:
-  work_dir: /discourse
   user: discourse
   init_command: /sbin/boot
   startup_delay: 10
@@ -92,21 +96,21 @@ container:
 verify-fs:
   required_files:
     # Main discourse source files at project root
-    - /discourse/.git/config
-    - /discourse/CLAUDE.md
-    - /discourse/Gemfile
-    - /discourse/package.json
-    - /discourse/bin/rails
-    - /discourse/app/controllers/application_controller.rb
-    - /discourse/plugins/county-fence
-    - /discourse/plugins/discourse-calendar
+    - "{env.WORKDIR}/.git/config"
+    - "{env.WORKDIR}/CLAUDE.md"
+    - "{env.WORKDIR}/Gemfile"
+    - "{env.WORKDIR}/package.json"
+    - "{env.WORKDIR}/bin/rails"
+    - "{env.WORKDIR}/app/controllers/application_controller.rb"
+    - "{env.WORKDIR}/plugins/county-fence"
+    - "{env.WORKDIR}/plugins/discourse-calendar"
     # Infrastructure files in claude-habitat subdirectory
-    - /discourse/claude-habitat/system/CLAUDE.md
-    - /discourse/claude-habitat/system/tools/tools.yaml
-    - /discourse/claude-habitat/shared/CLAUDE.md
-    - /discourse/claude-habitat/shared/config.yaml
-    - /discourse/claude-habitat/local/CLAUDE.md
-    - /discourse/claude-habitat/local/config.yaml
+    - "{env.HABITAT_PATH}/system/CLAUDE.md"
+    - "{env.HABITAT_PATH}/system/tools/tools.yaml"
+    - "{env.HABITAT_PATH}/shared/CLAUDE.md"
+    - "{env.HABITAT_PATH}/shared/config.yaml"
+    - "{env.HABITAT_PATH}/local/CLAUDE.md"
+    - "{env.HABITAT_PATH}/local/config.yaml"
 
 # Claude configuration
 claude:

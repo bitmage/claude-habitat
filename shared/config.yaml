@@ -31,8 +31,8 @@ setup:
     commands:
       - |
         # Configure git for container user
-        if [ -f /claude-habitat/shared/gitconfig ]; then
-          cp /claude-habitat/shared/gitconfig ~/.gitconfig
+        if [ -f "{env.SHARED_PATH}/gitconfig" ]; then
+          cp "{env.SHARED_PATH}/gitconfig" ~/.gitconfig
           chmod 644 ~/.gitconfig
           echo "Git configuration applied for user: $(whoami)"
         fi
@@ -44,6 +44,6 @@ verify-fs:
     - /etc/gitconfig
     - /root/.gitconfig
     # Infrastructure files
-    - /claude-habitat/shared/CLAUDE.md
-    - /claude-habitat/shared/config.yaml
-    - /claude-habitat/shared/gitconfig
+    - "{env.SHARED_PATH}/CLAUDE.md"
+    - "{env.SHARED_PATH}/config.yaml"
+    - "{env.SHARED_PATH}/gitconfig"
