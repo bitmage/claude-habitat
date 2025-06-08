@@ -7,6 +7,7 @@ const yaml = require('js-yaml');
 const { colors, fileExists } = require('./utils');
 const { askToContinue } = require('./cli');
 const { dockerRun } = require('./docker');
+const { cleanAllImages, cleanHabitatImages, cleanOrphanImages, showImageSummary } = require('./image-management');
 
 /**
  * Execute CLI commands that have direct output
@@ -31,6 +32,12 @@ async function executeCliCommand(options) {
     process.exit(0);
   }
 
+  // Handle clean images
+  if (options.cleanImages) {
+    await handleCleanImages(options.cleanImagesTarget);
+    process.exit(0);
+  }
+
   return false; // No command executed
 }
 
@@ -47,6 +54,7 @@ OPTIONS:
     --cmd COMMAND          Override the claude command for this session
     --rebuild              Force rebuild of Docker images (ignore cache)
     --clean                Remove all Claude Habitat Docker images
+    --clean-images [TARGET] Clean Docker images (all|orphans|HABITAT_NAME, default: all)
     --list-configs         List available configuration files
     --test-sequence=SEQ    Run UI test sequence (e.g., "t2f" for test>claude-habitat>filesystem)
     --preserve-colors      Preserve ANSI color codes in test sequence output
@@ -82,6 +90,15 @@ EXAMPLES:
 
     # Start with rebuild (ignores cache)
     ${path.basename(process.argv[1])} start discourse --rebuild
+
+    # Clean all images
+    ${path.basename(process.argv[1])} --clean-images
+
+    # Clean specific habitat images
+    ${path.basename(process.argv[1])} --clean-images discourse
+
+    # Clean orphan images only
+    ${path.basename(process.argv[1])} --clean-images orphans
 
     # Start with custom command
     ${path.basename(process.argv[1])} start claude-habitat --cmd "claude -p 'do some stuff'"
@@ -157,4 +174,28 @@ async function cleanDockerImages() {
   }
 }
 
-module.exports = { executeCliCommand, showHelp, listConfigs, cleanDockerImages };
+/**
+ * Handle clean images command with different targets
+ * @param {string} target - all, orphans, or habitat name
+ */
+async function handleCleanImages(target = 'all') {
+  console.log(colors.green('\n=== Claude Habitat Image Management ===\n'));
+  
+  // Show summary first
+  await showImageSummary();
+  
+  switch (target.toLowerCase()) {
+    case 'all':
+      await cleanAllImages();
+      break;
+    case 'orphans':
+      await cleanOrphanImages();
+      break;
+    default:
+      // Assume it's a habitat name
+      await cleanHabitatImages(target);
+      break;
+  }
+}
+
+module.exports = { executeCliCommand, showHelp, listConfigs, cleanDockerImages, handleCleanImages };

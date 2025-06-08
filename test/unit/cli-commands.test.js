@@ -470,3 +470,70 @@ test('shift key mappings for rebuild are correct', () => {
   
   console.log('✅ Shift key mappings are correct');
 });
+
+test('--clean-images flag is parsed correctly', async () => {
+  console.log('Testing --clean-images flag parsing...');
+  
+  const { parseCliArguments, validateCliOptions } = require('../../src/cli-parser');
+  
+  // Test clean-images without target (should default to 'all')
+  const args1 = ['--clean-images'];
+  const options1 = parseCliArguments(args1);
+  
+  assert.strictEqual(options1.cleanImages, true, 'Should parse --clean-images flag');
+  assert.strictEqual(options1.cleanImagesTarget, 'all', 'Should default to all');
+  
+  // Test validation passes
+  assert.doesNotThrow(() => validateCliOptions(options1), 'Should validate successfully');
+  
+  // Test clean-images with specific target
+  const args2 = ['--clean-images', 'discourse'];
+  const options2 = parseCliArguments(args2);
+  
+  assert.strictEqual(options2.cleanImages, true, 'Should parse --clean-images flag');
+  assert.strictEqual(options2.cleanImagesTarget, 'discourse', 'Should parse target habitat');
+  
+  // Test clean-images with orphans target
+  const args3 = ['--clean-images', 'orphans'];
+  const options3 = parseCliArguments(args3);
+  
+  assert.strictEqual(options3.cleanImages, true, 'Should parse --clean-images flag');
+  assert.strictEqual(options3.cleanImagesTarget, 'orphans', 'Should parse orphans target');
+  
+  console.log('✅ --clean-images flag parsing works correctly');
+});
+
+test('--help shows image management documentation', async () => {
+  console.log('Testing image management in help output...');
+  
+  const scriptPath = path.join(__dirname, '../../claude-habitat.js');
+  
+  const result = await new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, '--help'], {
+      stdio: 'pipe'
+    });
+    
+    let stdout = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      resolve({ code, stdout });
+    });
+    
+    child.on('error', reject);
+  });
+  
+  // Should exit successfully
+  assert.strictEqual(result.code, 0, 'Help should exit with code 0');
+  
+  // Should mention clean-images option
+  assert.ok(result.stdout.includes('--clean-images'), 'Should show --clean-images flag');
+  assert.ok(result.stdout.includes('Clean Docker images'), 'Should explain clean-images functionality');
+  assert.ok(result.stdout.includes('--clean-images discourse'), 'Should show clean-images example');
+  assert.ok(result.stdout.includes('--clean-images orphans'), 'Should show orphans example');
+  
+  console.log('✅ Help shows image management documentation');
+});

@@ -25,7 +25,9 @@ function parseCliArguments(argv) {
     preserveColors: false,
     overrideCommand: null,
     habitatName: null,
-    rebuild: false
+    rebuild: false,
+    cleanImages: false,
+    cleanImagesTarget: 'all'
   };
 
   // Parse arguments
@@ -59,6 +61,13 @@ function parseCliArguments(argv) {
         break;
       case '--rebuild':
         options.rebuild = true;
+        break;
+      case '--clean-images':
+        options.cleanImages = true;
+        // Next argument might be target (all, orphans, or habitat name)
+        if (i + 1 < argv.length && !argv[i + 1].startsWith('-')) {
+          options.cleanImagesTarget = argv[++i];
+        }
         break;
       case '--cmd':
         // Override claude command
@@ -151,7 +160,7 @@ function parseCliArguments(argv) {
  */
 function validateCliOptions(options) {
   // Can't use multiple primary commands at once
-  const primaryCommands = ['start', 'add', 'maintain', 'test', 'clean', 'listConfigs', 'help'];
+  const primaryCommands = ['start', 'add', 'maintain', 'test', 'clean', 'listConfigs', 'help', 'cleanImages'];
   const activePrimary = primaryCommands.filter(cmd => options[cmd]);
   
   if (activePrimary.length > 1) {
