@@ -27,7 +27,8 @@ function parseCliArguments(argv) {
     habitatName: null,
     rebuild: false,
     cleanImages: false,
-    cleanImagesTarget: 'all'
+    cleanImagesTarget: 'all',
+    tty: null  // null = use config default, true = force TTY, false = disable TTY
   };
 
   // Parse arguments
@@ -74,6 +75,14 @@ function parseCliArguments(argv) {
         if (i + 1 < argv.length) {
           options.overrideCommand = argv[++i];
         }
+        break;
+      case '--tty':
+        // Force TTY allocation
+        options.tty = true;
+        break;
+      case '--no-tty':
+        // Disable TTY allocation
+        options.tty = false;
         break;
       case '--test-sequence':
         // Test sequence for UI testing

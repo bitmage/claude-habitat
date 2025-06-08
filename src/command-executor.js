@@ -52,6 +52,8 @@ OPTIONS:
     -r, --repo REPO_SPEC    Additional repository to clone (format: URL:PATH[:BRANCH])
                            Can be specified multiple times
     --cmd COMMAND          Override the claude command for this session
+    --tty                  Force TTY allocation (interactive mode)
+    --no-tty               Disable TTY allocation (for scripts/automation)
     --rebuild              Force rebuild of Docker images (ignore cache)
     --clean                Remove all Claude Habitat Docker images
     --clean-images [TARGET] Clean Docker images (all|orphans|HABITAT_NAME, default: all)

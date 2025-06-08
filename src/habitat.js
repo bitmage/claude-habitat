@@ -51,7 +51,7 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
   }
 
   // Run the container
-  return await runContainer(preparedTag, config, envVars, overrideCommand);
+  return await runContainer(preparedTag, config, envVars, overrideCommand, options.tty);
 }
 
 // Build habitat image (base + prepared)
@@ -174,7 +174,7 @@ async function setupHabitatEnvironment(habitatName, config) {
 }
 
 // Run container (internal function)
-async function runContainer(tag, config, envVars, overrideCommand = null) {
+async function runContainer(tag, config, envVars, overrideCommand = null, ttyOverride = null) {
   const containerName = `${config.name}_${Date.now()}_${process.pid}`;
   const workDir = config.container.work_dir; // Config validation ensures this exists
   const containerUser = config.container.user; // Config validation ensures this exists
@@ -297,7 +297,14 @@ async function runContainer(tag, config, envVars, overrideCommand = null) {
 
     // Launch Claude Code with TTY allocation based on explicit configuration
     // Default to TTY enabled since Claude is an interactive tool that needs proper output display
-    const enableTTY = config.claude?.tty !== false; // Default true, can be explicitly disabled
+    let enableTTY;
+    if (ttyOverride !== null) {
+      // CLI override takes precedence
+      enableTTY = ttyOverride;
+    } else {
+      // Use config setting, default to true
+      enableTTY = config.claude?.tty !== false;
+    }
     const dockerFlags = enableTTY ? ['-it'] : ['-i'];
     
     const claudeProcess = spawn('docker', [
