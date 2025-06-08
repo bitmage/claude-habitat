@@ -10,31 +10,25 @@ const { dockerRun } = require('./docker');
 
 /**
  * Execute CLI commands that have direct output
- * These commands show output and return to main menu
+ * These commands show output and exit (not return to menu)
  */
-async function executeCliCommand(options, returnToMainMenu) {
+async function executeCliCommand(options) {
   // Handle help
   if (options.help) {
     await showHelp();
-    await askToContinue();
-    await returnToMainMenu();
-    return true;
+    process.exit(0);
   }
 
   // Handle list configs
   if (options.listConfigs) {
     await listConfigs();
-    await askToContinue();
-    await returnToMainMenu();
-    return true;
+    process.exit(0);
   }
 
   // Handle clean
   if (options.clean) {
     await cleanDockerImages();
-    await askToContinue();
-    await returnToMainMenu();
-    return true;
+    process.exit(0);
   }
 
   return false; // No command executed

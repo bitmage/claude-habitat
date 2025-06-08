@@ -341,7 +341,7 @@ async function main() {
     validateCliOptions(options);
 
     // Handle CLI commands (help, list-configs, clean)
-    const commandExecuted = await executeCliCommand(options, returnToMainMenu);
+    const commandExecuted = await executeCliCommand(options);
     if (commandExecuted) {
       return;
     }
