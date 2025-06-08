@@ -40,7 +40,12 @@ function validateHabitatConfig(config) {
     throw new Error(`container.work_dir must be absolute path in ${config.name}, got: ${config.container.work_dir}`);
   }
 
-  // Validate user field
+  // Validate user field - check for empty string
+  if (config.container.user === '') {
+    throw new Error(`container.user must be a non-empty string in ${config.name}`);
+  }
+  
+  // Additional user validation
   if (typeof config.container.user !== 'string' || config.container.user.length === 0) {
     throw new Error(`container.user must be a non-empty string in ${config.name}`);
   }

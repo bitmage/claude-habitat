@@ -33,8 +33,10 @@ const {
   cloneRepository 
 } = require('./src/docker');
 const { showMainMenu, getUserChoice, handleMenuChoice, showInvalidChoice, showNoHabitatsMenu } = require('./src/menu');
-const { runHabitat, getLastUsedConfig, saveLastUsedConfig, checkHabitatRepositories } = require('./src/habitat');
+const { startSession, runHabitat, getLastUsedConfig, saveLastUsedConfig, checkHabitatRepositories } = require('./src/habitat');
 const { runInitialization, checkInitializationStatus, hasGitHubAppAuth } = require('./src/init');
+const { parseCliArguments, validateCliOptions } = require('./src/cli-parser');
+const { executeCliCommand } = require('./src/command-executor');
 
 const returnToMainMenu = async () => {
   console.log('\nReturning to main menu...\n');
@@ -332,271 +334,34 @@ Session started: ${new Date().toISOString()}
 
 // CLI handling
 async function main() {
-  const args = process.argv.slice(2);
-  const options = {
-    configPath: null,
-    extraRepos: [],
-    clean: false,
-    listConfigs: false,
-    help: false,
-    start: false,
-    add: false,
-    maintain: false,
-    test: false,
-    testTarget: null,
-    testType: 'all',
-    testSequence: null
-  };
+  try {
+    // Parse CLI arguments
+    const args = process.argv.slice(2);
+    const options = parseCliArguments(args);
+    validateCliOptions(options);
 
-  // Parse arguments
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    
-    // Handle --option=value syntax
-    if (arg.startsWith('--test-sequence=')) {
-      options.testSequence = arg.substring('--test-sequence='.length);
-      continue;
+    // Handle CLI commands (help, list-configs, clean)
+    const commandExecuted = await executeCliCommand(options, returnToMainMenu);
+    if (commandExecuted) {
+      return;
     }
-    if (arg.startsWith('--preserve-colors')) {
-      options.preserveColors = true;
-      continue;
-    }
-    
-    switch (arg) {
-      case '-c':
-      case '--config':
-        options.configPath = args[++i];
-        break;
-      case '-r':
-      case '--repo':
-        options.extraRepos.push(args[++i]);
-        break;
-      case '--clean':
-        options.clean = true;
-        break;
-      case '--list-configs':
-        options.listConfigs = true;
-        break;
-      case '--cmd':
-        // Override claude command
-        if (i + 1 < args.length) {
-          options.overrideCommand = args[++i];
-        }
-        break;
-      case '--test-sequence':
-        // Test sequence for UI testing
-        if (i + 1 < args.length) {
-          options.testSequence = args[++i];
-        }
-        break;
-      case '-h':
-      case '--help':
-        options.help = true;
-        break;
-      case 's':
-      case 'start':
-        options.start = true;
-        // Next argument might be habitat name
-        if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-          options.habitatName = args[++i];
-        }
-        break;
-      case 'a':
-      case 'add':
-        options.add = true;
-        break;
-      case 'm':
-      case 'maintain':
-        options.maintain = true;
-        break;
-      case 'test':
-        options.test = true;
-        // Next argument should be habitat name (or "all" for all habitats)
-        if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
-          const target = args[++i];
-          if (target === 'all') {
-            options.testType = 'all';
-          } else {
-            options.testTarget = target;
-            // Check for test type flag after habitat name
-            if (i + 1 < args.length && args[i + 1].startsWith('--')) {
-              const testTypeFlag = args[++i];
-              if (testTypeFlag === '--system') {
-                options.testType = 'system';
-              } else if (testTypeFlag === '--shared') {
-                options.testType = 'shared';
-              } else if (testTypeFlag.startsWith('--verify-fs')) {
-                // Support --verify-fs=scope syntax
-                if (testTypeFlag.includes('=')) {
-                  const scope = testTypeFlag.split('=')[1];
-                  options.testType = `verify-fs:${scope}`;
-                } else {
-                  options.testType = 'verify-fs';
-                }
-              } else if (testTypeFlag === '--habitat') {
-                options.testType = 'habitat';
-              } else if (testTypeFlag === '--all') {
-                options.testType = 'all';
-              }
-            } else {
-              // Default to all tests for the habitat
-              options.testType = 'all';
-            }
-          }
-        } else {
-          // No habitat specified - show menu
-          options.testType = 'menu';
-        }
-        break;
-      default:
-        // If it doesn't start with -, treat it as a habitat name
-        if (!args[i].startsWith('-')) {
-          options.configPath = args[i];
-        } else {
-          console.error(colors.red(`Unknown option: ${args[i]}`));
-          process.exit(1);
-        }
-    }
-  }
 
-  // Handle special modes
-  // Handle test sequence mode first (before help)
-  if (options.testSequence) {
-    const { runSequence } = require('./src/scenes/scene-runner');
-    const { mainMenuScene } = require('./src/scenes/main-menu.scene');
-    
-    try {
-      const context = await runSequence(mainMenuScene, options.testSequence, {
-        preserveColors: options.preserveColors
-      });
-      console.log(context.getOutput());
-      process.exit(context.exitCode);
-    } catch (error) {
-      console.error(`Test sequence failed: ${error.message}`);
-      process.exit(1);
-    }
-  }
-
-  if (options.help) {
-    console.log(`Usage: ${path.basename(process.argv[1])} [OPTIONS|SHORTCUTS]
-
-OPTIONS:
-    -c, --config FILE       Path to configuration YAML file
-    -r, --repo REPO_SPEC    Additional repository to clone (format: URL:PATH[:BRANCH])
-                           Can be specified multiple times
-    --cmd COMMAND          Override the claude command for this session
-    --clean                 Remove all Claude Habitat Docker images
-    --list-configs          List available configuration files
-    --test-sequence=SEQ    Run UI test sequence (e.g., "t2f" for test>claude-habitat>filesystem)
-    --preserve-colors      Preserve ANSI color codes in test sequence output
-    -h, --help             Display this help message
-
-SHORTCUTS:
-    s, start [HABITAT]     Start habitat (last used if no name given)
-    a, add                 Create new configuration with AI assistance
-    m, maintain            Update/troubleshoot Claude Habitat itself
-    test [HABITAT] [TYPE]  Run tests (show menu if no args)
-
-TEST OPTIONS:
-    test                   Show interactive test menu
-    test all               Run all tests for all habitats
-    test discourse         Run all tests for discourse habitat  
-    test discourse --system    Run system tests in discourse habitat
-    test discourse --shared    Run shared tests in discourse habitat
-    test discourse --verify-fs    Run filesystem verification for discourse habitat
-    test discourse --verify-fs=system   Run system filesystem verification
-    test discourse --verify-fs=shared   Run shared filesystem verification  
-    test discourse --verify-fs=habitat  Run habitat filesystem verification
-    test discourse --verify-fs=all      Run all filesystem verification scopes
-    test discourse --habitat   Run discourse-specific tests only
-    test discourse --all       Run all tests for discourse habitat
-
-EXAMPLES:
-    # Start with shortcut
-    ${path.basename(process.argv[1])} s
-
-    # Start specific habitat
-    ${path.basename(process.argv[1])} start discourse
-
-    # Start with custom command
-    ${path.basename(process.argv[1])} start claude-habitat --cmd "claude -p 'do some stuff'"
-
-    # Use a configuration file
-    ${path.basename(process.argv[1])} --config discourse.yaml
-
-    # Override/add repositories
-    ${path.basename(process.argv[1])} --config discourse.yaml --repo "https://github.com/myuser/my-plugin:/src/plugins/my-plugin"
-
-    # List available configs
-    ${path.basename(process.argv[1])} --list-configs`);
-    
-    await askToContinue();
-    await returnToMainMenu();
-    return;
-  }
-
-  if (options.listConfigs) {
-    const habitatsDir = path.join(__dirname, 'habitats');
-    console.log('Available habitats:\n');
-    try {
-      const dirs = await fs.readdir(habitatsDir);
-      let found = false;
-      for (const dir of dirs) {
-        const configPath = path.join(habitatsDir, dir, 'config.yaml');
-        if (await fileExists(configPath)) {
-          try {
-            const content = require('fs').readFileSync(configPath, 'utf8');
-            const parsed = yaml.load(content);
-            console.log(`  ${colors.yellow(dir)}`);
-            if (parsed.description) {
-              console.log(`    ${parsed.description}`);
-            }
-            console.log('');
-            found = true;
-          } catch {
-            console.log(`  ${colors.yellow(dir)} (configuration error)`);
-          }
-        }
-      }
-      if (!found) {
-        console.log('  No habitats found');
-      }
-    } catch (err) {
-      console.log('  No habitats directory found');
-    }
-    
-    await askToContinue();
-    await returnToMainMenu();
-    return;
-  }
-
-  if (options.clean) {
-    console.log('Cleaning Claude Habitat Docker images...');
-    try {
-      const { stdout } = await execAsync('docker images --format "{{.Repository}}:{{.Tag}}" | grep "^claude-habitat-"');
-      const images = stdout.trim().split('\n').filter(Boolean);
+    // Handle test sequence mode  
+    if (options.testSequence) {
+      const { runSequence } = require('./src/scenes/scene-runner');
+      const { mainMenuScene } = require('./src/scenes/main-menu.scene');
       
-      if (images.length === 0) {
-        console.log('No Claude Habitat images found.');
-      } else {
-        for (const image of images) {
-          console.log(`Removing ${image}...`);
-          try {
-            await dockerRun(['rmi', image]);
-          } catch (err) {
-            console.log(colors.yellow(`  Warning: Could not remove ${image}: ${err.message}`));
-          }
-        }
-        console.log(colors.green(`Clean complete. Removed ${images.length} image(s).`));
+      try {
+        const context = await runSequence(mainMenuScene, options.testSequence, {
+          preserveColors: options.preserveColors
+        });
+        console.log(context.getOutput());
+        process.exit(context.exitCode);
+      } catch (error) {
+        console.error(`Test sequence failed: ${error.message}`);
+        process.exit(1);
       }
-    } catch {
-      console.log('No Claude Habitat images found.');
     }
-    
-    await askToContinue();
-    await returnToMainMenu();
-    return;
-  }
 
   // Handle shortcut commands
   if (options.start) {
@@ -1110,7 +875,7 @@ EXAMPLES:
       }
       
       await saveLastUsedConfig(options.configPath);
-      await runHabitat(options.configPath, options.extraRepos, options.overrideCommand);
+      await startSession(options.configPath, options.extraRepos, options.overrideCommand);
     } catch (err) {
       console.error(colors.red(`\n❌ Error starting habitat: ${err.message}`));
       if (err.validationErrors) {
@@ -1150,6 +915,10 @@ EXAMPLES:
       }
     }
   }
+  } catch (err) {
+    console.error(colors.red(`Fatal error: ${err.message}`));
+    process.exit(1);
+  }
 }
 
 // checkInitializationStatus, hasGitHubAppAuth, checkHabitatRepositories, and runInitialization moved to src/init.js
@@ -1162,4 +931,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { loadConfig, calculateCacheHash, parseRepoSpec, runHabitat };
+module.exports = { loadConfig, calculateCacheHash, parseRepoSpec, startSession, runHabitat: startSession };

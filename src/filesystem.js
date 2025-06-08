@@ -2,7 +2,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 const { colors, sleep, fileExists, calculateCacheHash, executeCommand, setFilePermissions, manageContainer, rel } = require('./utils');
-const { dockerRun, dockerExec } = require('./docker');
+const { dockerRun, dockerExec } = require('./container-operations');
 
 // File ignore patterns functionality
 async function loadIgnorePatterns(sourceDir) {
@@ -269,7 +269,7 @@ async function runFilesystemVerification(config) {
 
 // Run verify-fs bash script with scope support
 async function runVerifyFsScript(containerName, scope = 'all', config = null) {
-  const { dockerExec } = require('./docker');
+  const { dockerExec } = require('./container-operations');
   const { colors } = require('./utils');
   
   try {
@@ -329,7 +329,7 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
 
 // Enhanced verification that uses the bash script
 async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', config = null) {
-  const { dockerRun, dockerIsRunning, dockerImageExists } = require('./docker');
+  const { dockerRun, dockerIsRunning, dockerImageExists } = require('./container-operations');
   const { colors, sleep } = require('./utils');
   const { promisify } = require('util');
   const { exec } = require('child_process');

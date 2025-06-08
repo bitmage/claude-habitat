@@ -10,8 +10,8 @@ const { buildBaseImage, buildPreparedImage, dockerImageExists, dockerRun, docker
 const { testRepositoryAccess } = require('./github');
 const { verifyFilesystem } = require('./filesystem');
 
-// Main habitat runner
-async function runHabitat(configPath, extraRepos = [], overrideCommand = null) {
+// Start a new session with the specified habitat
+async function startSession(configPath, extraRepos = [], overrideCommand = null) {
   const config = await loadConfig(configPath);
   const hash = calculateCacheHash(config, extraRepos);
   const preparedTag = `claude-habitat-${config.name}:${hash}`;
@@ -271,7 +271,8 @@ async function runContainer(tag, config, envVars, overrideCommand = null) {
 }
 
 module.exports = {
-  runHabitat,
+  startSession,
+  runHabitat: startSession, // Backward compatibility alias
   buildHabitatImage,
   getLastUsedConfig,
   saveLastUsedConfig,
