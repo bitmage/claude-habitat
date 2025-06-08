@@ -6,7 +6,7 @@ tests:
   - tests/test-claude-habitat-inception.sh
 
 image:
-  dockerfile: ./habitats/claude-habitat/Dockerfile
+  dockerfile: habitats/claude-habitat/Dockerfile
   tag: claude-habitat-claude-habitat:latest
 
 repositories:
@@ -113,4 +113,5 @@ verify-fs:
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)
 claude:
   command: claude --dangerously-skip-permissions
+  tty: true  # Enable TTY for proper Claude output display (default: true)
   bypass_habitat_construction: true

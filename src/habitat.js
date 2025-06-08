@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
-const { colors, calculateCacheHash, fileExists, sleep } = require('./utils');
+const { colors, calculateCacheHash, fileExists, sleep, rel } = require('./utils');
 const { loadConfig } = require('./config');
 const { buildBaseImage, buildPreparedImage, dockerImageExists, dockerRun, dockerExec, dockerIsRunning } = require('./docker');
 const { testRepositoryAccess } = require('./github');
@@ -190,7 +190,7 @@ async function runContainer(tag, config, envVars, overrideCommand = null) {
   ];
 
   // Add volume mounts from system config and habitat config
-  const systemConfigPath = path.join(__dirname, '..', 'system', 'config.yaml');
+  const systemConfigPath = rel('system', 'config.yaml');
   let systemVolumes = [];
   
   // Load system volumes if system config exists
@@ -295,16 +295,17 @@ async function runContainer(tag, config, envVars, overrideCommand = null) {
     console.log('Launching Claude Code...');
     console.log('');
 
-    // Launch Claude Code - always use -i for non-TTY environments
-    // TTY should be explicitly configured, not detected from command content
-    const dockerFlags = ['-i'];
+    // Launch Claude Code with TTY allocation based on explicit configuration
+    // Default to TTY enabled since Claude is an interactive tool that needs proper output display
+    const enableTTY = config.claude?.tty !== false; // Default true, can be explicitly disabled
+    const dockerFlags = enableTTY ? ['-it'] : ['-i'];
     
     const claudeProcess = spawn('docker', [
       'exec', ...dockerFlags,
       '-u', containerUser,
       '-w', workDir,
       containerName,
-      ...claudeCommand.split(' ')
+      'sh', '-c', claudeCommand
     ], {
       stdio: 'inherit'
     });

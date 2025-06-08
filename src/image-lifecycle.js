@@ -6,7 +6,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { spawn } = require('child_process');
-const { colors, fileExists, sleep } = require('./utils');
+const { colors, fileExists, sleep, rel, createWorkDirPath } = require('./utils');
 const { getHabitatInfrastructurePath } = require('./path-helpers');
 const { dockerRun, dockerExec, dockerImageExists } = require('./container-operations');
 const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
@@ -43,11 +43,11 @@ async function buildBaseImage(config, options = {}) {
   
   let dockerfilePath;
   if (config.image && config.image.dockerfile) {
-    // Use explicit dockerfile path from config
-    dockerfilePath = path.resolve(config.image.dockerfile);
+    // Use explicit dockerfile path from config - always relative to project root
+    dockerfilePath = rel(config.image.dockerfile);
   } else {
     // Default to dockerfiles/[name]/Dockerfile
-    dockerfilePath = path.join(process.cwd(), 'dockerfiles', config.name, 'Dockerfile');
+    dockerfilePath = rel('dockerfiles', config.name, 'Dockerfile');
   }
   
   // Check if dockerfile exists
@@ -92,25 +92,49 @@ async function runSetupCommands(container, config) {
   
   console.log('Running setup commands...');
   
+  // Helper function to replace variables in commands
+  const replaceVariables = (cmd) => {
+    let result = cmd;
+    // Replace work_dir (new standard)
+    if (config.container && config.container.work_dir) {
+      result = result.replace(/\${work_dir}/g, config.container.work_dir);
+    }
+    // Replace container.work_dir (legacy support)
+    if (config.container && config.container.work_dir) {
+      result = result.replace(/\${container\.work_dir}/g, config.container.work_dir);
+    }
+    // Replace container.user
+    if (config.container && config.container.user) {
+      result = result.replace(/\${container\.user}/g, config.container.user);
+    }
+    return result;
+  };
+  
   // Run root setup commands
   if (config.setup.root && config.setup.root.length > 0) {
     console.log('Running root setup commands...');
     for (const cmd of config.setup.root) {
       if (cmd && cmd.trim()) {
-        console.log(`  ${cmd}`);
-        await dockerExec(container, cmd, 'root');
+        const processedCmd = replaceVariables(cmd);
+        console.log(`  ${processedCmd}`);
+        await dockerExec(container, processedCmd, 'root');
       }
     }
   }
   
   // Run user setup commands
   if (config.setup.user && config.setup.user.commands && config.setup.user.commands.length > 0) {
-    const runAsUser = config.setup.user.run_as || config.container.user;
+    let runAsUser = config.setup.user.run_as || config.container.user;
+    // Replace variables in run_as user
+    if (runAsUser === '{container.user}') {
+      runAsUser = config.container.user;
+    }
     console.log(`Running user setup commands as ${runAsUser}...`);
     for (const cmd of config.setup.user.commands) {
       if (cmd && cmd.trim()) {
-        console.log(`  ${cmd}`);
-        await dockerExec(container, cmd, runAsUser);
+        const processedCmd = replaceVariables(cmd);
+        console.log(`  ${processedCmd}`);
+        await dockerExec(container, processedCmd, runAsUser);
       }
     }
   }
@@ -130,7 +154,7 @@ async function copyDirectoryToContainer(container, srcDir, destDir) {
 /**
  * Clone a repository inside the container
  */
-async function cloneRepository(container, repoInfo, workDir) {
+async function cloneRepository(container, repoInfo, workDir, containerUser = null) {
   console.log(`Cloning ${repoInfo.url} to ${repoInfo.path}...`);
   
   const parentDir = path.dirname(repoInfo.path);
@@ -174,9 +198,9 @@ async function cloneRepository(container, repoInfo, workDir) {
   }
   
   // Change ownership to the container user if specified
-  if (workDir.startsWith(repoInfo.path) || repoInfo.path.startsWith(workDir)) {
+  if (containerUser) {
     console.log(`Changing ownership of ${repoInfo.path} to container user...`);
-    await dockerExec(container, `chown -R $(id -u):$(id -g) ${repoInfo.path}`, 'root');
+    await dockerExec(container, `chown -R ${containerUser}:${containerUser} ${repoInfo.path}`, 'root');
   }
 }
 
@@ -215,23 +239,24 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     // Skip infrastructure copying for bypass habitats
     const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
     
+    // Create workDirPath helper for this container
+    const workDirPath = createWorkDirPath(config.container.work_dir);
+    
     if (!isBypassHabitat) {
       // Copy system files first
-      const systemPath = path.join(process.cwd(), 'system');
+      const systemPath = rel('system');
       if (await fileExists(systemPath)) {
         console.log('Copying system files to container...');
-        const containerSystemPath = getHabitatInfrastructurePath(config.container.work_dir, 'system');
+        const containerSystemPath = workDirPath('claude-habitat', 'system');
         await dockerExec(tempContainer, `mkdir -p ${containerSystemPath}`, 'root');
         await copyDirectoryToContainer(tempContainer, systemPath, containerSystemPath);
       }
-    }
-    
-    if (!isBypassHabitat) {
+      
       // Copy shared files
-      const sharedPath = path.join(process.cwd(), 'shared');
+      const sharedPath = rel('shared');
       if (await fileExists(sharedPath)) {
         console.log('Copying shared files to container...');
-        const containerSharedPath = getHabitatInfrastructurePath(config.container.work_dir, 'shared');
+        const containerSharedPath = workDirPath('claude-habitat', 'shared');
         await dockerExec(tempContainer, `mkdir -p ${containerSharedPath}`, 'root');
         await copyDirectoryToContainer(tempContainer, sharedPath, containerSharedPath);
       }
@@ -240,13 +265,34 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
       const habitatPath = path.dirname(config._configPath);
       if (await fileExists(habitatPath)) {
         console.log('Copying habitat files to container...');
-        const containerLocalPath = getHabitatInfrastructurePath(config.container.work_dir, 'local');
+        const containerLocalPath = workDirPath('claude-habitat', 'local');
         await dockerExec(tempContainer, `mkdir -p ${containerLocalPath}`, 'root');
         await copyDirectoryToContainer(tempContainer, habitatPath, containerLocalPath);
       }
     }
     
-    // Clone repositories
+    // Run system setup commands first if not in bypass mode
+    if (!isBypassHabitat) {
+      const systemConfigPath = rel('system', 'config.yaml');
+      if (await fileExists(systemConfigPath)) {
+        console.log('Loading system configuration...');
+        const yaml = require('js-yaml');
+        const systemConfigContent = await fs.readFile(systemConfigPath, 'utf8');
+        const systemConfig = yaml.load(systemConfigContent);
+        
+        // Ensure the system config has the correct work_dir
+        if (!systemConfig.container) {
+          systemConfig.container = {};
+        }
+        systemConfig.container.work_dir = config.container.work_dir;
+        systemConfig.container.user = config.container.user;
+        
+        console.log('Running system setup commands...');
+        await runSetupCommands(tempContainer, systemConfig);
+      }
+    }
+    
+    // Clone repositories after system setup (which includes GitHub authentication)
     console.log('Cloning repositories...');
     const allRepos = [...(config.repositories || [])];
     
@@ -260,15 +306,19 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     }
     
     for (const repo of allRepos) {
-      await cloneRepository(tempContainer, repo, config.container.work_dir);
+      await cloneRepository(tempContainer, repo, config.container.work_dir, config.container.user);
     }
     
-    // Run setup commands
+    // Run habitat setup commands
     await runSetupCommands(tempContainer, config);
     
     // Fix permissions for work directory
     console.log('Setting up work directory permissions...');
     await dockerExec(tempContainer, `chown -R $(id -u):$(id -g) ${config.container.work_dir} || true`, 'root');
+    
+    // Fix git safe directory ownership issues
+    console.log('Configuring git safe directories...');
+    await dockerExec(tempContainer, `git config --global --add safe.directory '*'`, config.container.user);
     
     // Commit the container to create the prepared image
     console.log('Creating prepared image...');

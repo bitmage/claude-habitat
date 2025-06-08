@@ -275,6 +275,9 @@ In addition you may use the claude/scratch directory for any temporary files you
 When developing features, always run the full test suite to ensure nothing is broken:
 
 ### 1. Unit Tests
+
+Use these constantly to find the state of the system.  Add to these rather than creating ad-hoc requests into the system.
+
 ```bash
 npm test                    # Run all unit tests
 npm run test:unit          # Same as above
@@ -282,17 +285,26 @@ npm run test:watch         # Run tests in watch mode
 ```
 
 ### 2. E2E Tests
+
+At minimum run these before you commit a feature.
+
 ```bash
 npm run test:e2e           # Run end-to-end tests
 ```
 
 ### 3. UI Testing
+
+At minimum run these before you commit a feature.  Snapshots require manual verification.  Look at them and ensure that what is happening is what you expected.
+
 ```bash
 npm run test:ui            # Generate UI snapshots
 npm run test:ui:view       # Generate and view snapshots
 ```
 
 ### 4. Habitat Tests
+
+You should always be working with a test habitat in mind, and run the tests for that habitat.  Then run tests for all habitats before committing.
+
 ```bash
 npm run test:habitat       # Run base habitat system tests
 ./claude-habitat test base --system    # Manual habitat testing
@@ -382,3 +394,131 @@ container:
 - Test both successful and error scenarios
 
 Remember: The goal is to create a perfect, isolated development environment that "just works" when developers run it!
+
+## Path Resolution Standards
+
+To eliminate path resolution bugs and regressions, always follow these standards:
+
+### Host-Side Paths
+
+**Rule: Always use `rel()` for host filesystem paths (relative to project root)**
+
+```javascript
+// Import the helper
+const { rel } = require('./utils');
+
+// Good: Consistent project-root relative paths
+const dockerfilePath = rel('habitats', 'claude-habitat', 'Dockerfile');
+const systemDir = rel('system');
+const sharedDir = rel('shared');
+const configPath = rel('habitats', 'discourse', 'config.yaml');
+
+// Bad: Manual path construction prone to errors
+const dockerfilePath = path.join(__dirname, '..', 'habitats', 'claude-habitat', 'Dockerfile');
+const systemDir = path.join(process.cwd(), 'system');
+```
+
+### Container-Side Paths
+
+**Rule 1: Use absolute strings for fixed container paths**
+
+```javascript
+// Good: Clear, fixed container paths
+const claudeCredentials = '/opt/claude-credentials.json';
+const homeDir = '/home/node';
+const systemBin = '/usr/bin/docker';
+
+// Bad: Unnecessary helper overhead
+const homeDir = containerPath('/home', 'node');
+```
+
+**Rule 2: Use `createWorkDirPath()` for workspace-relative paths**
+
+```javascript
+// Import the helper factory
+const { createWorkDirPath } = require('./utils');
+
+// Create workspace-relative helper for this container
+const workDirPath = createWorkDirPath(config.container.work_dir);
+
+// Good: Workspace-relative paths
+const repoPath = workDirPath('my-repo');
+const habitatSystem = workDirPath('claude-habitat', 'system');
+const toolPath = workDirPath('claude-habitat', 'system', 'tools', 'bin', 'setup-github-auth');
+
+// Bad: Manual construction with repetition
+const repoPath = path.posix.join(config.container.work_dir, 'my-repo');
+const toolPath = path.posix.join(config.container.work_dir, 'claude-habitat', 'system', 'tools', 'bin', 'setup-github-auth');
+```
+
+### Configuration Files
+
+**Rule: Dockerfile and other paths in configs are always relative to project root**
+
+```yaml
+# Good: Relative to project root (no leading ./)
+image:
+  dockerfile: habitats/claude-habitat/Dockerfile
+
+# Bad: Ambiguous relative paths
+image:
+  dockerfile: ./habitats/claude-habitat/Dockerfile  # Relative to what?
+```
+
+### Variable Templates
+
+**Rule: Use simplified variable names in template substitution**
+
+```yaml
+# Good: Simple, clear variable names
+setup:
+  user:
+    commands:
+      - ${work_dir}/claude-habitat/system/tools/bin/setup-github-auth
+
+# Avoid: Verbose nested references
+setup:
+  user:
+    commands:
+      - ${container.work_dir}/claude-habitat/system/tools/bin/setup-github-auth
+```
+
+### Benefits of This Approach
+
+1. **Eliminates path duplication bugs**: No more `habitats/habitat/habitats/habitat` errors
+2. **Clear context separation**: `rel()` = host, `workDirPath()` = container workspace, `'/absolute'` = container fixed
+3. **Self-documenting code**: Function names indicate the path context immediately
+4. **Centralized logic**: Path resolution logic is in one place
+5. **Consistent mental model**: Always know which context you're working in
+
+### Migration Guide
+
+When updating existing code:
+
+1. **Replace project-relative constructions with `rel()`**:
+   ```javascript
+   // Before
+   const configPath = path.join(__dirname, '..', 'system', 'config.yaml');
+   
+   // After  
+   const configPath = rel('system', 'config.yaml');
+   ```
+
+2. **Replace workspace-relative constructions with `workDirPath()`**:
+   ```javascript
+   // Before
+   const toolPath = path.posix.join(config.container.work_dir, 'claude-habitat', 'system', 'tools', 'bin', 'tool');
+   
+   // After
+   const workDirPath = createWorkDirPath(config.container.work_dir);
+   const toolPath = workDirPath('claude-habitat', 'system', 'tools', 'bin', 'tool');
+   ```
+
+3. **Simplify absolute container paths**:
+   ```javascript
+   // Before
+   const containerPath = buildContainerPath('/home', 'node', '.claude');
+   
+   // After
+   const containerPath = '/home/node/.claude';
+   ```

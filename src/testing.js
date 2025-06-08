@@ -10,7 +10,7 @@ const { loadConfig } = require('./config');
 const { askToContinue } = require('./cli');
 
 // Test running functionality
-async function runTestMode(testType, testTarget) {
+async function runTestMode(testType, testTarget, rebuild = false) {
   console.log(colors.green('\n=== Claude Habitat Test Runner ===\n'));
 
   if (testType === 'all' && !testTarget) {
@@ -37,7 +37,7 @@ async function runTestMode(testType, testTarget) {
         return;
       }
       console.log(`Running system tests in ${testTarget} habitat...`);
-      await runSystemTests(habitatConfig);
+      await runSystemTests(habitatConfig, false, rebuild);
     } else if (testType === 'shared') {
       // Check if habitat bypasses system/shared infrastructure
       if (habitatConfig.claude?.bypass_habitat_construction) {
@@ -46,7 +46,7 @@ async function runTestMode(testType, testTarget) {
         return;
       }
       console.log(`Running shared tests in ${testTarget} habitat...`);
-      await runSharedTests(habitatConfig);
+      await runSharedTests(habitatConfig, false, rebuild);
     } else if (testType === 'verify-fs') {
       // Support scope parameter: verify-fs:scope or just verify-fs (defaults to 'all')
       const parts = testType.split(':');
@@ -63,13 +63,13 @@ async function runTestMode(testType, testTarget) {
     } else if (testType === 'habitat') {
       console.log(`Running ${testTarget}-specific tests...`);
       if (habitatConfig.tests && habitatConfig.tests.length > 0) {
-        await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig);
+        await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, false, rebuild);
       } else {
         console.log(`No ${testTarget}-specific tests configured`);
       }
     } else {
       // Default: run all tests for the habitat
-      await runHabitatTests(testTarget);
+      await runHabitatTests(testTarget, false, rebuild);
     }
   } else {
     console.error(colors.red('Invalid test configuration'));
@@ -289,7 +289,7 @@ async function runAllTests() {
   }
 }
 
-async function runSystemTests(habitatConfig = null, captureResults = false) {
+async function runSystemTests(habitatConfig = null, captureResults = false, rebuild = false) {
   console.log(colors.yellow('Running system infrastructure tests...\n'));
 
   // If no habitat provided, use the base habitat
@@ -300,14 +300,14 @@ async function runSystemTests(habitatConfig = null, captureResults = false) {
 
   const systemConfig = await loadConfig(rel('system', 'config.yaml'));
   if (systemConfig.tests && systemConfig.tests.length > 0) {
-    return await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig, captureResults);
+    return await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig, captureResults, rebuild);
   } else {
     console.log('No system tests configured');
     return captureResults ? [{ type: 'info', message: 'No system tests configured' }] : undefined;
   }
 }
 
-async function runSharedTests(habitatConfig = null, captureResults = false) {
+async function runSharedTests(habitatConfig = null, captureResults = false, rebuild = false) {
   console.log(colors.yellow('Running shared configuration tests...\n'));
 
   // If no habitat provided, use the base habitat
@@ -318,14 +318,14 @@ async function runSharedTests(habitatConfig = null, captureResults = false) {
 
   const sharedConfig = await loadConfig(rel('shared', 'config.yaml'));
   if (sharedConfig.tests && sharedConfig.tests.length > 0) {
-    return await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig, captureResults);
+    return await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig, captureResults, rebuild);
   } else {
     console.log('No shared tests configured');
     return captureResults ? [{ type: 'info', message: 'No shared tests configured' }] : undefined;
   }
 }
 
-async function runHabitatTests(habitatName, captureResults = false) {
+async function runHabitatTests(habitatName, captureResults = false, rebuild = false) {
   console.log(colors.yellow(`Running tests for ${habitatName} habitat...\n`));
 
   const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
@@ -339,18 +339,18 @@ async function runHabitatTests(habitatName, captureResults = false) {
 
   // Run system tests
   console.log('1. System tests:');
-  const systemResults = await runSystemTests(habitatConfig, captureResults);
+  const systemResults = await runSystemTests(habitatConfig, captureResults, rebuild);
   if (captureResults && systemResults) results.push(...systemResults);
 
   // Run shared tests
   console.log('\n2. Shared tests:');
-  const sharedResults = await runSharedTests(habitatConfig, captureResults);
+  const sharedResults = await runSharedTests(habitatConfig, captureResults, rebuild);
   if (captureResults && sharedResults) results.push(...sharedResults);
 
   // Run habitat-specific tests
   if (habitatConfig.tests && habitatConfig.tests.length > 0) {
     console.log(`\n3. ${habitatName}-specific tests:`);
-    const habitatResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, captureResults);
+    const habitatResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, captureResults, rebuild);
     if (captureResults && habitatResults) results.push(...habitatResults);
   } else {
     console.log(`\n3. No ${habitatName}-specific tests configured`);
@@ -360,7 +360,7 @@ async function runHabitatTests(habitatName, captureResults = false) {
   return captureResults ? results : undefined;
 }
 
-async function runTestsInHabitatContainer(tests, testType, habitatConfig = null, captureResults = false) {
+async function runTestsInHabitatContainer(tests, testType, habitatConfig = null, captureResults = false, rebuild = false) {
   if (!habitatConfig) {
     console.error('No habitat configuration provided for testing');
     return captureResults ? [{ type: 'error', message: 'No habitat configuration provided' }] : undefined;
@@ -374,11 +374,15 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
     let imageTag = preparedTag;
 
-    if (!await dockerImageExists(preparedTag)) {
-      console.log(colors.yellow('Prepared image not found. Building habitat for testing...'));
-      const { buildBaseImage, buildPreparedImage } = require('./docker');
-      await buildBaseImage(habitatConfig);
-      await buildPreparedImage(habitatConfig, preparedTag, []);
+    if (!await dockerImageExists(preparedTag) || rebuild) {
+      if (rebuild) {
+        console.log(colors.yellow('🔄 Rebuild requested - building fresh habitat for testing...'));
+      } else {
+        console.log(colors.yellow('Prepared image not found. Building habitat for testing...'));
+      }
+      const { buildBaseImage, prepareWorkspace } = require('./image-lifecycle');
+      await buildBaseImage(habitatConfig, { rebuild });
+      await prepareWorkspace(habitatConfig, preparedTag, [], { rebuild });
       imageTag = preparedTag;
     }
 

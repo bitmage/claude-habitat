@@ -3,9 +3,10 @@ const { runTestMode } = require('../testing');
 /**
  * Test type scene - shows test options for a specific habitat
  */
-async function testTypeScene(context, habitatName = 'base') {
+async function testTypeScene(context, habitatName = 'base', rebuild = false) {
   try {
-    context.log(`\n=== Testing ${habitatName} ===\n`);
+    const rebuildText = rebuild ? ' (with rebuild)' : '';
+    context.log(`\n=== Testing ${habitatName}${rebuildText} ===\n`);
     
     // Load habitat config to check for bypass_habitat_construction
     let habitatConfig = null;
@@ -112,11 +113,12 @@ async function testTypeScene(context, habitatName = 'base') {
     }
     
     // Run the selected test type
-    context.log(`\nRunning ${testType} tests for ${habitatName}...`);
+    const rebuildText = rebuild ? ' (with rebuild)' : '';
+    context.log(`\nRunning ${testType} tests for ${habitatName}${rebuildText}...`);
     context.log('');
     
     try {
-      await runTestMode(testType, habitatName);
+      await runTestMode(testType, habitatName, rebuild);
       context.log(`\n✅ ${testType} tests completed successfully`);
     } catch (error) {
       context.error(`Test execution failed: ${error.message}`);

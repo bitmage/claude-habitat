@@ -47,7 +47,7 @@ setup:
       - |
         # Set up GitHub App authentication using tools
         echo "Setting up GitHub authentication..."
-        ./habitat/system/tools/bin/setup-github-auth
+        ${work_dir}/claude-habitat/system/tools/bin/setup-github-auth
 
 # Filesystem verification structure
 verify-fs:

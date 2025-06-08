@@ -59,6 +59,7 @@ async function testMenuScene(context) {
     context.log('Actions:\n');
     context.log('  [a]ll     - Run all tests for all habitats');
     context.log('  [q]uit    - Back to main menu\n');
+    context.log('💡 Tip: Use capital letters (!@#$%^&*()) to force rebuild for habitats 1-9\n');
     
     const choice = await context.getInput('Enter your choice: ');
     
@@ -73,11 +74,19 @@ async function testMenuScene(context) {
         return (context) => testTypeScene(context, 'all');
         
       default:
+        // Check for rebuild shift keys (! = shift+1, @ = shift+2, etc.)
+        const shiftKeys = '!@#$%^&*()';
+        const shiftIndex = shiftKeys.indexOf(choice);
+        if (shiftIndex >= 0 && shiftIndex < habitats.length) {
+          const { testTypeScene } = require('./test-type.scene');
+          return (context) => testTypeScene(context, habitats[shiftIndex].name, true); // true = rebuild
+        }
+        
         // Check if it's a number (habitat selection)
         const habitatIndex = parseInt(choice) - 1;
         if (!isNaN(habitatIndex) && habitatIndex >= 0 && habitatIndex < habitats.length) {
           const { testTypeScene } = require('./test-type.scene');
-          return (context) => testTypeScene(context, habitats[habitatIndex].name);
+          return (context) => testTypeScene(context, habitats[habitatIndex].name, false); // false = no rebuild
         }
         
         context.log('\n❌ Invalid choice');

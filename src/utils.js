@@ -8,6 +8,9 @@ const execAsync = promisify(exec);
 // Project root relative path helper
 const rel = (...segments) => path.join(__dirname, '..', ...segments);
 
+// Container workspace relative path helper
+const createWorkDirPath = (workDir) => (...segments) => path.posix.join(workDir, ...segments);
+
 // Terminal colors for output
 const colors = {
   red: (text) => `\x1b[31m${text}\x1b[0m`,
@@ -241,8 +244,9 @@ module.exports = {
   parseRepoSpec,
   parseCommands,
   
-  // Path helper
+  // Path helpers
   rel,
+  createWorkDirPath,
   
   // New parameterized helpers
   executeCommand,
