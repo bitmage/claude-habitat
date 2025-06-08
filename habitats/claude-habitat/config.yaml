@@ -93,7 +93,7 @@ setup:
 
 container:
   user: node
-  init_command: /sbin/init
+  init_command: /usr/local/bin/habitat-init
   startup_delay: 5
 
 # Filesystem verification structure (bypass mode - Meta Claude structure)

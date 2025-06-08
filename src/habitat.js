@@ -307,13 +307,19 @@ async function runContainer(tag, config, envVars, overrideCommand = null, ttyOve
     }
     const dockerFlags = enableTTY ? ['-it'] : ['-i'];
     
-    const claudeProcess = spawn('docker', [
+    // Ensure proper environment is loaded including PATH
+    const envSetup = 'export PATH=/usr/local/bin:/usr/bin:/bin:$PATH';
+    const fullCommand = `${envSetup} && ${claudeCommand}`;
+    
+    const dockerArgs = [
       'exec', ...dockerFlags,
       '-u', containerUser,
       '-w', workDir,
       containerName,
-      'sh', '-c', claudeCommand
-    ], {
+      '/bin/bash', '-c', fullCommand
+    ];
+    
+    const claudeProcess = spawn('docker', dockerArgs, {
       stdio: 'inherit'
     });
 

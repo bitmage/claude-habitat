@@ -27,10 +27,12 @@ RUN mkdir -p /workspace && \
     chmod 755 /home/node/.claude
 
 # Create a simple init script that keeps container running
-RUN echo '#!/bin/bash\nwhile true; do sleep 3600; done' > /sbin/init && chmod +x /sbin/init
+# Use custom path since /sbin/init may be managed by systemd
+RUN echo '#!/bin/bash\nwhile true; do sleep 3600; done' > /usr/local/bin/habitat-init && chmod +x /usr/local/bin/habitat-init
 
 USER node
 WORKDIR /workspace
 
-# Use simple init script
-CMD ["/sbin/init"]
+# Clear any inherited entrypoint and use our init script
+ENTRYPOINT []
+CMD ["/usr/local/bin/habitat-init"]
