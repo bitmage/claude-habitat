@@ -208,6 +208,9 @@ async function runInitialization() {
     console.log('Private repositories will be accessible using the configured app.');
     console.log('');
     
+    // Generate host information
+    await generateHostInfo();
+    
     // Final status check
     const finalStatus = await checkInitializationStatus();
     
@@ -244,9 +247,178 @@ async function setupGitHubToken() {
   // Implementation would go here
 }
 
+// Generate host system information file
+async function generateHostInfo() {
+  const { promisify } = require('util');
+  const { exec } = require('child_process');
+  const execAsync = promisify(exec);
+  const path = require('path');
+  const { fileExists } = require('./utils');
+  
+  try {
+    console.log(colors.yellow('=== Generating Host Information ==='));
+    console.log('This creates a safe system profile to help Claude understand your environment.');
+    console.log('Only non-identifying system information will be collected.');
+    console.log('');
+    
+    // Ask for consent
+    const readline = require('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    const ask = (question) => new Promise(resolve => {
+      rl.question(question, answer => resolve(answer.trim().toLowerCase()));
+    });
+    
+    const consent = await ask('Generate host system information? [y/N]: ');
+    rl.close();
+    
+    if (consent !== 'y' && consent !== 'yes') {
+      console.log('Host information generation skipped.');
+      return false;
+    }
+    
+    console.log('Collecting system information...');
+    
+    // Collect safe system information
+    const systemInfo = {};
+    
+    try {
+      const { stdout: unameOutput } = await execAsync('uname -a');
+      const unameParts = unameOutput.trim().split(' ');
+      systemInfo.system = {
+        os: unameParts[0] || 'Unknown',
+        architecture: unameParts[4] || 'Unknown',
+        kernel: unameParts[2] || 'Unknown'
+      };
+    } catch {
+      systemInfo.system = { os: 'Unknown', architecture: 'Unknown', kernel: 'Unknown' };
+    }
+    
+    try {
+      const { stdout: osInfo } = await execAsync('lsb_release -a 2>/dev/null || cat /etc/os-release 2>/dev/null || echo "Unknown"');
+      if (osInfo.includes('Distributor ID:')) {
+        const lines = osInfo.split('\n');
+        const distLine = lines.find(line => line.startsWith('Distributor ID:'));
+        const releaseLine = lines.find(line => line.startsWith('Release:'));
+        const codeLine = lines.find(line => line.startsWith('Codename:'));
+        
+        let distribution = 'Unknown';
+        if (distLine && releaseLine) {
+          const dist = distLine.split(':')[1]?.trim();
+          const release = releaseLine.split(':')[1]?.trim();
+          const codename = codeLine?.split(':')[1]?.trim();
+          distribution = `${dist} ${release}${codename ? ' (' + codename + ')' : ''}`;
+        }
+        systemInfo.system.distribution = distribution;
+      } else if (osInfo.includes('NAME=')) {
+        const nameLine = osInfo.split('\n').find(line => line.startsWith('NAME='));
+        const versionLine = osInfo.split('\n').find(line => line.startsWith('VERSION='));
+        if (nameLine) {
+          let name = nameLine.split('=')[1]?.replace(/"/g, '').trim();
+          if (versionLine) {
+            const version = versionLine.split('=')[1]?.replace(/"/g, '').trim();
+            name += ` ${version}`;
+          }
+          systemInfo.system.distribution = name;
+        }
+      }
+    } catch {
+      systemInfo.system.distribution = 'Unknown';
+    }
+    
+    // Tool versions
+    systemInfo.tools = {};
+    
+    const tools = [
+      { name: 'docker', cmd: 'docker --version' },
+      { name: 'nodejs', cmd: 'node --version' },
+      { name: 'git', cmd: 'git --version' }
+    ];
+    
+    for (const tool of tools) {
+      try {
+        const { stdout } = await execAsync(tool.cmd);
+        systemInfo.tools[tool.name] = stdout.trim().replace(/^[a-z]+ version /i, '');
+      } catch {
+        systemInfo.tools[tool.name] = 'Not available';
+      }
+    }
+    
+    // Platform info
+    systemInfo.platform = {
+      type: systemInfo.system.os === 'Linux' ? 'GNU/Linux' : systemInfo.system.os,
+      shell_environment: 'bash'
+    };
+    
+    // Infer package manager for Linux distributions
+    if (systemInfo.system.os === 'Linux') {
+      const distro = systemInfo.system.distribution?.toLowerCase() || '';
+      if (distro.includes('ubuntu') || distro.includes('debian')) {
+        systemInfo.platform.package_manager = 'apt';
+      } else if (distro.includes('fedora') || distro.includes('rhel') || distro.includes('centos')) {
+        systemInfo.platform.package_manager = 'dnf/yum';
+      } else if (distro.includes('arch') || distro.includes('manjaro')) {
+        systemInfo.platform.package_manager = 'pacman';
+      } else {
+        systemInfo.platform.package_manager = 'unknown';
+      }
+    }
+    
+    // Generate YAML content
+    const yamlContent = `# Host System Information
+# This file contains non-identifying system information to help Claude understand
+# the development environment. Generated automatically during initialization.
+
+system:
+  os: "${systemInfo.system.os}"
+  architecture: "${systemInfo.system.architecture}" 
+  kernel: "${systemInfo.system.kernel}"
+  distribution: "${systemInfo.system.distribution || 'Unknown'}"
+  
+tools:
+  docker: "${systemInfo.tools.docker}"
+  nodejs: "${systemInfo.tools.nodejs}"
+  git: "${systemInfo.tools.git}"
+
+platform:
+  type: "${systemInfo.platform.type}"
+  package_manager: "${systemInfo.platform.package_manager}"
+  shell_environment: "${systemInfo.platform.shell_environment}"
+
+# Notes for Claude:
+# - This is a ${systemInfo.system.os} development environment with modern tool versions
+# - ${systemInfo.system.distribution || 'System'} distribution${systemInfo.platform.package_manager !== 'unknown' ? ' using ' + systemInfo.platform.package_manager + ' package manager' : ''}
+# - Docker and development tools are ${systemInfo.tools.docker !== 'Not available' ? 'available' : 'may need installation'}
+# - Standard ${systemInfo.platform.type} command-line tools should be available`;
+    
+    // Write to shared directory
+    const sharedDir = path.join(__dirname, '..', 'shared');
+    const hostInfoPath = path.join(sharedDir, 'host-info.yaml');
+    
+    // Ensure shared directory exists
+    await fs.mkdir(sharedDir, { recursive: true });
+    
+    await fs.writeFile(hostInfoPath, yamlContent);
+    
+    console.log(colors.green('✅ Host information generated successfully'));
+    console.log(`   Saved to: ${path.relative(process.cwd(), hostInfoPath)}`);
+    console.log('');
+    
+    return true;
+    
+  } catch (err) {
+    console.error(colors.red(`Error generating host information: ${err.message}`));
+    return false;
+  }
+}
+
 module.exports = {
   checkInitializationStatus,
   hasGitHubAppAuth,
+  generateHostInfo,
   checkHabitatRepositories,
   runInitialization,
   setupGitHubApp,

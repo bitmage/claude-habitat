@@ -1,5 +1,5 @@
 # System infrastructure configuration applied to all habitats
-name: system-setup  
+name: system-setup
 description: Core infrastructure setup for all claude-habitat containers
 
 # Default environment variables (can be overridden by shared/habitat configs)
@@ -9,6 +9,8 @@ environment:
   - SYSTEM_PATH=${HABITAT_PATH}/system
   - SHARED_PATH=${HABITAT_PATH}/shared
   - LOCAL_PATH=${HABITAT_PATH}/local
+  - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
+  - PATH=${PATH}:${SYSTEM_TOOLS_PATH}
 
 # Container settings for system setup
 container:
@@ -45,10 +47,10 @@ setup:
     - |
       # System-wide configuration
       echo "Claude Habitat system setup complete"
-      
+
       # Ensure profile.d directory exists for future use
       mkdir -p /etc/profile.d
-      
+
       # Set timezone if not already set
       if [ ! -f /etc/timezone ]; then
         echo "UTC" > /etc/timezone
@@ -66,14 +68,14 @@ setup:
 verify-fs:
   required_files:
     # Core system tools
-    - "{env.SYSTEM_PATH}/tools/bin/setup-github-auth"
-    - "{env.SYSTEM_PATH}/tools/bin/rg"
-    - "{env.SYSTEM_PATH}/tools/bin/fd"
-    - "{env.SYSTEM_PATH}/tools/bin/jq"
-    - "{env.SYSTEM_PATH}/tools/bin/yq"
-    - "{env.SYSTEM_PATH}/tools/bin/gh"
-    - "{env.SYSTEM_PATH}/tools/install-tools.sh"
-    - "{env.SYSTEM_PATH}/tools/regenerate-github-token.sh"
-    - "{env.SYSTEM_PATH}/tools/tools.yaml"
+    - "${SYSTEM_PATH}/tools/bin/setup-github-auth"
+    - "${SYSTEM_PATH}/tools/bin/rg"
+    - "${SYSTEM_PATH}/tools/bin/fd"
+    - "${SYSTEM_PATH}/tools/bin/jq"
+    - "${SYSTEM_PATH}/tools/bin/yq"
+    - "${SYSTEM_PATH}/tools/bin/gh"
+    - "${SYSTEM_PATH}/tools/install-tools.sh"
+    - "${SYSTEM_PATH}/tools/regenerate-github-token.sh"
+    - "${SYSTEM_PATH}/tools/tools.yaml"
     # Claude credentials (copied from host during build)
     - ~/.claude/.credentials.json

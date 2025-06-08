@@ -132,6 +132,15 @@ Code should reflect the domain model defined in `docs/TERMINOLOGY.md`:
 - **Preserve user context** - Return to appropriate menu after errors
 - **Make errors educational** - Help users understand what went wrong
 
+## Host Environment Information
+
+Host system information is available in `shared/host-info.yaml` to help you understand the development environment:
+- Operating system and architecture details
+- Tool versions (Docker, Node.js, Git)
+- Platform-specific information
+
+This information is generated during initialization and contains only non-identifying system details.
+
 ## Your Roles
 
 ### 1. Configuration Creator (Add Mode)

@@ -1,0 +1,25 @@
+# Host System Information
+# This file contains non-identifying system information to help Claude understand
+# the development environment. Generated automatically during initialization.
+
+system:
+  os: "Linux"
+  architecture: "x86_64" 
+  kernel: "6.12.28-1-MANJARO"
+  distribution: "Manjaro Linux 25.0.3 (Zetar)"
+  
+tools:
+  docker: "28.1.1, build 4eba377327"
+  nodejs: "v22.13.0"
+  git: "2.49.0"
+
+platform:
+  type: "GNU/Linux"
+  package_manager: "pacman" # Inferred from Manjaro
+  shell_environment: "bash"
+
+# Notes for Claude:
+# - This is a Linux development environment with modern tool versions
+# - Manjaro is an Arch-based distribution with rolling releases
+# - Docker and Node.js versions are current/recent
+# - Standard GNU/Linux command-line tools should be available

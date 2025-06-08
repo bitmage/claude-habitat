@@ -21,6 +21,10 @@ environment:
   - SYSTEM_PATH=${HABITAT_PATH}/system
   - SHARED_PATH=${HABITAT_PATH}/shared
   - LOCAL_PATH=${HABITAT_PATH}/local
+  - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
+  - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
+  - LOCAL_TOOLS_PATH=${LOCAL_PATH}/tools/bin
+  - PATH=${PATH}:${SYSTEM_TOOLS_PATH}:${SHARED_TOOLS_PATH}:${LOCAL_TOOLS_PATH}
   - NODE_ENV=development
   - DOCKER_HOST=unix:///var/run/docker.sock
 
@@ -49,8 +53,8 @@ setup:
     - |
       # Fix Docker socket permissions for development
       chmod 666 /var/run/docker.sock || true
-      
-      # Ensure .claude directory exists and has proper ownership for node user  
+
+      # Ensure .claude directory exists and has proper ownership for node user
       # Create this BEFORE any volumes are mounted to avoid ownership conflicts
       mkdir -p /home/node/.claude
       chown node:node /home/node/.claude
@@ -70,17 +74,21 @@ setup:
         /usr/bin/docker --version && echo "Docker CLI available" || echo "Docker not accessible"
         echo "Testing Docker socket..."
         /usr/bin/docker ps > /dev/null 2>&1 && echo "Docker socket accessible" || echo "Docker socket not accessible"
-        
+
         # Ensure .claude directory has proper permissions (credentials copied by system setup)
         mkdir -p ~/.claude
         chmod 755 ~/.claude
         echo "Claude directory permissions set for user: $(whoami)"
         ls -la ~/.claude
-        
+
         # Set up GitHub App authentication using system tools (Meta Claude's structure)
         echo "Setting up GitHub authentication..."
         "{env.WORKDIR}/system/tools/bin/setup-github-auth"
         
+        # Configure git for container user using centralized script
+        echo "Setting up git configuration..."
+        "{env.SYSTEM_PATH}/tools/bin/install-gitconfig"
+
         echo "Claude Habitat setup complete"
 
 container:
@@ -92,30 +100,30 @@ container:
 verify-fs:
   required_files:
     # Main claude-habitat source files at repository root
-    - "{env.WORKDIR}/.git/config"
-    - "{env.WORKDIR}/CLAUDE.md"
-    - "{env.WORKDIR}/README.md"
-    - "{env.WORKDIR}/package.json"
-    - "{env.WORKDIR}/package-lock.json"
-    - "{env.WORKDIR}/claude-habitat"
-    - "{env.WORKDIR}/claude-habitat.js"
-    - "{env.WORKDIR}/claude-habitat.sh"
-    - "{env.WORKDIR}/habitats/base/config.yaml"
-    - "{env.WORKDIR}/habitats/discourse/config.yaml"
-    - "{env.WORKDIR}/test/unit/claude-habitat.test.js"
-    - "{env.WORKDIR}/node_modules/package.json"
+    - "${WORKDIR}/.git/config"
+    - "${WORKDIR}/CLAUDE.md"
+    - "${WORKDIR}/README.md"
+    - "${WORKDIR}/package.json"
+    - "${WORKDIR}/package-lock.json"
+    - "${WORKDIR}/claude-habitat"
+    - "${WORKDIR}/claude-habitat.js"
+    - "${WORKDIR}/claude-habitat.sh"
+    - "${WORKDIR}/habitats/base/config.yaml"
+    - "${WORKDIR}/habitats/discourse/config.yaml"
+    - "${WORKDIR}/test/unit/claude-habitat.test.js"
+    - "${WORKDIR}/node_modules/package.json"
     # System tools (Meta Claude's structure)
-    - "{env.WORKDIR}/system/tools/bin/setup-github-auth"
-    - "{env.WORKDIR}/system/tools/bin/rg"
-    - "{env.WORKDIR}/system/tools/bin/fd"
-    - "{env.WORKDIR}/system/tools/bin/jq"
-    - "{env.WORKDIR}/system/tools/bin/yq"
-    - "{env.WORKDIR}/system/tools/bin/gh"
-    - "{env.WORKDIR}/system/tools/install-tools.sh"
-    - "{env.WORKDIR}/system/tools/regenerate-github-token.sh"
-    - "{env.WORKDIR}/system/tools/tools.yaml"
+    - "${WORKDIR}/system/tools/bin/setup-github-auth"
+    - "${WORKDIR}/system/tools/bin/rg"
+    - "${WORKDIR}/system/tools/bin/fd"
+    - "${WORKDIR}/system/tools/bin/jq"
+    - "${WORKDIR}/system/tools/bin/yq"
+    - "${WORKDIR}/system/tools/bin/gh"
+    - "${WORKDIR}/system/tools/install-tools.sh"
+    - "${WORKDIR}/system/tools/regenerate-github-token.sh"
+    - "${WORKDIR}/system/tools/tools.yaml"
     # Claude workspace directory (created by files section)
-    - /home/node/.claude/.keep
+    - ~/.claude/.keep
     # Claude credentials (copied from host)
     - ~/.claude/.credentials.json
 

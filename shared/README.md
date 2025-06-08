@@ -8,6 +8,7 @@ This directory contains your personal preferences and configurations that extend
 - **`claude.md`** - Your personal Claude preferences and instructions
 - **`gitconfig`** - Your git configuration (name, email, aliases)
 - **`aliases.sh`** - Your personal shell aliases and functions
+- **`host-info.yaml`** - Host system information (generated during init)
 - **Custom scripts** - Your personal utility scripts
 
 ### Authentication
@@ -40,6 +41,7 @@ Files in this directory are:
 shared/
 ├── claude.md              # Your Claude preferences
 ├── gitconfig              # Your git settings
+├── host-info.yaml         # Host system information (auto-generated)
 ├── aliases.sh             # Your shell aliases
 ├── github_deploy_key      # Your SSH key
 ├── my-github-app.pem      # Your GitHub App key

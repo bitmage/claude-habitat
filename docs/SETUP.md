@@ -22,6 +22,20 @@ git clone <repo-url> && cd claude-habitat && npm install
 ./claude-habitat discourse  # Try the example
 ```
 
+## Initialization (Recommended)
+
+Run the initialization process to set up authentication and generate host information:
+
+```bash
+./claude-habitat --init
+```
+
+This will:
+- Check system prerequisites (Docker, Node.js, Claude Code)
+- Set up GitHub App authentication for private repositories
+- Generate safe host system information for Claude (with your consent)
+- Verify everything is working correctly
+
 ## GitHub Authentication (Optional)
 
 For private repositories, put SSH keys or GitHub App files in `shared/`:

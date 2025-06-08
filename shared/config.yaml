@@ -6,6 +6,11 @@ description: User preferences and shared configuration for all habitats
 tests:
   - tests/test-user-config.sh
 
+# Shared environment variables (add to system PATH)
+environment:
+  - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
+  - PATH=${PATH}:${SHARED_TOOLS_PATH}
+
 # Structured file operations - copy files to specific locations with permissions
 files:
   - src: gitconfig
@@ -30,12 +35,8 @@ setup:
     run_as: "{container.user}"
     commands:
       - |
-        # Configure git for container user
-        if [ -f "{env.SHARED_PATH}/gitconfig" ]; then
-          cp "{env.SHARED_PATH}/gitconfig" ~/.gitconfig
-          chmod 644 ~/.gitconfig
-          echo "Git configuration applied for user: $(whoami)"
-        fi
+        # Configure git for container user using centralized script
+        "{env.SYSTEM_PATH}/tools/bin/install-gitconfig"
 
 # Filesystem verification - verify shared/user files are properly configured
 verify-fs:
