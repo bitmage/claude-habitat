@@ -60,9 +60,10 @@ setup:
         echo "Testing Docker socket..."
         /usr/bin/docker ps > /dev/null 2>&1 && echo "Docker socket accessible" || echo "Docker socket not accessible"
         
-        # Ensure .claude directory has proper permissions for the container user
+        # Ensure .claude directory has proper permissions and link credentials
         mkdir -p ~/.claude
         chmod 755 ~/.claude
+        ln -sf /opt/claude-credentials.json ~/.claude/.credentials.json
         echo "Claude directory permissions set for user: $(whoami)"
         ls -la ~/.claude
         

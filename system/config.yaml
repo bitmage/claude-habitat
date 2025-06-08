@@ -9,8 +9,8 @@ container:
 
 # System-wide volume mounts applied to all habitats
 volumes:
-  # Mount only Claude credentials file as read-only to enable authentication in all containers
-  - ~/.claude/.credentials.json:/home/{container.user}/.claude/.credentials.json:ro
+  # Mount Claude credentials to a different location and symlink it
+  - ~/.claude/.credentials.json:/opt/claude-credentials.json:ro
 
 # System tests (run with: claude-habitat test --system)
 tests:
