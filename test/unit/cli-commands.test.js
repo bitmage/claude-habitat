@@ -378,3 +378,63 @@ test('start command shows CLI-appropriate error messages', async () => {
   
   console.log('✅ Start command shows appropriate CLI error messages');
 });
+
+test('--rebuild flag is parsed correctly', async () => {
+  console.log('Testing --rebuild flag parsing...');
+  
+  const { parseCliArguments, validateCliOptions } = require('../../src/cli-parser');
+  
+  // Test rebuild with start command
+  const args1 = ['start', 'discourse', '--rebuild'];
+  const options1 = parseCliArguments(args1);
+  
+  assert.strictEqual(options1.rebuild, true, 'Should parse --rebuild flag');
+  assert.strictEqual(options1.start, true, 'Should parse start command');
+  assert.strictEqual(options1.habitatName, 'discourse', 'Should parse habitat name');
+  
+  // Test validation passes
+  assert.doesNotThrow(() => validateCliOptions(options1), 'Should validate successfully');
+  
+  // Test rebuild without start/config should fail validation
+  const args2 = ['--rebuild'];
+  const options2 = parseCliArguments(args2);
+  
+  assert.strictEqual(options2.rebuild, true, 'Should parse --rebuild flag');
+  assert.throws(() => validateCliOptions(options2), 'Should fail validation without start/config');
+  
+  console.log('✅ --rebuild flag parsing works correctly');
+});
+
+test('--help shows rebuild documentation', async () => {
+  console.log('Testing rebuild in help output...');
+  
+  const scriptPath = path.join(__dirname, '../../claude-habitat.js');
+  
+  const result = await new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, '--help'], {
+      stdio: 'pipe'
+    });
+    
+    let stdout = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      resolve({ code, stdout });
+    });
+    
+    child.on('error', reject);
+  });
+  
+  // Should exit successfully
+  assert.strictEqual(result.code, 0, 'Help should exit with code 0');
+  
+  // Should mention rebuild option
+  assert.ok(result.stdout.includes('--rebuild'), 'Should show --rebuild flag');
+  assert.ok(result.stdout.includes('Force rebuild'), 'Should explain rebuild functionality');
+  assert.ok(result.stdout.includes('start discourse --rebuild'), 'Should show rebuild example');
+  
+  console.log('✅ Help shows rebuild documentation');
+});

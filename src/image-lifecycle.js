@@ -13,12 +13,32 @@ const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
 
 /**
  * Build the base Docker image from Dockerfile
+ * @param {object} config - Habitat configuration
+ * @param {object} options - Build options
+ * @param {boolean} options.rebuild - Force rebuild without cache
  */
-async function buildBaseImage(config) {
+async function buildBaseImage(config, options = {}) {
+  const { rebuild = false } = options;
   const baseTag = `claude-habitat-${config.name}:base`;
   
+  // Handle rebuild: remove existing image if rebuilding
+  if (rebuild) {
+    console.log(colors.yellow('🔄 Rebuild requested - removing existing base image...'));
+    try {
+      await dockerRun(['rmi', baseTag]);
+      console.log(`Removed existing base image: ${baseTag}`);
+    } catch (err) {
+      // Image might not exist, continue
+      console.log(`Base image ${baseTag} not found (this is normal for first build)`);
+    }
+  }
+  
   // Build the base image
-  console.log('Building base Docker image...');
+  if (rebuild) {
+    console.log(colors.yellow('🔄 Building base Docker image with fresh cache...'));
+  } else {
+    console.log('Building base Docker image...');
+  }
   console.log('This will take several minutes on first run.');
   
   let dockerfilePath;
@@ -35,12 +55,21 @@ async function buildBaseImage(config) {
     throw new Error(`Dockerfile not found at ${dockerfilePath}`);
   }
   
-  const buildProcess = spawn('docker', [
+  // Build Docker arguments
+  const buildArgs = [
     'build',
     '-f', dockerfilePath,
-    '-t', baseTag,
-    path.dirname(dockerfilePath)
-  ], { stdio: 'inherit' });
+    '-t', baseTag
+  ];
+  
+  // Add --no-cache if rebuilding
+  if (rebuild) {
+    buildArgs.splice(1, 0, '--no-cache');
+  }
+  
+  buildArgs.push(path.dirname(dockerfilePath));
+  
+  const buildProcess = spawn('docker', buildArgs, { stdio: 'inherit' });
   
   await new Promise((resolve, reject) => {
     buildProcess.on('close', (code) => {
@@ -134,8 +163,23 @@ async function cloneRepository(container, repoInfo, workDir) {
 /**
  * Prepare workspace image with all repositories and setup complete
  */
-async function prepareWorkspace(config, tag, extraRepos) {
-  const baseTag = await buildBaseImage(config);
+async function prepareWorkspace(config, tag, extraRepos, options = {}) {
+  const { rebuild = false } = options;
+  
+  // Handle rebuild: remove existing prepared image if rebuilding
+  const preparedTag = `${config.image.tag}:${tag}`;
+  if (rebuild) {
+    console.log(colors.yellow('🔄 Rebuild requested - removing existing prepared image...'));
+    try {
+      await dockerRun(['rmi', preparedTag]);
+      console.log(`Removed existing prepared image: ${preparedTag}`);
+    } catch (err) {
+      // Image might not exist, continue
+      console.log(`Prepared image ${preparedTag} not found (this is normal for first build)`);
+    }
+  }
+  
+  const baseTag = await buildBaseImage(config, { rebuild });
   
   // Start a temporary container for preparation
   const tempContainer = `claude-habitat-prep-${Date.now()}`;

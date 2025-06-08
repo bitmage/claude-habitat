@@ -11,7 +11,8 @@ const { testRepositoryAccess } = require('./github');
 const { verifyFilesystem } = require('./filesystem');
 
 // Start a new session with the specified habitat
-async function startSession(configPath, extraRepos = [], overrideCommand = null) {
+async function startSession(configPath, extraRepos = [], overrideCommand = null, options = {}) {
+  const { rebuild = false } = options;
   const config = await loadConfig(configPath);
   const hash = calculateCacheHash(config, extraRepos);
   const preparedTag = `claude-habitat-${config.name}:${hash}`;
@@ -19,16 +20,21 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null)
   console.log(`Cache hash: ${hash}`);
   console.log(`Prepared image tag: ${preparedTag}`);
 
-  // Check if prepared image exists
-  if (!await dockerImageExists(preparedTag)) {
-    console.log('No cached image found, building prepared environment...');
+  // Check if prepared image exists or if rebuild is requested
+  const imageExists = await dockerImageExists(preparedTag);
+  if (!imageExists || rebuild) {
+    if (rebuild) {
+      console.log(colors.yellow('🔄 Rebuild requested - building fresh environment...'));
+    } else {
+      console.log('No cached image found, building prepared environment...');
+    }
     console.log('This will take several minutes but subsequent runs will be instant.');
     
-    // Build or get base image
-    const baseTag = await buildBaseImage(config);
+    // Build or get base image (with rebuild option)
+    const baseTag = await buildBaseImage(config, { rebuild });
     
-    // Build prepared image with all setup
-    await buildPreparedImage(config, preparedTag, extraRepos);
+    // Build prepared image with all setup (with rebuild option)
+    await buildPreparedImage(config, preparedTag, extraRepos, { rebuild });
   } else {
     console.log('Using cached prepared image');
   }

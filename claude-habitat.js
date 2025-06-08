@@ -875,7 +875,7 @@ async function main() {
       }
       
       await saveLastUsedConfig(options.configPath);
-      await startSession(options.configPath, options.extraRepos, options.overrideCommand);
+      await startSession(options.configPath, options.extraRepos, options.overrideCommand, { rebuild: options.rebuild });
     } catch (err) {
       console.error(colors.red(`\n❌ Error starting habitat: ${err.message}`));
       if (err.validationErrors) {

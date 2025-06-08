@@ -24,7 +24,8 @@ function parseCliArguments(argv) {
     testSequence: null,
     preserveColors: false,
     overrideCommand: null,
-    habitatName: null
+    habitatName: null,
+    rebuild: false
   };
 
   // Parse arguments
@@ -55,6 +56,9 @@ function parseCliArguments(argv) {
         break;
       case '--list-configs':
         options.listConfigs = true;
+        break;
+      case '--rebuild':
+        options.rebuild = true;
         break;
       case '--cmd':
         // Override claude command
@@ -168,6 +172,11 @@ function validateCliOptions(options) {
   // Extra repos only make sense with config or start
   if (options.extraRepos.length > 0 && !options.configPath && !options.start) {
     throw new Error('--repo requires a configuration or start command');
+  }
+
+  // Rebuild only makes sense with config or start
+  if (options.rebuild && !options.configPath && !options.start) {
+    throw new Error('--rebuild requires a configuration or start command');
   }
 }
 

@@ -45,14 +45,16 @@ OPTIONS:
     -r, --repo REPO_SPEC    Additional repository to clone (format: URL:PATH[:BRANCH])
                            Can be specified multiple times
     --cmd COMMAND          Override the claude command for this session
-    --clean                 Remove all Claude Habitat Docker images
-    --list-configs          List available configuration files
+    --rebuild              Force rebuild of Docker images (ignore cache)
+    --clean                Remove all Claude Habitat Docker images
+    --list-configs         List available configuration files
     --test-sequence=SEQ    Run UI test sequence (e.g., "t2f" for test>claude-habitat>filesystem)
     --preserve-colors      Preserve ANSI color codes in test sequence output
     -h, --help             Display this help message
 
 SHORTCUTS:
     s, start [HABITAT]     Start habitat (last used if no name given)
+    start HABITAT --rebuild    Force rebuild and start habitat
     a, add                 Create new configuration with AI assistance
     m, maintain            Update/troubleshoot Claude Habitat itself
     test [HABITAT] [TYPE]  Run tests (show menu if no args)
@@ -77,6 +79,9 @@ EXAMPLES:
 
     # Start specific habitat
     ${path.basename(process.argv[1])} start discourse
+
+    # Start with rebuild (ignores cache)
+    ${path.basename(process.argv[1])} start discourse --rebuild
 
     # Start with custom command
     ${path.basename(process.argv[1])} start claude-habitat --cmd "claude -p 'do some stuff'"
