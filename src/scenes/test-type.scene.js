@@ -113,7 +113,6 @@ async function testTypeScene(context, habitatName = 'base', rebuild = false) {
     }
     
     // Run the selected test type
-    const rebuildText = rebuild ? ' (with rebuild)' : '';
     context.log(`\nRunning ${testType} tests for ${habitatName}${rebuildText}...`);
     context.log('');
     

@@ -71,13 +71,14 @@ async function runSequence(startScene, sequence, options = {}) {
 async function runAllSequences(startScene, sequences) {
   const results = [];
 
-  for (const { seq, desc } of sequences) {
+  for (const { seq, desc, expected } of sequences) {
     console.log(`Running sequence: ${seq} - ${desc}`);
     const context = await runSequence(startScene, seq);
     
     results.push({
       sequence: seq,
       description: desc,
+      expected: expected,
       output: context.getOutput(),
       metadata: context.getMetadata()
     });
@@ -101,6 +102,12 @@ function formatSnapshots(results) {
     lines.push('=' .repeat(60));
     lines.push(`Sequence: ${result.sequence}`);
     lines.push(`Description: ${result.description}`);
+    
+    // Add expected behavior if available
+    if (result.expected) {
+      lines.push(`Expected: ${result.expected}`);
+    }
+    
     lines.push(`Status: ${result.metadata.status}`);
     lines.push(`Exit Code: ${result.metadata.exitCode}`);
     lines.push('-' .repeat(60));
