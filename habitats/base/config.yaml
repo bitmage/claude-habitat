@@ -9,8 +9,9 @@ image:
 # No repositories needed for base habitat
 repositories: []
 
-# Environment configuration (inherits WORKDIR from system, adds base-specific variables)
+# Environment configuration (inherits from system, sets explicit WORKDIR for base habitat)
 environment:
+  - WORKDIR=/workspace
   - GITHUB_APP_ID=1357221
 
 # No additional setup needed
