@@ -24,7 +24,7 @@ environment:
   - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
   - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - LOCAL_TOOLS_PATH=${LOCAL_PATH}/tools/bin
-  - PATH=${PATH}:${SYSTEM_TOOLS_PATH}:${SHARED_TOOLS_PATH}:${LOCAL_TOOLS_PATH}
+  - PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${SYSTEM_TOOLS_PATH}:${SHARED_TOOLS_PATH}:${LOCAL_TOOLS_PATH}
   - NODE_ENV=development
   - DOCKER_HOST=unix:///var/run/docker.sock
 
