@@ -5,6 +5,7 @@ Total sequences: 5
 ============================================================
 Sequence: q
 Description: Main menu > Quit
+Expected: Display main menu with options (s/1/2/3/t/h/a/m/c/o/i/q), then exit cleanly when q is pressed
 Status: completed
 Exit Code: 0
 ------------------------------------------------------------
@@ -14,10 +15,10 @@ Checking system status...
 
 Habitats:
 
-  [1] base [s]tart (most recent)
+  [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat
+  [2] claude-habitat [s]tart (most recent)
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -37,8 +38,9 @@ Enter your choice: q
 Goodbye!
 
 ============================================================
-Sequence: tq
-Description: Main menu > Test menu > Quit
+Sequence: h
+Description: Main menu > Help
+Expected: Display main menu, then show comprehensive help text with usage instructions and examples
 Status: completed
 Exit Code: 0
 ------------------------------------------------------------
@@ -48,10 +50,46 @@ Checking system status...
 
 Habitats:
 
-  [1] base [s]tart (most recent)
+  [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat
+  [2] claude-habitat [s]tart (most recent)
+      Development environment for Claude Habitat itself
+
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]dd     - Create new configuration with AI assistance
+  [t]est    - Run tests (system, shared, or habitat)
+  t[o]ols   - Manage development tools
+  [m]aintain - Update/troubleshoot Claude Habitat itself
+  [c]lean   - Remove all Docker images
+  [h]elp    - Show usage information
+  [q]uit    - Exit
+
+Enter your choice: h
+
+[Sequence ended, scene still active]
+
+============================================================
+Sequence: tq
+Description: Main menu > Test menu > Quit
+Expected: Display main menu, then test menu with habitat list and options (a/s/h/q), then return to main menu on q
+Status: completed
+Exit Code: 0
+------------------------------------------------------------
+Checking system status...
+
+=== Claude Habitat ===
+
+Habitats:
+
+  [1] base
+      Minimal base habitat for testing system and shared components
+
+  [2] claude-habitat [s]tart (most recent)
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -87,28 +125,190 @@ Actions:
   [a]ll     - Run all tests for all habitats
   [q]uit    - Back to main menu
 
+💡 Tip: Use capital letters (!@#$%^&*()) to force rebuild for habitats 1-9
+
 Enter your choice: q
+
+[Sequence ended, scene still active]
+
+============================================================
+Sequence: t1s
+Description: Test > Base > System tests
+Expected: Navigate to test menu, select base habitat (1), then run system infrastructure tests
+Status: completed
+Exit Code: 0
+------------------------------------------------------------
+Checking system status...
+
+=== Claude Habitat ===
+
+Habitats:
+
+  [1] base
+      Minimal base habitat for testing system and shared components
+
+  [2] claude-habitat [s]tart (most recent)
+      Development environment for Claude Habitat itself
+
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]dd     - Create new configuration with AI assistance
+  [t]est    - Run tests (system, shared, or habitat)
+  t[o]ols   - Manage development tools
+  [m]aintain - Update/troubleshoot Claude Habitat itself
+  [c]lean   - Remove all Docker images
+  [h]elp    - Show usage information
+  [q]uit    - Exit
+
+Enter your choice: t
+
+=== Test Menu ===
+
+Select a habitat to test:
+
+  [1] base
+      Minimal base habitat for testing system and shared components
+
+  [2] claude-habitat
+      Development environment for Claude Habitat itself
+
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]ll     - Run all tests for all habitats
+  [q]uit    - Back to main menu
+
+💡 Tip: Use capital letters (!@#$%^&*()) to force rebuild for habitats 1-9
+
+Enter your choice: 1
+
+=== Testing base ===
+
+Select test type:
+
+  [s]ystem   - System infrastructure tests
+  s[h]ared   - Shared configuration tests
+  [h]abitat  - Habitat-specific tests
+  [f]ilesystem - Filesystem verification
+  [a]ll      - Run all test types
+  [q]uit     - Back to test menu
+
+Enter your choice: s
+
+Running system tests for base...
+
+
+✅ system tests completed successfully
+
+Press Enter to return to main menu...
+q
+
+[Sequence ended, scene still active]
+
+============================================================
+Sequence: xyz
+Description: Invalid input handling
+Expected: Display main menu, show error for invalid input, then return to main menu for retry
+Status: completed
+Exit Code: 0
+------------------------------------------------------------
+Checking system status...
+
+=== Claude Habitat ===
+
+Habitats:
+
+  [1] base
+      Minimal base habitat for testing system and shared components
+
+  [2] claude-habitat [s]tart (most recent)
+      Development environment for Claude Habitat itself
+
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]dd     - Create new configuration with AI assistance
+  [t]est    - Run tests (system, shared, or habitat)
+  t[o]ols   - Manage development tools
+  [m]aintain - Update/troubleshoot Claude Habitat itself
+  [c]lean   - Remove all Docker images
+  [h]elp    - Show usage information
+  [q]uit    - Exit
+
+Enter your choice: x
+
+❌ Invalid choice
+Use number keys 1-9, tilde sequences (~1, ~~2), or letter commands
+Returning to main menu...
 
 Checking system status...
 
 === Claude Habitat ===
 
-[... menu repeats ...]
+Habitats:
 
-============================================================
-Sequence: t2f
-Description: Test > Claude-habitat > Filesystem verification
-Status: completed
-Exit Code: 0
-------------------------------------------------------------
-[Shows complete navigation through test menu to filesystem verification]
+  [1] base
+      Minimal base habitat for testing system and shared components
 
-============================================================
-Sequence: xyz
-Description: Invalid input handling
-Status: completed
-Exit Code: 0
-------------------------------------------------------------
-[Shows error handling for invalid input]
+  [2] claude-habitat [s]tart (most recent)
+      Development environment for Claude Habitat itself
 
-============================================================
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]dd     - Create new configuration with AI assistance
+  [t]est    - Run tests (system, shared, or habitat)
+  t[o]ols   - Manage development tools
+  [m]aintain - Update/troubleshoot Claude Habitat itself
+  [c]lean   - Remove all Docker images
+  [h]elp    - Show usage information
+  [q]uit    - Exit
+
+Enter your choice: y
+
+❌ Invalid choice
+Use number keys 1-9, tilde sequences (~1, ~~2), or letter commands
+Returning to main menu...
+
+Checking system status...
+
+=== Claude Habitat ===
+
+Habitats:
+
+  [1] base
+      Minimal base habitat for testing system and shared components
+
+  [2] claude-habitat [s]tart (most recent)
+      Development environment for Claude Habitat itself
+
+  [3] discourse
+      Discourse plugin development environment
+
+Actions:
+
+  [a]dd     - Create new configuration with AI assistance
+  [t]est    - Run tests (system, shared, or habitat)
+  t[o]ols   - Manage development tools
+  [m]aintain - Update/troubleshoot Claude Habitat itself
+  [c]lean   - Remove all Docker images
+  [h]elp    - Show usage information
+  [q]uit    - Exit
+
+Enter your choice: z
+
+❌ Invalid choice
+Use number keys 1-9, tilde sequences (~1, ~~2), or letter commands
+Returning to main menu...
+
+
+[Sequence ended, scene still active]
