@@ -41,6 +41,13 @@ files:
     mode: 600
     owner: "{container.user}"
     description: "Claude credentials for authentication"
+  # Copy GitHub App private key for authentication (if it exists)
+  - src: ~/.claude/github-app-key.pem
+    dest: ${SHARED_PATH}/github-app-key.pem
+    mode: 600
+    owner: "{container.user}"
+    description: "GitHub App private key for repository access"
+    optional: true
 
 volumes:
   # Mount Docker socket for container management
@@ -83,7 +90,15 @@ setup:
         # Install system tools as node user
         echo "Installing system tools..."
         cd /workspace/system/tools
-        ./install-tools.sh install || echo "Some tools failed to install"
+        # Install tools one by one to see which ones fail
+        ./install-tools.sh install rg || echo "rg installation failed"
+        ./install-tools.sh install fd || echo "fd installation failed"  
+        ./install-tools.sh install jq || echo "jq installation failed"
+        ./install-tools.sh install yq || echo "yq installation failed"
+        ./install-tools.sh install bat || echo "bat installation failed"
+        # List installed tools
+        echo "Installed tools:"
+        ls -la /workspace/system/tools/bin/ || echo "No tools installed yet"
         
         # Ensure shared directory structure exists
         echo "Setting up shared directory..."
@@ -167,6 +182,8 @@ verify-fs:
     - "/usr/bin/tree"
     # Shared directory structure
     - "${WORKDIR}/shared/gitconfig"
+    # GitHub App private key (optional - may not exist)
+    - "${WORKDIR}/shared/github-app-key.pem"
     # User git configuration
     - ~/.gitconfig
     # Claude workspace directory (created by files section)
