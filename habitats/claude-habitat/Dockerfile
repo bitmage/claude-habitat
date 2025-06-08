@@ -21,7 +21,10 @@ RUN groupadd -f docker && usermod -aG docker node
 
 # Create workspace directory structure with proper permissions
 RUN mkdir -p /workspace && \
-    chown -R node:node /workspace
+    chown -R node:node /workspace && \
+    mkdir -p /home/node/.claude && \
+    chown -R node:node /home/node/.claude && \
+    chmod 755 /home/node/.claude
 
 # Create a simple init script that keeps container running
 RUN echo '#!/bin/bash\nwhile true; do sleep 3600; done' > /sbin/init && chmod +x /sbin/init
