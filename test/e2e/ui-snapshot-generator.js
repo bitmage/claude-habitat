@@ -21,6 +21,26 @@ async function generateSnapshots() {
     const snapshotPath = path.join(__dirname, '..', 'ui-snapshots.txt');
     await fs.writeFile(snapshotPath, snapshotText);
     
+    // Also update sample snapshots with a subset of key sequences
+    const sampleSequences = ['q', 'h', 'tq', 't1s', 'xyz'];
+    const sampleResults = results.filter(r => sampleSequences.includes(r.sequence));
+    if (sampleResults.length > 0) {
+      let sampleSnapshotText = formatSnapshots(sampleResults);
+      // Update header for sample file
+      sampleSnapshotText = sampleSnapshotText.replace(
+        /Generated: .*/,
+        'Generated: Manual test run'
+      );
+      sampleSnapshotText = sampleSnapshotText.replace(
+        /Total sequences: .*/,
+        'Total sequences: ' + sampleResults.length
+      );
+      
+      const samplePath = path.join(__dirname, '..', 'ui-sample-snapshots.txt');
+      await fs.writeFile(samplePath, sampleSnapshotText);
+      console.log(`✅ Sample snapshots updated: ${samplePath}`);
+    }
+    
     console.log(`\n✅ Snapshots generated: ${snapshotPath}`);
     console.log(`Total sequences: ${results.length}`);
     

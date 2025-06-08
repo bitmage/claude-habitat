@@ -3,7 +3,7 @@ description: Minimal base habitat for testing system and shared components
 
 # Docker image configuration
 image:
-  dockerfile: Dockerfile
+  dockerfile: habitats/base/Dockerfile
   tag: claude-habitat-base:latest
 
 # No repositories needed for base habitat
