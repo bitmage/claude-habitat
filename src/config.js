@@ -1,7 +1,8 @@
 const yaml = require('js-yaml');
 const fs = require('fs').promises;
 const { fileExists } = require('./utils');
-const { validateHabitatConfig, getConfigValidationHelp } = require('./config-validation');
+const { pipe, transform } = require('./functional');
+const { validateConfig } = require('./validation');
 
 /**
  * Process environment variables from config and expand variable references
@@ -110,19 +111,84 @@ async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true
   
   // Only validate as habitat config if requested (not for system/shared configs)
   if (validateAsHabitat) {
-    try {
-      validateHabitatConfig(config);
-    } catch (error) {
-      const helpfulError = new Error(getConfigValidationHelp(error));
-      helpfulError.configPath = configPath;
-      helpfulError.originalError = error;
-      throw helpfulError;
+    const validationResult = validateConfig(config, 'habitat');
+    
+    if (!validationResult.valid) {
+      const error = new Error(`Configuration validation failed for ${configPath}:\n${validationResult.formattedErrors}`);
+      error.configPath = configPath;
+      error.validationErrors = validationResult.errors;
+      error.suggestions = validationResult.suggestions;
+      throw error;
     }
+    
+    // Use the validated config (may have defaults applied)
+    config = validationResult.data;
   }
   
   return { ...config, _configPath: configPath, _environment: env };
 }
 
+/**
+ * Functional composition for config loading chain
+ * Load configs in sequence: system → shared → habitat
+ */
+const loadConfigChain = pipe(
+  // Transform single habitat path into config loading plan
+  async (habitatConfigPath) => {
+    const { rel } = require('./utils');
+    
+    return [
+      { path: rel('system', 'config.yaml'), type: 'system', optional: true },
+      { path: rel('shared', 'config.yaml'), type: 'shared', optional: true },
+      { path: habitatConfigPath, type: 'habitat', optional: false }
+    ];
+  },
+  
+  // Load configs in sequence, accumulating environment
+  async (configPlan) => {
+    const configs = [];
+    let accumulatedEnv = {};
+    
+    for (const { path, type, optional } of configPlan) {
+      if (optional && !await fileExists(path)) {
+        continue;
+      }
+      
+      const validateAsHabitat = (type === 'habitat');
+      const config = await loadConfig(path, accumulatedEnv, validateAsHabitat);
+      
+      configs.push({ ...config, _type: type });
+      accumulatedEnv = { ...accumulatedEnv, ...config._environment };
+    }
+    
+    return configs;
+  },
+  
+  // Return the final habitat config
+  async (configs) => {
+    const habitatConfig = configs.find(c => c._type === 'habitat');
+    if (!habitatConfig) {
+      throw new Error('No habitat configuration loaded');
+    }
+    return habitatConfig;
+  }
+);
+
+/**
+ * Load config with environment variable chain: system → shared → habitat
+ * This is the main entry point for loading habitat configurations
+ * 
+ * @param {string} habitatConfigPath - Path to habitat config file
+ * @returns {Object} - Loaded and validated habitat configuration
+ */
+async function loadConfigWithEnvironmentChain(habitatConfigPath) {
+  return loadConfigChain(habitatConfigPath);
+}
+
 module.exports = {
-  loadConfig
+  loadConfig,
+  loadConfigWithEnvironmentChain,
+  processEnvironmentVariables,
+  expandEnvironmentVariables,
+  expandConfigVariables
 };
