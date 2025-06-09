@@ -10,8 +10,15 @@ node_modules/
 temp-*.yaml
 .maintenance-session.md
 
-# Tools (downloaded on demand, not committed)
-system/tools/bin/
+# Downloaded binary tools (not committed)
+system/tools/bin/rg
+system/tools/bin/fd
+system/tools/bin/jq
+system/tools/bin/yq
+system/tools/bin/bat
+system/tools/bin/gh
+system/tools/bin/delta
+system/tools/bin/fzf
 system/tools/.tmp/
 .last-used-config
 

@@ -1,0 +1,30 @@
+#!/bin/bash
+# Install gitconfig from shared directory with proper user context
+# This script provides centralized git configuration installation for all habitats
+
+set -e
+
+# Check if SHARED_PATH is set
+if [ -z "${SHARED_PATH}" ]; then
+    echo "Error: SHARED_PATH environment variable is not set"
+    exit 1
+fi
+
+GITCONFIG_SOURCE="${SHARED_PATH}/gitconfig"
+
+if [ -f "${GITCONFIG_SOURCE}" ]; then
+    # Install to user's home directory
+    cp "${GITCONFIG_SOURCE}" ~/.gitconfig
+    chmod 644 ~/.gitconfig
+    echo "✅ Git configuration applied for user: $(whoami)"
+    echo "   Source: ${GITCONFIG_SOURCE}"
+    echo "   Target: ~/.gitconfig"
+    
+    # Show what was configured
+    echo "   User: $(git config --global user.name 2>/dev/null || echo 'Not set')"
+    echo "   Email: $(git config --global user.email 2>/dev/null || echo 'Not set')"
+else
+    echo "⚠️  Warning: No gitconfig found at ${GITCONFIG_SOURCE}"
+    echo "   Create shared/gitconfig to enable git configuration"
+    exit 1
+fi
