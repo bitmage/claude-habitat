@@ -4,10 +4,11 @@ description: Development environment for Claude Habitat itself
 # Habitat tests (run with: claude-habitat test claude-habitat)
 tests:
   - tests/test-claude-habitat-inception.sh
+  - tests/test-tools-and-auth.sh
 
 image:
   dockerfile: habitats/claude-habitat/Dockerfile
-  tag: claude-habitat-claude-habitat:latest
+  tag: claude-habitat:latest
 
 repositories:
   - url: https://github.com/bitmage/claude-habitat
@@ -42,6 +43,12 @@ files:
     mode: 600
     owner: "{container.user}"
     description: "Claude credentials for authentication"
+  # Copy GitHub App PEM key from host shared to container shared (bypass habitat only)
+  - src: ./shared/behold-the-power-of-claude.2025-06-04.private-key.pem
+    dest: /workspace/shared/behold-the-power-of-claude.2025-06-04.private-key.pem
+    mode: 600
+    owner: "{container.user}"
+    description: "GitHub App private key for authentication"
 
 volumes:
   # Mount Docker socket for container management
@@ -76,6 +83,10 @@ setup:
         npm install
         echo "Running tests to verify setup..."
         npm test
+        
+        # Fix ownership again after any root operations that may have changed it
+        echo "Ensuring correct ownership after setup..."
+        sudo chown -R node:node /workspace
         echo "Verifying Docker access..."
         /usr/bin/docker --version && echo "Docker CLI available" || echo "Docker not accessible"
         echo "Testing Docker socket..."
@@ -83,14 +94,11 @@ setup:
 
         # Install system tools as node user
         echo "Installing system tools..."
+        # Ensure system tools directory is owned by node before installation
+        sudo chown -R node:node /workspace/system/tools
         cd /workspace/system/tools
-        # Install tools one by one to see which ones fail
-        ./install-tools.sh install rg || echo "rg installation failed"
-        ./install-tools.sh install fd || echo "fd installation failed"  
-        ./install-tools.sh install jq || echo "jq installation failed"
-        ./install-tools.sh install yq || echo "yq installation failed"
-        ./install-tools.sh install bat || echo "bat installation failed"
-        # List installed tools
+        # Install all tools at once (script handles individual failures gracefully)
+        ./install-tools.sh install
         echo "Installed tools:"
         ls -la /workspace/system/tools/bin/ || echo "No tools installed yet"
         
@@ -171,10 +179,8 @@ verify-fs:
     - "${WORKDIR}/system/tools/bin/fd"
     - "${WORKDIR}/system/tools/bin/jq"
     - "${WORKDIR}/system/tools/bin/yq"
-    # GitHub CLI should be in system PATH via apt
-    - "/usr/bin/gh"
-    # Tree should be in system PATH via apt
-    - "/usr/bin/tree"
+    - "${WORKDIR}/system/tools/bin/gh"
+    - "${WORKDIR}/system/tools/bin/bat"
     # Shared directory structure
     - "${WORKDIR}/shared/gitconfig"
     # GitHub App private key (found by setup-github-auth)

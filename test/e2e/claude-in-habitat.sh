@@ -11,4 +11,4 @@ prompt="Print 'hi' when you first arrive.  Then take a look at your environment.
 # ./claude-habitat start claude-habitat --cmd "docker exec -i \$(docker ps --filter name=claude-habitat --format '{{.Names}}' | head -1) /bin/bash -c 'cd /workspace && claude --dangerously-skip-permissions -p \"$prompt\"'"
 
 # Method 3: Using script command for TTY emulation (uncomment to try)  
-script -qec "./claude-habitat start claude-habitat --rebuild --cmd \"claude --dangerously-skip-permissions -p '$prompt'\"" /dev/null
+script -qec "./claude-habitat start claude-habitat --cmd \"claude --dangerously-skip-permissions -p '$prompt'\"" /dev/null
