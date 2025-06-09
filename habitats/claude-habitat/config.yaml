@@ -27,6 +27,7 @@ environment:
   - PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${SYSTEM_TOOLS_PATH}:${SHARED_TOOLS_PATH}:${LOCAL_TOOLS_PATH}
   - NODE_ENV=development
   - DOCKER_HOST=unix:///var/run/docker.sock
+  - GITHUB_APP_ID=1357221
 
 # Directory and file setup
 files:
@@ -41,13 +42,6 @@ files:
     mode: 600
     owner: "{container.user}"
     description: "Claude credentials for authentication"
-  # Copy GitHub App private key for authentication (if it exists)
-  - src: ~/.claude/github-app-key.pem
-    dest: ${SHARED_PATH}/github-app-key.pem
-    mode: 600
-    owner: "{container.user}"
-    description: "GitHub App private key for repository access"
-    optional: true
 
 volumes:
   # Mount Docker socket for container management
@@ -135,11 +129,12 @@ setup:
           echo "Git configuration applied"
         fi
         
-        # Set up GitHub CLI authentication if credentials exist
-        if [ -f ~/.claude/.credentials.json ] && command -v gh &> /dev/null; then
-          echo "Setting up GitHub CLI authentication..."
-          # Extract token from credentials.json if needed
-          # For now, we'll skip this as it requires parsing JSON
+        # Set up GitHub authentication using the setup-github-auth tool
+        echo "Setting up GitHub authentication..."
+        if /workspace/system/tools/bin/setup-github-auth; then
+          echo "✅ GitHub authentication configured successfully"
+        else
+          echo "⚠️  GitHub authentication setup failed - continuing without GitHub access"
         fi
 
         echo "Claude Habitat setup complete"
@@ -182,8 +177,8 @@ verify-fs:
     - "/usr/bin/tree"
     # Shared directory structure
     - "${WORKDIR}/shared/gitconfig"
-    # GitHub App private key (optional - may not exist)
-    - "${WORKDIR}/shared/github-app-key.pem"
+    # GitHub App private key (found by setup-github-auth)
+    - "${WORKDIR}/shared/behold-the-power-of-claude.2025-06-04.private-key.pem"
     # User git configuration
     - ~/.gitconfig
     # Claude workspace directory (created by files section)
