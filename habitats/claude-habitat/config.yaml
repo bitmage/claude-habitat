@@ -3,7 +3,7 @@ description: Development environment for Claude Habitat itself
 
 # Habitat tests (run with: claude-habitat test claude-habitat)
 tests:
-  # - tests/test-claude-habitat-inception.sh  # Disabled - takes too long for quick testing
+  - tests/test-claude-habitat-inception.sh  # Disabled - takes too long for quick testing
   - tests/test-tools-and-auth.sh
 
 image:
@@ -76,6 +76,20 @@ setup:
     - |
       # Fix Docker socket permissions for development
       chmod 666 /var/run/docker.sock || true
+      
+      # Fix Docker group ID mismatch - make container's docker group match host's
+      HOST_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
+      CONTAINER_DOCKER_GID=$(getent group docker | cut -d: -f3)
+      echo "Docker GID check: host=$HOST_DOCKER_GID, container=$CONTAINER_DOCKER_GID"
+      if [ "$HOST_DOCKER_GID" != "$CONTAINER_DOCKER_GID" ]; then
+        echo "Fixing docker group ID mismatch: container=$CONTAINER_DOCKER_GID -> host=$HOST_DOCKER_GID"
+        groupmod -g $HOST_DOCKER_GID docker
+        # Re-add node user to docker group with new GID
+        usermod -aG docker node
+        echo "Docker group fixed, new GID: $(getent group docker | cut -d: -f3)"
+      else
+        echo "Docker group IDs already match: $HOST_DOCKER_GID"
+      fi
 
       # Ensure .claude directory exists and has proper ownership for node user
       # Create this BEFORE any volumes are mounted to avoid ownership conflicts

@@ -1,13 +1,23 @@
 FROM node:20-bookworm
 
-# Install essential system dependencies (development tools via habitat tools)
+# Install essential system dependencies including Docker
 RUN apt-get update && apt-get install -y \
     vim \
     curl \
     git \
     sudo \
     wget \
+    ca-certificates \
+    gnupg \
+    lsb-release \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CE
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && \
+    rm -rf /var/lib/apt/lists/*
 
 
 # Install Claude Code globally
@@ -16,8 +26,8 @@ RUN npm install -g @anthropic-ai/claude-code
 # Use existing node user (UID 1000) and give it sudo access
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Create docker group for when Docker is installed via habitat tools
-RUN groupadd -f docker && usermod -aG docker node
+# Create docker group with matching host GID for Docker socket access
+RUN groupadd -f -g 966 docker && usermod -aG docker node
 
 # Create workspace directory structure with proper permissions
 RUN mkdir -p /workspace && \

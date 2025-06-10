@@ -1,49 +1,28 @@
 #!/bin/bash
-# Inception test for claude-habitat: Test claude-habitat from within claude-habitat
+# Inception test: Run claude-habitat from within claude-habitat
 
-set -e
+# Source TAP helpers for proper test reporting
+source /workspace/system/tools/tap-helpers.sh
 
-echo "=== Claude Habitat Inception Test ==="
-echo "Testing claude-habitat functionality from within claude-habitat container"
+# Start TAP session
+tap_start 1
 
-# Verify we're in the right environment
-WORKDIR=${WORKDIR:-/workspace}
-if [ ! -f "$WORKDIR/claude-habitat" ]; then
-    echo "❌ ERROR: Not in claude-habitat environment - missing $WORKDIR/claude-habitat"
-    exit 1
-fi
+cd /workspace
 
-if ! command -v docker >/dev/null 2>&1; then
-    echo "❌ ERROR: Docker not available"
-    exit 1
-fi
+# Capture output from inner claude-habitat command 
+tap_diag "Running self-hosted claude-habitat base system tests..."
 
-# Check Docker socket accessibility
-if ! docker ps >/dev/null 2>&1; then
-    echo "❌ ERROR: Docker socket not accessible - checking permissions"
-    ls -la /var/run/docker.sock || echo "Docker socket not found"
-    echo "Container may need Docker socket mount and proper permissions"
-    exit 1
-fi
+# Run the command and capture both output and exit code
+set +e  # Don't exit on command failure
+output=$(./claude-habitat test base --system 2>&1)
+exit_code=$?
+set -e  # Re-enable exit on error
 
-echo "✅ Environment check passed"
+# Show the output for debugging
+echo "$output"
 
-# Test that claude-habitat can run from within the container
-echo ""
-echo "Testing claude-habitat inception: running base --system tests from within claude-habitat"
-
-cd "$WORKDIR"
-
-# Run the inception test: claude-habitat test base --system
-echo "Running: ./claude-habitat test base --system"
-./claude-habitat test base --system
-
-if [ $? -eq 0 ]; then
-    echo "✅ Inception test passed: Successfully ran base --system tests from within claude-habitat"
+if [ $exit_code -eq 0 ]; then
+    tap_ok "Self-hosted claude-habitat can run base system tests"
 else
-    echo "❌ Inception test failed: Could not run base --system tests"
-    exit 1
+    tap_not_ok "Self-hosted claude-habitat failed to run base system tests" "Inner command failed with exit code $exit_code"
 fi
-
-echo ""
-echo "=== Inception Test Complete ==="
