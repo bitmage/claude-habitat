@@ -82,7 +82,7 @@ class HabitatPathHelpers {
       const match = envStr.match(/^([A-Z_]+)=(.*)$/);
       if (match) {
         const [, key, value] = match;
-        this.environment[key] = this._resolveVariableReferences(value);
+        this.environment[key] = this._resolveVariableReferences(value, key);
       }
     }
   }
@@ -90,12 +90,18 @@ class HabitatPathHelpers {
   /**
    * Resolve variable references in a value (e.g., ${WORKDIR}/habitat)
    * @param {string} value - Value that may contain ${VAR} references
+   * @param {string} currentKey - The key being resolved (to detect self-references)
    * @returns {string} Resolved value
    */
-  _resolveVariableReferences(value) {
+  _resolveVariableReferences(value, currentKey = null) {
     if (typeof value !== 'string') return value;
     
     return value.replace(/\$\{([A-Z_]+)\}/g, (match, varName) => {
+      // Handle self-references - return empty string to avoid circular resolution
+      if (currentKey && varName === currentKey) {
+        return '';
+      }
+      
       if (this.environment[varName]) {
         return this.environment[varName];
       }
