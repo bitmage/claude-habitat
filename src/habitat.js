@@ -8,7 +8,6 @@ const { colors, calculateCacheHash, fileExists, sleep, rel } = require('./utils'
 const { loadConfig } = require('./config');
 const { buildBaseImage, buildPreparedImage, dockerImageExists, dockerRun, dockerExec, dockerIsRunning } = require('./docker');
 const { testRepositoryAccess } = require('./github');
-const { verifyFilesystem } = require('./filesystem');
 
 // Start a new session with the specified habitat
 async function startSession(configPath, extraRepos = [], overrideCommand = null, options = {}) {
@@ -293,19 +292,6 @@ async function runContainer(tag, config, envVars, overrideCommand = null, ttyOve
       throw new Error(`Work directory ${workDir} not found in prepared image`);
     }
 
-    // Run filesystem verification if configured
-    const verifyResult = await verifyFilesystem(config, containerName);
-    if (!verifyResult.passed) {
-      console.warn(colors.yellow(`⚠️  Filesystem verification: ${verifyResult.message}`));
-      if (verifyResult.missingFiles) {
-        console.warn(colors.yellow(`Missing files:`));
-        verifyResult.missingFiles.forEach(file => {
-          console.warn(colors.yellow(`  - ${file}`));
-        });
-      }
-    } else {
-      console.log(colors.green(`✅ ${verifyResult.message}`));
-    }
 
     console.log('');
     console.log(colors.green('Container ready!'));

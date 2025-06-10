@@ -171,101 +171,7 @@ async function copyFileToContainer(container, srcPath, destPath, containerUser =
 }
 
 // Filesystem verification
-async function verifyFilesystem(config, containerName) {
-  if (!config['verify-fs'] || !config['verify-fs'].required_files) {
-    return { passed: true, message: 'No filesystem verification configured' };
-  }
 
-  const requiredFiles = config['verify-fs'].required_files;
-  const missingFiles = [];
-  
-  console.log('Verifying filesystem structure...');
-  
-  for (const file of requiredFiles) {
-    try {
-      await dockerExec(containerName, `test -e "${file}"`, 'node');
-    } catch (err) {
-      missingFiles.push(file);
-    }
-  }
-  
-  if (missingFiles.length > 0) {
-    return {
-      passed: false,
-      message: `Missing files: ${missingFiles.join(', ')}`,
-      missingFiles
-    };
-  }
-  
-  return { 
-    passed: true, 
-    message: `All ${requiredFiles.length} required files verified` 
-  };
-}
-
-// Run filesystem verification as a standalone test
-async function runFilesystemVerification(config) {
-  console.log(colors.green('=== Filesystem Verification ===\n'));
-  
-  if (!config['verify-fs'] || !config['verify-fs'].required_files) {
-    console.log(colors.yellow('No filesystem verification configured for this habitat'));
-    return;
-  }
-  
-  // Check if a container is already running for this habitat
-  const containerName = `${config.name}_fs_verify_${Date.now()}`;
-  
-  try {
-    // Build/get the prepared image
-    const tag = `claude-habitat-${config.name}:latest`;
-    const cacheHash = calculateCacheHash(config, []);
-    const preparedTag = `claude-habitat-${config.name}:${cacheHash}`;
-    
-    // Try to use existing prepared image, or build if needed
-    const imagesResult = await executeCommand(`docker images -q ${preparedTag}`);
-    if (!imagesResult.output.trim()) {
-      console.log('No prepared image found, building...');
-      const { buildPreparedImage } = require('../claude-habitat');
-      await buildPreparedImage(config, preparedTag, []);
-    }
-    
-    // Start a temporary container for verification
-    const runArgs = [
-      'run', '-d',
-      '--name', containerName,
-      preparedTag,
-      config.container?.init_command || '/sbin/init'
-    ];
-    
-    await dockerRun(runArgs);
-    
-    // Wait a moment for container to start
-    await sleep(2000);
-    
-    // Run verification
-    const verifyResult = await verifyFilesystem(config, containerName);
-    
-    if (verifyResult.passed) {
-      console.log(colors.green(`✅ ${verifyResult.message}`));
-    } else {
-      console.log(colors.red(`❌ ${verifyResult.message}`));
-      if (verifyResult.missingFiles) {
-        console.log(colors.red('Missing files:'));
-        verifyResult.missingFiles.forEach(file => {
-          console.log(colors.red(`  - ${file}`));
-        });
-      }
-    }
-    
-  } catch (err) {
-    console.error(colors.red(`Error during filesystem verification: ${err.message}`));
-    throw err;
-  } finally {
-    // Cleanup
-    await manageContainer('stop', containerName, { ignoreErrors: true });
-    await manageContainer('remove', containerName, { ignoreErrors: true });
-  }
-}
 
 // Run verify-fs bash script with scope support
 async function runVerifyFsScript(containerName, scope = 'all', config = null) {
@@ -420,8 +326,6 @@ module.exports = {
   copyFilesDirectory,
   processFileOperations,
   copyFileToContainer,
-  verifyFilesystem,
-  runFilesystemVerification,
   runVerifyFsScript,
   runEnhancedFilesystemVerification
 };

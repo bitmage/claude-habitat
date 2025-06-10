@@ -247,8 +247,11 @@ async function showHabitatTestMenu(habitatName) {
     const habitatConfig = await loadConfig(habitatConfigPath);
 
     console.log(`Running filesystem verification for ${habitatName}...\n`);
-    const { runFilesystemVerification } = require('./filesystem');
-    await runFilesystemVerification(habitatConfig);
+    const { runEnhancedFilesystemVerification } = require('./filesystem');
+    const { calculateCacheHash } = require('./utils');
+    const hash = calculateCacheHash(habitatConfig, []);
+    const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
+    await runEnhancedFilesystemVerification(preparedTag, 'all', habitatConfig);
     testResults = [{ type: 'info', message: 'Filesystem verification completed' }];
   } else {
     console.error(colors.red('\n❌ Invalid choice'));
