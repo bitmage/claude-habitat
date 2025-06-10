@@ -5,7 +5,7 @@ description: Core infrastructure setup for all claude-habitat containers
 # Default environment variables (can be overridden by shared/habitat configs)
 env:
   - WORKDIR=/workspace
-  - HABITAT_PATH=${WORKDIR}/claude-habitat
+  - HABITAT_PATH=${WORKDIR}/habitat
   - SYSTEM_PATH=${HABITAT_PATH}/system
   - SHARED_PATH=${HABITAT_PATH}/shared
   - LOCAL_PATH=${HABITAT_PATH}/local

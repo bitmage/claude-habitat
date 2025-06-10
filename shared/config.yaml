@@ -45,6 +45,6 @@ verify-fs:
     - /etc/gitconfig
     - /root/.gitconfig
     # Infrastructure files
-    - "{env.SHARED_PATH}/CLAUDE.md"
-    - "{env.SHARED_PATH}/config.yaml"
-    - "{env.SHARED_PATH}/gitconfig"
+    - "${SHARED_PATH}/CLAUDE.md"
+    - "${SHARED_PATH}/config.yaml"
+    - "${SHARED_PATH}/gitconfig"

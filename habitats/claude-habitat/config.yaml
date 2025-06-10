@@ -18,10 +18,10 @@ repositories:
 
 env:
   - WORKDIR=/workspace
-  - HABITAT_PATH=${WORKDIR}/claude-habitat
-  - SYSTEM_PATH=${HABITAT_PATH}/system
-  - SHARED_PATH=${HABITAT_PATH}/shared
-  - LOCAL_PATH=${HABITAT_PATH}/local
+  - HABITAT_PATH=${WORKDIR}
+  - SYSTEM_PATH=${WORKDIR}/system
+  - SHARED_PATH=${WORKDIR}/shared
+  - LOCAL_PATH=${WORKDIR}/habitats/claude-habitat
   - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
   - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - LOCAL_TOOLS_PATH=${LOCAL_PATH}/tools/bin
@@ -32,16 +32,6 @@ env:
 
 # Directory and file setup
 files:
-  # Copy entire system directory with pre-installed tools
-  - src: ./system
-    dest: /workspace/system
-    owner: "{container.user}"
-    description: "System infrastructure including pre-installed tools"
-  # Copy entire shared directory
-  - src: ./shared
-    dest: /workspace/shared
-    owner: "{container.user}"
-    description: "Shared configuration and keys"
   # Copy habitat-specific files
   - src: ./habitats/claude-habitat
     dest: /workspace/habitats/claude-habitat
@@ -62,6 +52,9 @@ files:
 volumes:
   # Mount Docker socket for container management
   - /var/run/docker.sock:/var/run/docker.sock
+  # Mount system and shared directories for live development
+  - ./system:/workspace/system:ro
+  - ./shared:/workspace/shared:ro
   # Optional: Mount local code for live development
   # - ./:/workspace/claude-habitat
 
@@ -149,22 +142,22 @@ verify-fs:
     - "${WORKDIR}/test/unit/claude-habitat.test.js"
     - "${WORKDIR}/node_modules/package.json"
     # System infrastructure
-    - "${WORKDIR}/system/CLAUDE.md"
-    - "${WORKDIR}/system/config.yaml"
-    - "${WORKDIR}/system/tools/install-tools.sh"
-    - "${WORKDIR}/system/tools/regenerate-github-token.sh"
-    - "${WORKDIR}/system/tools/tools.yaml"
+    - "${SYSTEM_PATH}/CLAUDE.md"
+    - "${SYSTEM_PATH}/config.yaml"
+    - "${SYSTEM_PATH}/tools/install-tools.sh"
+    - "${SYSTEM_PATH}/tools/regenerate-github-token.sh"
+    - "${SYSTEM_PATH}/tools/tools.yaml"
     # Installed system tools
-    - "${WORKDIR}/system/tools/bin/rg"
-    - "${WORKDIR}/system/tools/bin/fd"
-    - "${WORKDIR}/system/tools/bin/jq"
-    - "${WORKDIR}/system/tools/bin/yq"
-    - "${WORKDIR}/system/tools/bin/gh"
-    - "${WORKDIR}/system/tools/bin/bat"
+    - "${SYSTEM_PATH}/tools/bin/rg"
+    - "${SYSTEM_PATH}/tools/bin/fd"
+    - "${SYSTEM_PATH}/tools/bin/jq"
+    - "${SYSTEM_PATH}/tools/bin/yq"
+    - "${SYSTEM_PATH}/tools/bin/gh"
+    - "${SYSTEM_PATH}/tools/bin/bat"
     # Shared directory structure
-    - "${WORKDIR}/shared/gitconfig"
+    - "${SHARED_PATH}/gitconfig"
     # GitHub App private key (found by setup-github-auth)
-    - "${WORKDIR}/shared/behold-the-power-of-claude.2025-06-04.private-key.pem"
+    - "${SHARED_PATH}/behold-the-power-of-claude.2025-06-04.private-key.pem"
     # User git configuration
     - ~/.gitconfig
     # Claude workspace directory (created by files section)

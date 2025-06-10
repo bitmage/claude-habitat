@@ -119,28 +119,34 @@ function parseCliArguments(argv) {
             options.testType = 'all';
           } else {
             options.testTarget = target;
-            // Check for test type flag after habitat name
-            if (i + 1 < argv.length && argv[i + 1].startsWith('--')) {
-              const testTypeFlag = argv[++i];
-              if (testTypeFlag === '--system') {
+            // Process remaining arguments after habitat name
+            while (i + 1 < argv.length && argv[i + 1].startsWith('--')) {
+              const flag = argv[++i];
+              if (flag === '--system') {
                 options.testType = 'system';
-              } else if (testTypeFlag === '--shared') {
+              } else if (flag === '--shared') {
                 options.testType = 'shared';
-              } else if (testTypeFlag.startsWith('--verify-fs')) {
+              } else if (flag.startsWith('--verify-fs')) {
                 // Support --verify-fs=scope syntax
-                if (testTypeFlag.includes('=')) {
-                  const scope = testTypeFlag.split('=')[1];
+                if (flag.includes('=')) {
+                  const scope = flag.split('=')[1];
                   options.testType = `verify-fs:${scope}`;
                 } else {
                   options.testType = 'verify-fs';
                 }
-              } else if (testTypeFlag === '--habitat') {
+              } else if (flag === '--habitat') {
                 options.testType = 'habitat';
-              } else if (testTypeFlag === '--all') {
+              } else if (flag === '--all') {
                 options.testType = 'all';
+              } else if (flag === '--rebuild') {
+                options.rebuild = true;
+              } else {
+                throw new Error(`Unknown test option: ${flag}`);
               }
-            } else {
-              // Default to all tests for the habitat
+            }
+            
+            // Default to all tests if no specific type was set
+            if (!options.testType || options.testType === 'menu') {
               options.testType = 'all';
             }
           }
@@ -192,9 +198,9 @@ function validateCliOptions(options) {
     throw new Error('--repo requires a configuration or start command');
   }
 
-  // Rebuild only makes sense with config or start
-  if (options.rebuild && !options.configPath && !options.start) {
-    throw new Error('--rebuild requires a configuration or start command');
+  // Rebuild only makes sense with config, start, or test
+  if (options.rebuild && !options.configPath && !options.start && !options.test) {
+    throw new Error('--rebuild requires a configuration, start, or test command');
   }
 }
 

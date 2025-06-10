@@ -333,7 +333,7 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
       const systemPath = rel('system');
       if (await fileExists(systemPath)) {
         console.log('Copying system files to container...');
-        const containerSystemPath = workDirPath('claude-habitat', 'system');
+        const containerSystemPath = workDirPath('habitat', 'system');
         await dockerExec(tempContainer, `mkdir -p ${containerSystemPath}`, 'root');
         await copyDirectoryToContainer(tempContainer, systemPath, containerSystemPath);
       }
@@ -342,7 +342,7 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
       const sharedPath = rel('shared');
       if (await fileExists(sharedPath)) {
         console.log('Copying shared files to container...');
-        const containerSharedPath = workDirPath('claude-habitat', 'shared');
+        const containerSharedPath = workDirPath('habitat', 'shared');
         await dockerExec(tempContainer, `mkdir -p ${containerSharedPath}`, 'root');
         await copyDirectoryToContainer(tempContainer, sharedPath, containerSharedPath);
       }
@@ -351,7 +351,7 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
       const habitatPath = path.dirname(config._configPath);
       if (await fileExists(habitatPath)) {
         console.log('Copying habitat files to container...');
-        const containerLocalPath = workDirPath('claude-habitat', 'local');
+        const containerLocalPath = workDirPath('habitat', 'local');
         await dockerExec(tempContainer, `mkdir -p ${containerLocalPath}`, 'root');
         await copyDirectoryToContainer(tempContainer, habitatPath, containerLocalPath);
       }
