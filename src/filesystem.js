@@ -259,7 +259,7 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
       console.log('Running habitat file initialization...');
       try {
         // Simple initialization commands
-        const initCommands = 'if [ -f /workspace/shared/gitconfig ]; then sudo cp /workspace/shared/gitconfig /etc/gitconfig && sudo cp /workspace/shared/gitconfig /root/.gitconfig && cp /workspace/shared/gitconfig ~/.gitconfig; fi && if [ -f /home/node/.claude/.credentials.json ]; then sudo mkdir -p /root/.claude && sudo cp /home/node/.claude/.credentials.json /root/.claude/.credentials.json && sudo chmod 600 /root/.claude/.credentials.json; fi';
+        const initCommands = 'if [ -f /workspace/shared/gitconfig ]; then sudo cp /workspace/shared/gitconfig /etc/gitconfig && sudo cp /workspace/shared/gitconfig /root/.gitconfig && cp /workspace/shared/gitconfig /home/node/.gitconfig; fi && if [ -f /home/node/.claude/.credentials.json ]; then sudo mkdir -p /root/.claude && sudo cp /home/node/.claude/.credentials.json /root/.claude/.credentials.json && sudo chmod 600 /root/.claude/.credentials.json; fi';
         
         await dockerExec(container.name, initCommands, config.container?.user || 'node');
       } catch (err) {
