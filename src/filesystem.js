@@ -277,9 +277,6 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
     const workDir = config?.container?.work_dir || '/workspace';
     const containerUser = config?.container?.user || 'root';
     
-    // Set environment variables for the script
-    const envVars = [`WORKSPACE_ROOT=${workDir}`, 'TAP_MODE=true'];
-    
     console.log(`Running filesystem verification (scope: ${scope})...`);
     
     // Determine correct path based on bypass mode
@@ -287,7 +284,7 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
     const scriptPath = isBypassHabitat ? './system/tools/bin/verify-fs' : './habitat/system/tools/bin/verify-fs';
     
     // Run the verify-fs script inside the container
-    const command = `cd ${workDir} && WORKSPACE_ROOT=${workDir} TAP_MODE=true ${scriptPath} ${scope}`;
+    const command = `cd ${workDir} && ${scriptPath} ${scope}`;
     const result = await dockerExec(containerName, command, containerUser);
     
     // Parse TAP output
@@ -332,7 +329,7 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
 }
 
 // Enhanced verification that uses the bash script
-async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', config = null) {
+async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', config = null, rebuild = false) {
   const { dockerRun, dockerIsRunning, dockerImageExists } = require('./container-operations');
   const { colors, sleep } = require('./utils');
   const { promisify } = require('util');
@@ -344,20 +341,43 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
   console.log(`Starting filesystem verification container...`);
   
   try {
-    // Build image if it doesn't exist
-    if (!await dockerImageExists(preparedTag)) {
-      console.log(`Prepared image not found. Building habitat for verification...`);
+    // Build image if it doesn't exist or if rebuild is requested
+    if (!await dockerImageExists(preparedTag) || rebuild) {
+      if (rebuild) {
+        console.log(`Rebuilding habitat for verification...`);
+      } else {
+        console.log(`Prepared image not found. Building habitat for verification...`);
+      }
       const { prepareWorkspace } = require('./image-lifecycle');
-      await prepareWorkspace(config, preparedTag, []);
+      await prepareWorkspace(config, preparedTag, [], { rebuild });
     }
     
     // Start a temporary container for verification
     const runArgs = [
       'run', '-d',
-      '--name', containerName,
-      preparedTag,
-      config?.container?.init_command || '/sbin/init'
+      '--name', containerName
     ];
+    
+    // Add environment variables from config
+    if (config?.env && Array.isArray(config.env)) {
+      config.env.forEach(envVar => {
+        if (typeof envVar === 'string') {
+          runArgs.push('-e', envVar);
+        }
+      });
+    }
+    
+    // Add volume mounts from config if they exist
+    if (config?.volumes && Array.isArray(config.volumes)) {
+      config.volumes.forEach(volume => {
+        if (typeof volume === 'string') {
+          runArgs.push('-v', volume);
+        }
+      });
+    }
+    
+    runArgs.push(preparedTag);
+    runArgs.push(config?.container?.init_command || '/sbin/init');
     
     await dockerRun(runArgs);
     

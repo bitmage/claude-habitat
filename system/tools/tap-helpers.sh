@@ -26,7 +26,7 @@ tap_ok() {
 # Usage: tap_not_ok "test description" ["diagnostic message"]
 tap_not_ok() {
     echo "not ok $test_num - $1"
-    if [ -n "$2" ]; then
+    if [ -n "${2:-}" ]; then
         echo "# $2"
     fi
     ((test_num++))
