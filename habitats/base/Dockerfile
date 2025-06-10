@@ -4,11 +4,10 @@ FROM ubuntu:22.04
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Update and install basic dependencies
+# Install only essential system dependencies (development tools via habitat tools)
 RUN apt-get update && apt-get install -y \
     curl \
     git \
-    jq \
     openssl \
     sudo \
     && rm -rf /var/lib/apt/lists/*

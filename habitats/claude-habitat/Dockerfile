@@ -1,12 +1,11 @@
 FROM node:20-bookworm
 
-# Install development tools and Docker CLI
+# Install essential system dependencies (development tools via habitat tools)
 RUN apt-get update && apt-get install -y \
-    git \
     vim \
     curl \
+    git \
     sudo \
-    docker.io \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
@@ -17,7 +16,7 @@ RUN npm install -g @anthropic-ai/claude-code
 # Use existing node user (UID 1000) and give it sudo access
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Create docker group and add node user
+# Create docker group for when Docker is installed via habitat tools
 RUN groupadd -f docker && usermod -aG docker node
 
 # Create workspace directory structure with proper permissions

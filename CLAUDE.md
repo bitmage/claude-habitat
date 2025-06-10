@@ -159,8 +159,10 @@ Your tasks:
 
 2. **Create the Dockerfile** in `dockerfiles/[habitat-name]/`:
    - Choose appropriate base image
-   - Install system dependencies
-   - Set up required services
+   - Install minimal system dependencies via apt (git, essential libraries only)
+   - Most development tools provided via static binaries through habitat tools
+   - Exceptions: git and docker installed via container package management
+   - Set up required services (databases, caches, etc.)
    - Configure user permissions
    - Ensure services start properly
 
@@ -204,9 +206,18 @@ Your tasks:
    - Expected behavior
    - Common issues and solutions
 
-### 2. Maintenance Mode
+### 2. Maintenance Mode (Meta Claude)
 
 When launched in maintenance mode, you'll be in the claude-habitat directory itself.
+
+**Meta Claude Environment**: You are running on the host system in the project root directory:
+- **Project root**: `/home/bitmage/projects/tlsft/internal/county-fence/claude-habitat/`
+- **Source code**: `src/` - CLI parser, container operations, scenes
+- **Habitat configurations**: `habitats/` - Dockerfiles and config.yaml files
+- **System tools**: `system/tools/` - tool definitions and installation scripts
+- **Shared configs**: `shared/` - gitconfig, user preferences
+- **Documentation**: `docs/` and `claude/` - architecture and maintenance docs
+- **Tests**: `test/unit/` and `test/e2e/` - full test suite
 
 **IMPORTANT**: First action should be to read and present the maintenance menu from `claude/MAINTENANCE_MENU.md`.
 
@@ -283,19 +294,20 @@ In addition you may use the claude/scratch directory for any temporary files you
 
 When working in the claude-habitat environment, tools are available in these locations:
 
-### System Tools (installed via apt)
-- `/usr/bin/gh` - GitHub CLI 
-- `/usr/bin/tree` - Directory tree viewer
-- `/usr/bin/jq` - JSON processor (also available via install-tools.sh)
-- `/usr/bin/git` - Git version control
-- `/usr/bin/docker` - Docker CLI
+### System Tools (installed via apt only when necessary)
+- `/usr/bin/docker` - Docker CLI (only for claude-habitat self-hosting)
+- `/usr/bin/git` - Git version control (no reliable static binaries available)
 
-### Claude Habitat Tools (installed via install-tools.sh)
+### Habitat Tools (installed via system/tools/install-tools.sh)
 - `/workspace/system/tools/bin/rg` - ripgrep for fast searching
-- `/workspace/system/tools/bin/fd` - fd for file finding
+- `/workspace/system/tools/bin/fd` - fd for file finding  
 - `/workspace/system/tools/bin/jq` - JSON processor
 - `/workspace/system/tools/bin/yq` - YAML processor
+- `/workspace/system/tools/bin/gh` - GitHub CLI
+- `/workspace/system/tools/bin/eza` - Modern ls with tree functionality (replaces tree command)
 - `/workspace/system/tools/bin/bat` - Enhanced cat with syntax highlighting (optional)
+- `/workspace/system/tools/bin/delta` - Enhanced git diffs (optional)
+- `/workspace/system/tools/bin/fzf` - Fuzzy finder (optional)
 
 ### Configuration Files
 - `~/.gitconfig` - Git configuration (copied from /workspace/shared/gitconfig)
