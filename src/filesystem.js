@@ -236,62 +236,23 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
 
 // Enhanced verification that uses the bash script
 async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', config = null, rebuild = false) {
-  const { dockerRun, dockerIsRunning, dockerImageExists } = require('./container-operations');
-  const { colors, sleep } = require('./utils');
-  const { promisify } = require('util');
-  const { exec } = require('child_process');
-  const execAsync = promisify(exec);
-  
-  const containerName = `verify-fs-${Date.now()}`;
+  const { colors } = require('./utils');
+  const { createHabitatContainer } = require('./container-lifecycle');
   
   console.log(`Starting filesystem verification container...`);
   
+  let container = null;
   try {
-    // Build image if it doesn't exist or if rebuild is requested
-    if (!await dockerImageExists(preparedTag) || rebuild) {
-      if (rebuild) {
-        console.log(`Rebuilding habitat for verification...`);
-      } else {
-        console.log(`Prepared image not found. Building habitat for verification...`);
-      }
-      const { prepareWorkspace } = require('./image-lifecycle');
-      await prepareWorkspace(config, preparedTag, [], { rebuild });
-    }
-    
-    // Start a temporary container for verification
-    const runArgs = [
-      'run', '-d',
-      '--name', containerName
-    ];
-    
-    // Add environment variables from config
-    if (config?.env && Array.isArray(config.env)) {
-      config.env.forEach(envVar => {
-        if (typeof envVar === 'string') {
-          runArgs.push('-e', envVar);
-        }
-      });
-    }
-    
-    // Add volume mounts from config if they exist
-    if (config?.volumes && Array.isArray(config.volumes)) {
-      config.volumes.forEach(volume => {
-        if (typeof volume === 'string') {
-          runArgs.push('-v', volume);
-        }
-      });
-    }
-    
-    runArgs.push(preparedTag);
-    runArgs.push(config?.container?.init_command || '/sbin/init');
-    
-    await dockerRun(runArgs);
-    
-    // Wait a moment for container to start
-    await sleep(2000);
+    // Create container using shared logic
+    container = await createHabitatContainer(config, {
+      name: `verify-fs-${Date.now()}`,
+      temporary: true,
+      rebuild,
+      preparedTag
+    });
     
     // Run verification using bash script
-    const verifyResult = await runVerifyFsScript(containerName, scope, config);
+    const verifyResult = await runVerifyFsScript(container.name, scope, config);
     
     if (verifyResult.passed) {
       console.log(colors.green(`✅ ${verifyResult.message}`));
@@ -309,12 +270,9 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
     console.error(colors.red(`Error during filesystem verification: ${err.message}`));
     throw err;
   } finally {
-    // Cleanup
-    try {
-      await execAsync(`docker stop ${containerName}`);
-      await execAsync(`docker rm ${containerName}`);
-    } catch {
-      // Ignore cleanup errors
+    // Cleanup temporary container
+    if (container) {
+      await container.cleanup();
     }
   }
 }
