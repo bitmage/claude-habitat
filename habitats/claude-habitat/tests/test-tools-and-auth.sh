@@ -89,7 +89,7 @@ fi
 echo ""
 echo "Testing git credential helper..."
 
-if git config --global credential."https://github.com".helper | grep -q "system/tools/bin/git-credential-github-app"; then
+if git config --global credential."https://github.com".helper | grep -q "git-credential-github-app"; then
     echo "✅ Git credential helper configured"
 else
     echo "❌ Git credential helper not configured"

@@ -3,7 +3,8 @@ description: Development environment for Claude Habitat itself
 
 # Habitat tests (run with: claude-habitat test claude-habitat)
 tests:
-  # - tests/test-claude-habitat-inception.sh  # Disabled - takes too long for quick testing
+  # TODO: Re-enable inception test after fixing Docker-in-Docker support
+  # - tests/test-claude-habitat-inception.sh
   - tests/test-tools-and-auth.sh
 
 image:

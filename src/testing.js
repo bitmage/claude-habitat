@@ -405,7 +405,20 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       });
     }
 
-    // Build test command to run instead of normal init
+    // Use shared container logic like normal habitat start
+    const { createHabitatContainer } = require('./container-lifecycle');
+    const { dockerExec } = require('./container-operations');
+    
+    // Create container using shared logic
+    const container = await createHabitatContainer(habitatConfig, {
+      name: containerName,
+      temporary: true,
+      preparedTag: imageTag
+    });
+
+    console.log('Running tests in container...\n');
+
+    // Build test commands to run inside the already-configured container
     const testCommands = tests.map(testScript => {
       let testPath;
       if (testType === 'habitat') {
@@ -431,60 +444,33 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       `;
     }).join('\n');
 
-    // Create the full test script
-    const testEntrypoint = `
+    // Execute tests inside the properly configured container
+    const testScript = `
       #!/bin/bash
       set -e
-
-      # Source environment
-      set -a; source /etc/environment 2>/dev/null || true; set +a
-
-      # Run all tests
       ${testCommands}
-
       echo "All tests completed"
     `;
 
-    // Run container with test script as entrypoint
-    const runArgs = [
-      'run', '--rm',
-      '--name', containerName,
-      '-w', workDir,
-      ...envArgs
-    ];
-
-    // Add volume mounts if specified
-    if (habitatConfig.volumes && Array.isArray(habitatConfig.volumes)) {
-      habitatConfig.volumes.forEach(volume => {
-        runArgs.push('-v', volume);
-      });
-    }
-
-    runArgs.push(imageTag, '/bin/bash', '-c', testEntrypoint);
-
-    console.log('Running tests in container...\n');
-
-    let results = [];
-    if (captureResults) {
-      try {
-        const output = await execAsync(`docker ${runArgs.join(' ')}`);
-        results = parseTestOutput(output, testType);
-      } catch (err) {
-        results = [{
-          type: 'error',
-          message: `Test execution failed: ${err.message}`,
-          details: err.stdout || err.stderr || ''
-        }];
-      }
-    } else {
-      await dockerRun(runArgs);
+    try {
+      const output = await dockerExec(container.name, testScript, habitatConfig.container?.user || 'node');
+      console.log(output);
+      results = parseTestOutput(output, testType);
+    } catch (err) {
+      results = [{
+        type: 'error',
+        message: `Test execution failed: ${err.message}`,
+        scope: testType
+      }];
+    } finally {
+      // Cleanup the container
+      await container.cleanup();
     }
 
     return captureResults ? results : undefined;
 
   } catch (err) {
     console.error(colors.red(`Error running tests: ${err.message}`));
-    // Container already removed with --rm flag
     return captureResults ? [{ type: 'error', message: err.message }] : undefined;
   }
 }

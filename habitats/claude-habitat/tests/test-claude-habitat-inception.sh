@@ -7,13 +7,21 @@ echo "=== Claude Habitat Inception Test ==="
 echo "Testing claude-habitat functionality from within claude-habitat container"
 
 # Verify we're in the right environment
-if [ ! -f /workspace/src/claude-habitat.js ]; then
-    echo "❌ ERROR: Not in claude-habitat environment - missing /workspace/src/claude-habitat.js"
+if [ ! -f /workspace/claude-habitat ]; then
+    echo "❌ ERROR: Not in claude-habitat environment - missing /workspace/claude-habitat"
     exit 1
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
     echo "❌ ERROR: Docker not available"
+    exit 1
+fi
+
+# Check Docker socket accessibility
+if ! docker ps >/dev/null 2>&1; then
+    echo "❌ ERROR: Docker socket not accessible - checking permissions"
+    ls -la /var/run/docker.sock || echo "Docker socket not found"
+    echo "Container may need Docker socket mount and proper permissions"
     exit 1
 fi
 
