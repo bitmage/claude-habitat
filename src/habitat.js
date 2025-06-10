@@ -177,7 +177,7 @@ async function runContainerWithSharedLogic(tag, config, overrideCommand = null, 
 
     console.log('');
     console.log(colors.green('Container ready!'));
-    console.log('Launching Claude Code...');
+    console.log(`Launching: ${claudeCommand}`);
     console.log('');
 
     // Mark startup as completed
