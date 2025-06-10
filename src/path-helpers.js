@@ -1,15 +1,11 @@
 const path = require('path');
 
 /**
- * Get habitat infrastructure path relative to work directory
- * @param {string} workDir - The container work directory (e.g., '/workspace')
+ * Get habitat infrastructure path using environment variables
  * @param {string} component - The infrastructure component ('system', 'shared', 'local')
  * @returns {string} Absolute path to infrastructure component
  */
-function getHabitatInfrastructurePath(workDir, component) {
-  if (!workDir) {
-    throw new Error('workDir parameter is required');
-  }
+function getHabitatInfrastructurePath(component) {
   if (!component) {
     throw new Error('component parameter is required');
   }
@@ -19,20 +15,30 @@ function getHabitatInfrastructurePath(workDir, component) {
     throw new Error(`Invalid component: ${component}. Must be one of: ${validComponents.join(', ')}`);
   }
   
-  return path.posix.join(workDir, 'claude-habitat', component);
+  // Use environment variables that are set correctly by habitat configurations
+  switch (component) {
+    case 'system':
+      return process.env.SYSTEM_PATH || '/workspace/habitat/system';
+    case 'shared':
+      return process.env.SHARED_PATH || '/workspace/habitat/shared';
+    case 'local':
+      return process.env.LOCAL_PATH || '/workspace/habitat/local';
+    default:
+      throw new Error(`Invalid component: ${component}`);
+  }
 }
 
 /**
- * Get all habitat infrastructure paths for a given work directory
- * @param {string} workDir - The container work directory
- * @returns {Object} Object with system, shared, and local paths
+ * Get all habitat infrastructure paths using environment variables
+ * @returns {Object} Object with system, shared, local, and habitat paths
  */
-function getAllHabitatPaths(workDir) {
+function getAllHabitatPaths() {
   return {
-    system: getHabitatInfrastructurePath(workDir, 'system'),
-    shared: getHabitatInfrastructurePath(workDir, 'shared'),
-    local: getHabitatInfrastructurePath(workDir, 'local'),
-    root: path.posix.join(workDir, 'claude-habitat')
+    system: getHabitatInfrastructurePath('system'),
+    shared: getHabitatInfrastructurePath('shared'),
+    local: getHabitatInfrastructurePath('local'),
+    habitat: process.env.HABITAT_PATH || '/workspace/habitat',
+    workdir: process.env.WORKDIR || '/workspace'
   };
 }
 
@@ -57,9 +63,27 @@ function joinContainerPath(...segments) {
   return path.posix.join(...segments);
 }
 
+/**
+ * Get the container work directory from environment
+ * @returns {string} Work directory path
+ */
+function getWorkDir() {
+  return process.env.WORKDIR || '/workspace';
+}
+
+/**
+ * Get the habitat path from environment
+ * @returns {string} Habitat path
+ */
+function getHabitatPath() {
+  return process.env.HABITAT_PATH || '/workspace/habitat';
+}
+
 module.exports = {
   getHabitatInfrastructurePath,
   getAllHabitatPaths,
   normalizeContainerPath,
-  joinContainerPath
+  joinContainerPath,
+  getWorkDir,
+  getHabitatPath
 };

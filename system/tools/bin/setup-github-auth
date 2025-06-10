@@ -6,36 +6,27 @@ set -e
 
 echo "Setting up GitHub App authentication..."
 
-# Find the project root by looking for system/tools (where this script is)
+# Use environment variables for paths (set by habitat configuration)
+SYSTEM_PATH=${SYSTEM_PATH:-/workspace/system}
+SHARED_PATH=${SHARED_PATH:-/workspace/shared}
+WORKDIR=${WORKDIR:-/workspace}
+
+# Find the script directory for tools bin location
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 TOOLS_DIR="$(dirname "$SCRIPT_DIR")"
-SYSTEM_DIR="$(dirname "$TOOLS_DIR")"
 
-# Determine working directory context
-if [[ "$SYSTEM_DIR" == */claude-habitat/system ]]; then
-    # We're in normal mode: /path/to/project/claude-habitat/system
-    PROJECT_ROOT="$(dirname "$(dirname "$SYSTEM_DIR")")"
-    SHARED_DIR="$PROJECT_ROOT/claude-habitat/shared"
-elif [[ "$SYSTEM_DIR" == */system ]]; then
-    # We're in bypass mode: /workspace/src/system  
-    PROJECT_ROOT="$(dirname "$SYSTEM_DIR")"
-    SHARED_DIR="$PROJECT_ROOT/../shared"
-    if [ ! -d "$SHARED_DIR" ]; then
-        SHARED_DIR="$PROJECT_ROOT/shared"
-    fi
-fi
-
-echo "Project root: $PROJECT_ROOT"
-echo "Shared directory: $SHARED_DIR"
+echo "Work directory: $WORKDIR"
+echo "System directory: $SYSTEM_PATH"
+echo "Shared directory: $SHARED_PATH"
 
 # Find PEM file
 PEM_FILE=""
-if [ -d "$SHARED_DIR" ]; then
-    PEM_FILE=$(find "$SHARED_DIR" -name "*.pem" -type f | sort -r | head -1)
+if [ -d "$SHARED_PATH" ]; then
+    PEM_FILE=$(find "$SHARED_PATH" -name "*.pem" -type f | sort -r | head -1)
 fi
 
 if [ -z "$PEM_FILE" ] || [ ! -f "$PEM_FILE" ]; then
-    echo "❌ No GitHub App PEM file found in $SHARED_DIR"
+    echo "❌ No GitHub App PEM file found in $SHARED_PATH"
     echo "GitHub authentication will not be available"
     exit 1
 fi

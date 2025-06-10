@@ -4,8 +4,9 @@
 
 set -e
 
-# Load TAP helpers
-source /claude-habitat/system/tools/tap-helpers.sh
+# Load TAP helpers using environment variables
+SYSTEM_PATH=${SYSTEM_PATH:-/workspace/habitat/system}
+source "$SYSTEM_PATH/tools/tap-helpers.sh"
 
 tap_start 7
 

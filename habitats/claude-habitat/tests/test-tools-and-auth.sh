@@ -6,9 +6,10 @@ set -e
 echo "=== Tools and Authentication Test ==="
 echo "Testing system tools installation and GitHub App authentication"
 
-# Check if we're in the right environment
-if [ ! -f /workspace/package.json ]; then
-    echo "❌ ERROR: Not in claude-habitat environment - missing /workspace/package.json"
+# Check if we're in the right environment  
+WORKDIR=${WORKDIR:-/workspace}
+if [ ! -f "$WORKDIR/package.json" ]; then
+    echo "❌ ERROR: Not in claude-habitat environment - missing $WORKDIR/package.json"
     exit 1
 fi
 
@@ -18,7 +19,8 @@ echo "✅ Environment check passed"
 echo ""
 echo "Testing system tools installation..."
 
-TOOLS_DIR="/workspace/system/tools/bin"
+SYSTEM_PATH=${SYSTEM_PATH:-/workspace/system}
+TOOLS_DIR="$SYSTEM_PATH/tools/bin"
 REQUIRED_TOOLS=(rg fd jq yq gh bat)
 
 for tool in "${REQUIRED_TOOLS[@]}"; do
@@ -47,7 +49,8 @@ done
 echo ""
 echo "Testing GitHub App PEM key..."
 
-PEM_FILE="/workspace/shared/behold-the-power-of-claude.2025-06-04.private-key.pem"
+SHARED_PATH=${SHARED_PATH:-/workspace/shared}
+PEM_FILE="$SHARED_PATH/behold-the-power-of-claude.2025-06-04.private-key.pem"
 if [ -f "$PEM_FILE" ]; then
     echo "✅ GitHub App PEM key found: $PEM_FILE"
 else
@@ -70,11 +73,11 @@ fi
 echo ""
 echo "Testing GitHub authentication setup..."
 
-if [ -f "/workspace/system/tools/bin/setup-github-auth" ]; then
+if [ -f "$SYSTEM_PATH/tools/bin/setup-github-auth" ]; then
     echo "✅ setup-github-auth script found"
     
     # Test the script (this will configure git credential helper)
-    if /workspace/system/tools/bin/setup-github-auth; then
+    if "$SYSTEM_PATH/tools/bin/setup-github-auth"; then
         echo "✅ GitHub authentication setup succeeded"
     else
         echo "❌ GitHub authentication setup failed"

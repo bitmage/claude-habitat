@@ -7,8 +7,9 @@ echo "=== Claude Habitat Inception Test ==="
 echo "Testing claude-habitat functionality from within claude-habitat container"
 
 # Verify we're in the right environment
-if [ ! -f /workspace/claude-habitat ]; then
-    echo "❌ ERROR: Not in claude-habitat environment - missing /workspace/claude-habitat"
+WORKDIR=${WORKDIR:-/workspace}
+if [ ! -f "$WORKDIR/claude-habitat" ]; then
+    echo "❌ ERROR: Not in claude-habitat environment - missing $WORKDIR/claude-habitat"
     exit 1
 fi
 
@@ -31,7 +32,7 @@ echo "✅ Environment check passed"
 echo ""
 echo "Testing claude-habitat inception: running base --system tests from within claude-habitat"
 
-cd /workspace
+cd "$WORKDIR"
 
 # Run the inception test: claude-habitat test base --system
 echo "Running: ./claude-habitat test base --system"

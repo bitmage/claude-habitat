@@ -3,8 +3,8 @@ description: Development environment for Claude Habitat itself
 
 # Habitat tests (run with: claude-habitat test claude-habitat)
 tests:
-  # TODO: Re-enable inception test after fixing Docker-in-Docker support
-  # - tests/test-claude-habitat-inception.sh
+  # Docker-in-Docker setup needed for inception test
+  # - tests/test-claude-habitat-inception.sh  
   - tests/test-tools-and-auth.sh
 
 image:

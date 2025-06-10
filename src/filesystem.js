@@ -44,7 +44,12 @@ function shouldIgnoreItem(item, patterns) {
 }
 
 // File discovery and copying
-async function findFilesToCopy(sourceDir, destBase = '/claude-habitat', isShared = false) {
+async function findFilesToCopy(sourceDir, destBase = null, isShared = false) {
+  // Use habitat path from environment if destBase not provided
+  if (!destBase) {
+    const { getHabitatPath } = require('./path-helpers');
+    destBase = getHabitatPath();
+  }
   const filesToCopy = [];
   
   // Load ignore patterns from .habignore file

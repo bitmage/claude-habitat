@@ -7,7 +7,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { spawn } = require('child_process');
 const { colors, fileExists, isDirectory, sleep, rel, createWorkDirPath } = require('./utils');
-const { getHabitatInfrastructurePath } = require('./path-helpers');
+// Path helpers not currently used in this module
 const { dockerRun, dockerExec, dockerImageExists } = require('./container-operations');
 const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
 
