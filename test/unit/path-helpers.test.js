@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { 
+  HabitatPathHelpers,
   getHabitatInfrastructurePath, 
   getAllHabitatPaths, 
   normalizeContainerPath, 
@@ -24,9 +25,64 @@ const bypassHabitatConfig = {
   },
   claude: {
     bypass_habitat_construction: true
-  }
+  },
+  env: [
+    'WORKDIR=/workspace',
+    'HABITAT_PATH=${WORKDIR}',
+    'SYSTEM_PATH=${WORKDIR}/system',
+    'SHARED_PATH=${WORKDIR}/shared', 
+    'LOCAL_PATH=${WORKDIR}/habitats/claude-habitat'
+  ]
 };
 
+// Tests for new HabitatPathHelpers class
+test('HabitatPathHelpers resolves paths for bypass habitat', () => {
+  const habitat_rel = new HabitatPathHelpers(bypassHabitatConfig);
+  
+  assert.strictEqual(habitat_rel('WORKDIR'), '/workspace');
+  assert.strictEqual(habitat_rel('WORKDIR', 'CLAUDE.md'), '/workspace/CLAUDE.md');
+  assert.strictEqual(habitat_rel('SYSTEM_PATH'), '/workspace/system');
+  assert.strictEqual(habitat_rel('SYSTEM_PATH', 'tools/bin/rg'), '/workspace/system/tools/bin/rg');
+  assert.strictEqual(habitat_rel('SHARED_PATH'), '/workspace/shared');
+  assert.strictEqual(habitat_rel('LOCAL_PATH'), '/workspace/habitats/claude-habitat');
+});
+
+test('HabitatPathHelpers resolves paths for normal habitat', () => {
+  const habitat_rel = new HabitatPathHelpers(normalHabitatConfig);
+  
+  assert.strictEqual(habitat_rel('WORKDIR'), '/workspace');
+  assert.strictEqual(habitat_rel('HABITAT_PATH'), '/workspace/habitat');
+  assert.strictEqual(habitat_rel('SYSTEM_PATH'), '/workspace/habitat/system');
+  assert.strictEqual(habitat_rel('SHARED_PATH'), '/workspace/habitat/shared');
+  assert.strictEqual(habitat_rel('LOCAL_PATH'), '/workspace/habitat/local');
+});
+
+test('HabitatPathHelpers throws on missing environment variable', () => {
+  const habitat_rel = new HabitatPathHelpers(normalHabitatConfig);
+  
+  assert.throws(
+    () => habitat_rel('INVALID_VAR'),
+    /Environment variable 'INVALID_VAR' not found/
+  );
+});
+
+test('HabitatPathHelpers handles variable resolution', () => {
+  const config = {
+    name: 'test',
+    claude: { bypass_habitat_construction: true },
+    env: [
+      'WORKDIR=/workspace',
+      'TOOLS_PATH=${WORKDIR}/tools',
+      'BIN_PATH=${TOOLS_PATH}/bin'
+    ]
+  };
+  
+  const habitat_rel = new HabitatPathHelpers(config);
+  assert.strictEqual(habitat_rel('TOOLS_PATH'), '/workspace/tools');
+  assert.strictEqual(habitat_rel('BIN_PATH'), '/workspace/tools/bin');
+});
+
+// Legacy function tests
 test('getHabitatInfrastructurePath creates correct system path for normal habitat', () => {
   const result = getHabitatInfrastructurePath('system', normalHabitatConfig);
   assert.strictEqual(result, '/workspace/habitat/system');
