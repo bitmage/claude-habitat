@@ -2,6 +2,15 @@
 # verify-fs - Simple filesystem verification
 
 SCOPE="${1:-all}"
+
+# For bypass habitats (claude-habitat), only run habitat scope regardless of parameter
+if [ -f "$LOCAL_PATH/config.yaml" ]; then
+  if yq eval '.claude.bypass_habitat_construction' "$LOCAL_PATH/config.yaml" 2>/dev/null | grep -q "true"; then
+    SCOPE="habitat"
+    echo "# Detected bypass habitat - limiting scope to 'habitat' only" >&2
+  fi
+fi
+
 source "$SYSTEM_PATH/tools/tap-helpers.sh"
 
 echo "TAP version 13"
