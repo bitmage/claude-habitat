@@ -16,6 +16,13 @@ check_config() {
     while IFS= read -r file; do
         if [[ -n "$file" && "$file" != "null" ]]; then
             expanded=$(eval echo "\"$file\"")
+            # Debug specific failing files
+            if [[ "$expanded" == "/root/.gitconfig" || "$expanded" == ~/.gitconfig || "$expanded" == ~/.claude/.credentials.json ]]; then
+                echo "# DEBUG: Checking $expanded (original: $file)" >&2
+                echo "# DEBUG: Current user: $(whoami)" >&2
+                echo "# DEBUG: Home directory: $HOME" >&2
+                ls -la "$expanded" 2>&1 >&2 || echo "# DEBUG: ls failed for $expanded" >&2
+            fi
             if [[ -e "$expanded" ]]; then
                 tap_ok "File exists: $expanded ($name)"
             else

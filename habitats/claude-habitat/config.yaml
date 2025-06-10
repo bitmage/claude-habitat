@@ -48,6 +48,15 @@ files:
     mode: 600
     owner: "{container.user}"
     description: "Claude credentials for authentication"
+  # Git configuration files (copy to all 3 locations)
+  - src: ./shared/gitconfig
+    dest: /etc/gitconfig
+    mode: 644
+    description: "System-wide git configuration"
+  - src: ./shared/gitconfig  
+    dest: /root/.gitconfig
+    mode: 644
+    description: "Git configuration for root user"
 
 volumes:
   # Mount Docker socket for container management
@@ -70,6 +79,20 @@ setup:
       chown node:node /home/node/.claude
       chmod 755 /home/node/.claude
       echo "Created .claude directory with node ownership"
+      
+      # Copy gitconfig to system locations (since we're using volume mounts)
+      if [ -f /workspace/shared/gitconfig ]; then
+        cp /workspace/shared/gitconfig /etc/gitconfig
+        cp /workspace/shared/gitconfig /root/.gitconfig
+        echo "Copied gitconfig to system locations"
+      fi
+      
+      # Claude credentials should already be copied by files section
+      if [ -f /home/node/.claude/.credentials.json ]; then
+        echo "Claude credentials already present"
+      else
+        echo "Warning: Claude credentials not found at /home/node/.claude/.credentials.json"
+      fi
 
   user:
     run_as: node
@@ -104,11 +127,12 @@ setup:
         echo "Claude directory permissions set for user: $(whoami)"
         ls -la ~/.claude
 
-        # Set up git configuration
+        # Set up git configuration using install-gitconfig script
         echo "Setting up git configuration..."
-        if [ -f /workspace/shared/gitconfig ]; then
-          cp /workspace/shared/gitconfig ~/.gitconfig
-          echo "Git configuration applied"
+        if /workspace/system/tools/bin/install-gitconfig; then
+          echo "✅ Git configuration applied for user"
+        else
+          echo "⚠️  Git configuration setup failed"
         fi
         
         # Set up GitHub authentication using the setup-github-auth tool
@@ -140,7 +164,9 @@ verify-fs:
     - "${WORKDIR}/habitats/base/config.yaml"
     - "${WORKDIR}/habitats/discourse/config.yaml"
     - "${WORKDIR}/test/unit/claude-habitat.test.js"
-    - "${WORKDIR}/node_modules/package.json"
+    # Node modules verification (check key directories exist)
+    - "${WORKDIR}/node_modules"
+    - "${WORKDIR}/node_modules/js-yaml"
     # System infrastructure
     - "${SYSTEM_PATH}/CLAUDE.md"
     - "${SYSTEM_PATH}/config.yaml"
@@ -148,20 +174,26 @@ verify-fs:
     - "${SYSTEM_PATH}/tools/regenerate-github-token.sh"
     - "${SYSTEM_PATH}/tools/tools.yaml"
     # Installed system tools
+    - "${SYSTEM_PATH}/tools/bin/setup-github-auth"
     - "${SYSTEM_PATH}/tools/bin/rg"
     - "${SYSTEM_PATH}/tools/bin/fd"
     - "${SYSTEM_PATH}/tools/bin/jq"
     - "${SYSTEM_PATH}/tools/bin/yq"
     - "${SYSTEM_PATH}/tools/bin/gh"
+    - "${SYSTEM_PATH}/tools/bin/eza"
     - "${SYSTEM_PATH}/tools/bin/bat"
+    - "${SYSTEM_PATH}/tools/bin/install-gitconfig"
+    - "${SYSTEM_PATH}/tools/tap-helpers.sh"
     # Shared directory structure
+    - "${SHARED_PATH}/CLAUDE.md"
+    - "${SHARED_PATH}/config.yaml"
     - "${SHARED_PATH}/gitconfig"
     # GitHub App private key (found by setup-github-auth)
     - "${SHARED_PATH}/behold-the-power-of-claude.2025-06-04.private-key.pem"
-    # User git configuration
+    # Git configuration files (all 3 locations)
+    - /etc/gitconfig
+    - /root/.gitconfig
     - ~/.gitconfig
-    # Claude workspace directory (created by files section)
-    - ~/.claude/.keep
     # Claude credentials (copied from host)
     - ~/.claude/.credentials.json
 

@@ -26,9 +26,9 @@ RUN mkdir -p /workspace && \
     chown -R node:node /home/node/.claude && \
     chmod 755 /home/node/.claude
 
-# Create a simple init script that keeps container running
-# Use custom path since /sbin/init may be managed by systemd
-RUN echo '#!/bin/bash\nwhile true; do sleep 3600; done' > /usr/local/bin/habitat-init && chmod +x /usr/local/bin/habitat-init
+# Copy habitat initialization script
+COPY habitat-init.sh /usr/local/bin/habitat-init
+RUN chmod +x /usr/local/bin/habitat-init
 
 USER node
 WORKDIR /workspace
