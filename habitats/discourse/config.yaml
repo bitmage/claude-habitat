@@ -13,7 +13,7 @@ image:
     - "DISCOURSE_IMAGE=discourse/discourse_dev:release"
 
 # Environment variables (discourse uses /discourse instead of default /workspace)
-environment:
+env:
   - WORKDIR=/discourse
   - HABITAT_PATH=${WORKDIR}/habitat
   - SYSTEM_PATH=${HABITAT_PATH}/system

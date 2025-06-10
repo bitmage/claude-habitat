@@ -10,7 +10,7 @@ image:
 repositories: []
 
 # Environment configuration (inherits from system, sets explicit WORKDIR for base habitat)
-environment:
+env:
   - WORKDIR=/workspace
   - GITHUB_APP_ID=1357221
 

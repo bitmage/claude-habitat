@@ -11,8 +11,8 @@ function processEnvironmentVariables(config, existingEnv = {}) {
   const env = { ...existingEnv };
   
   // Process environment variables from config in order
-  if (config.environment && Array.isArray(config.environment)) {
-    for (const envVar of config.environment) {
+  if (config.env && Array.isArray(config.env)) {
+    for (const envVar of config.env) {
       if (typeof envVar === 'string' && envVar.includes('=')) {
         const [key, ...valueParts] = envVar.split('=');
         let value = valueParts.join('=');

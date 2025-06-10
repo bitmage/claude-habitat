@@ -59,7 +59,7 @@ async function runTestMode(testType, testTarget, rebuild = false) {
       const hash = calculateCacheHash(habitatConfig, []);
       const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
       
-      await runEnhancedFilesystemVerification(preparedTag, scope, habitatConfig);
+      await runEnhancedFilesystemVerification(preparedTag, scope, habitatConfig, rebuild);
     } else if (testType === 'habitat') {
       console.log(`Running ${testTarget}-specific tests...`);
       if (habitatConfig.tests && habitatConfig.tests.length > 0) {
@@ -394,8 +394,8 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
 
     // Parse environment variables from config
     const envArgs = [];
-    if (habitatConfig.environment && Array.isArray(habitatConfig.environment)) {
-      habitatConfig.environment.forEach(env => {
+    if (habitatConfig.env && Array.isArray(habitatConfig.env)) {
+      habitatConfig.env.forEach(env => {
         if (env && typeof env === 'string' && !env.startsWith('GITHUB_APP_PRIVATE_KEY_FILE=')) {
           envArgs.push('-e', env.replace(/^- /, ''));
         }

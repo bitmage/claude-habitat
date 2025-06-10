@@ -89,7 +89,7 @@ chown -R 1000:1000 $path
 **Debug Steps**:
 1. Check cache hash consistency:
    ```bash
-   ./claude-habitat.sh --config discourse.yaml | head -10
+   ./claude-habitat start discourse | head -10
    ```
 2. Verify no extra whitespace or formatting changes in YAML
 3. Check if `--repo` flags are being used inconsistently
@@ -264,10 +264,10 @@ docker stop $(docker ps -q --filter "name=claude-habitat")
 docker rm $(docker ps -aq --filter "name=claude-habitat")
 
 # Clean all images
-./claude-habitat.sh --clean
+./claude-habitat --clean
 
 # Rebuild from scratch
-./claude-habitat.sh --config discourse.yaml
+./claude-habitat start discourse
 ```
 
 ### Partial Recovery
@@ -276,7 +276,7 @@ docker rm $(docker ps -aq --filter "name=claude-habitat")
 docker rmi $(docker images -q --filter "reference=claude-habitat-*-*")
 
 # Keep base images, rebuild prepared only
-./claude-habitat.sh --config discourse.yaml
+./claude-habitat start discourse
 ```
 
 ## Getting Help

@@ -7,7 +7,7 @@ tests:
   - tests/test-user-config.sh
 
 # Shared environment variables (add to system PATH)
-environment:
+env:
   - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - PATH=${PATH}:${SHARED_TOOLS_PATH}
 

@@ -16,7 +16,7 @@ repositories:
     branch: main
     shallow: true
 
-environment:
+env:
   - WORKDIR=/workspace
   - HABITAT_PATH=${WORKDIR}/claude-habitat
   - SYSTEM_PATH=${HABITAT_PATH}/system
@@ -144,7 +144,6 @@ verify-fs:
     - "${WORKDIR}/package-lock.json"
     - "${WORKDIR}/claude-habitat"
     - "${WORKDIR}/claude-habitat.js"
-    - "${WORKDIR}/claude-habitat.sh"
     - "${WORKDIR}/habitats/base/config.yaml"
     - "${WORKDIR}/habitats/discourse/config.yaml"
     - "${WORKDIR}/test/unit/claude-habitat.test.js"

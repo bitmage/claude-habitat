@@ -465,7 +465,7 @@ async function main() {
     await returnToMainMenu();
     return;
   } else if (options.test) {
-    await runTestMode(options.testType, options.testTarget);
+    await runTestMode(options.testType, options.testTarget, options.rebuild);
     return;
   }
 

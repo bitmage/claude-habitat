@@ -41,8 +41,8 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
 
   // Parse environment variables
   const envVars = [];
-  if (config.environment && Array.isArray(config.environment)) {
-    for (const env of config.environment) {
+  if (config.env && Array.isArray(config.env)) {
+    for (const env of config.env) {
       if (env && typeof env === 'string') {
         const cleanEnv = env.replace(/^- /, '');
         envVars.push(cleanEnv);

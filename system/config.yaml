@@ -3,7 +3,7 @@ name: system-setup
 description: Core infrastructure setup for all claude-habitat containers
 
 # Default environment variables (can be overridden by shared/habitat configs)
-environment:
+env:
   - WORKDIR=/workspace
   - HABITAT_PATH=${WORKDIR}/claude-habitat
   - SYSTEM_PATH=${HABITAT_PATH}/system
