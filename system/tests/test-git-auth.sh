@@ -13,18 +13,19 @@ tap_start 8
 tap_has_env "GITHUB_APP_ID" "GitHub App ID environment variable is set"
 
 # Test 2: Work directory environment variable is set
-tap_has_env "CLAUDE_HABITAT_WORKDIR" "Claude Habitat work directory is set"
+tap_has_env "WORKDIR" "Work directory is set"
 
 # Test 3: PEM file exists in expected location
-if [ -n "$CLAUDE_HABITAT_WORKDIR" ]; then
-    pem_file=$(find "$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" -name "*.pem" -type f | sort -r | head -1)
+SHARED_PATH=${SHARED_PATH:-/workspace/shared}
+if [ -d "$SHARED_PATH" ]; then
+    pem_file=$(find "$SHARED_PATH" -name "*.pem" -type f | sort -r | head -1)
     if [ -n "$pem_file" ] && [ -f "$pem_file" ]; then
         tap_ok "GitHub App PEM file found at $(basename "$pem_file")"
     else
-        tap_not_ok "GitHub App PEM file found" "No .pem files in $CLAUDE_HABITAT_WORKDIR/claude-habitat/shared"
+        tap_not_ok "GitHub App PEM file found" "No .pem files in $SHARED_PATH"
     fi
 else
-    tap_skip "GitHub App PEM file found" "CLAUDE_HABITAT_WORKDIR not set"
+    tap_skip "GitHub App PEM file found" "SHARED_PATH not set or directory not found: $SHARED_PATH"
 fi
 
 # Test 4: Git credential helper is installed
