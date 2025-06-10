@@ -11,14 +11,19 @@ env:
   - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - PATH=${PATH}:${SHARED_TOOLS_PATH}
 
+# Container settings (will be overridden by habitat-specific config)
+container:
+  work_dir: /workspace
+  user: root
+
 # Structured file operations - copy files to specific locations with permissions
 files:
-  - src: gitconfig
+  - src: ./shared/gitconfig
     dest: /etc/gitconfig
     mode: 644
     description: "System-wide git configuration"
     
-  - src: gitconfig  
+  - src: ./shared/gitconfig  
     dest: /root/.gitconfig
     mode: 644
     description: "Git configuration for root user"
@@ -36,7 +41,7 @@ setup:
     commands:
       - |
         # Configure git for container user using centralized script
-        "{env.SYSTEM_PATH}/tools/bin/install-gitconfig"
+        "/workspace/habitat/system/tools/bin/install-gitconfig"
 
 # Filesystem verification - verify shared/user files are properly configured
 verify-fs:

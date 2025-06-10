@@ -1,7 +1,29 @@
 #!/bin/bash
 # verify-fs - Simple filesystem verification
+set -e
+
+show_usage() {
+  echo "Usage: verify-fs [SCOPE]"
+  echo "Verify filesystem structure for habitat environments"
+  echo ""
+  echo "SCOPE:"
+  echo "  system    - Verify system infrastructure files"
+  echo "  shared    - Verify shared configuration files" 
+  echo "  habitat   - Verify habitat-specific files"
+  echo "  all       - Verify all scopes (default)"
+  echo ""
+  echo "Options:"
+  echo "  --help    - Show this help message"
+}
+
+# Handle help option
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+  show_usage
+  exit 0
+fi
 
 SCOPE="${1:-all}"
+total_failures=0
 
 # For bypass habitats (claude-habitat), only run habitat scope regardless of parameter
 if [ -f "$LOCAL_PATH/config.yaml" ]; then
@@ -29,6 +51,7 @@ check_config() {
                 tap_ok "File exists: $expanded ($name)"
             else
                 tap_not_ok "File missing: $expanded ($name)"
+                ((total_failures++))
             fi
         fi
     done <<< "$files"
@@ -46,3 +69,8 @@ case "$SCOPE" in
 esac
 
 echo "1..$test_num"
+
+# Exit with appropriate code
+if [[ $total_failures -gt 0 ]]; then
+    exit 1
+fi
