@@ -44,7 +44,10 @@ function shouldIgnoreItem(item, patterns) {
 }
 
 // File discovery and copying
-async function findFilesToCopy(sourceDir, destBase = '/claude-habitat', isShared = false) {
+async function findFilesToCopy(sourceDir, destBase, isShared = false) {
+  if (!destBase) {
+    throw new Error('destBase parameter is required - specify the destination base path');
+  }
   const filesToCopy = [];
   
   // Load ignore patterns from .habignore file

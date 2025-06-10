@@ -60,13 +60,40 @@ async function createHabitatContainer(config, options = {}) {
     '--name', containerName
   ];
 
-  // Add environment variables from config
-  if (config.env && Array.isArray(config.env)) {
-    config.env.forEach(envVar => {
-      if (typeof envVar === 'string') {
-        runArgs.push('-e', envVar);
+  // Add environment variables - use compiled environment for normal habitats
+  const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
+  
+  if (isBypassHabitat) {
+    // For bypass habitats, only use local config.env
+    if (config.env && Array.isArray(config.env)) {
+      config.env.forEach(envVar => {
+        if (typeof envVar === 'string') {
+          runArgs.push('-e', envVar);
+        }
+      });
+    }
+  } else {
+    // For normal habitats, use compiled environment from system + shared + local
+    try {
+      const { createHabitatPathHelpers } = require('./path-helpers');
+      const pathHelpers = await createHabitatPathHelpers(config);
+      const compiledEnv = pathHelpers.getEnvironment();
+      
+      // Convert compiled environment to -e arguments
+      Object.entries(compiledEnv).forEach(([key, value]) => {
+        runArgs.push('-e', `${key}=${value}`);
+      });
+    } catch (err) {
+      console.warn(`Warning: Could not compile environment for normal habitat: ${err.message}`);
+      // Fallback to local config.env if compilation fails
+      if (config.env && Array.isArray(config.env)) {
+        config.env.forEach(envVar => {
+          if (typeof envVar === 'string') {
+            runArgs.push('-e', envVar);
+          }
+        });
       }
-    });
+    }
   }
 
   // Add volume mounts from system config and habitat config

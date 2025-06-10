@@ -7,7 +7,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const { spawn } = require('child_process');
 const { colors, fileExists, isDirectory, sleep, rel, createWorkDirPath } = require('./utils');
-const { getHabitatInfrastructurePath } = require('./path-helpers');
+const { loadConfig } = require('./config');
+// Path helpers not currently used in this module
 const { dockerRun, dockerExec, dockerImageExists } = require('./container-operations');
 const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
 
@@ -379,6 +380,25 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
         
         console.log('Running system setup commands...');
         await runSetupCommands(tempContainer, systemConfig);
+      }
+    }
+    
+    // Process shared configuration files for normal habitats
+    if (!isBypassHabitat) {
+      const sharedConfigPath = rel('shared', 'config.yaml');
+      if (await fileExists(sharedConfigPath)) {
+        console.log('Loading shared configuration...');
+        const sharedConfig = await loadConfig(sharedConfigPath);
+        
+        // Set container user for shared config processing
+        sharedConfig.container = sharedConfig.container || {};
+        sharedConfig.container.user = config.container?.user || 'root';
+        
+        // Copy shared-level files
+        await copyConfigFiles(tempContainer, sharedConfig);
+        
+        console.log('Running shared setup commands...');
+        await runSetupCommands(tempContainer, sharedConfig);
       }
     }
     

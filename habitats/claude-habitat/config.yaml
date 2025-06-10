@@ -32,6 +32,15 @@ env:
 
 # Directory and file setup
 files:
+  # Copy system and shared directories for writable access
+  - src: ./system
+    dest: /workspace/system
+    owner: "{container.user}"
+    description: "System tools and configuration (writable copy)"
+  - src: ./shared
+    dest: /workspace/shared
+    owner: "{container.user}"
+    description: "Shared configuration and resources (writable copy)"
   # Copy habitat-specific files
   - src: ./habitats/claude-habitat
     dest: /workspace/habitats/claude-habitat
@@ -61,11 +70,6 @@ files:
 volumes:
   # Mount Docker socket for container management
   - /var/run/docker.sock:/var/run/docker.sock
-  # Mount system and shared directories for live development
-  - ./system:/workspace/system:ro
-  - ./shared:/workspace/shared:ro
-  # Optional: Mount local code for live development
-  # - ./:/workspace/claude-habitat
 
 setup:
   root:
@@ -80,12 +84,7 @@ setup:
       chmod 755 /home/node/.claude
       echo "Created .claude directory with node ownership"
       
-      # Copy gitconfig to system locations (since we're using volume mounts)
-      if [ -f /workspace/shared/gitconfig ]; then
-        cp /workspace/shared/gitconfig /etc/gitconfig
-        cp /workspace/shared/gitconfig /root/.gitconfig
-        echo "Copied gitconfig to system locations"
-      fi
+      # Gitconfig files are now copied via the files section
       
       # Claude credentials should already be copied by files section
       if [ -f /home/node/.claude/.credentials.json ]; then

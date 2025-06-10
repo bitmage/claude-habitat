@@ -177,7 +177,7 @@ async function runContainerWithSharedLogic(tag, config, overrideCommand = null, 
 
     console.log('');
     console.log(colors.green('Container ready!'));
-    console.log('Launching Claude Code...');
+    console.log(`Launching: ${claudeCommand}`);
     console.log('');
 
     // Mark startup as completed
@@ -192,9 +192,8 @@ async function runContainerWithSharedLogic(tag, config, overrideCommand = null, 
     }
     const dockerFlags = enableTTY ? ['-it'] : ['-i'];
     
-    // Ensure proper environment is loaded
-    const envSetup = 'export PATH=/usr/local/bin:/usr/bin:/bin:$PATH';
-    const fullCommand = `${envSetup} && ${claudeCommand}`;
+    // Environment is already set via container creation with -e flags
+    const fullCommand = claudeCommand;
     
     const dockerArgs = [
       'exec', ...dockerFlags,
