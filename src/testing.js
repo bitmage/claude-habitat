@@ -407,14 +407,22 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
 
     // Build test command to run instead of normal init
     const testCommands = tests.map(testScript => {
-      const testPath = testType === 'habitat'
-        ? `${workDir}/habitat/local/${testScript}`
-        : `${workDir}/habitat/${testType}/${testScript}`;
+      let testPath;
+      if (testType === 'habitat') {
+        // For bypass habitats (like claude-habitat), tests are in habitats/{name}/tests/
+        // For normal habitats, tests are in habitat/local/tests/
+        const isBypassHabitat = habitatConfig?.claude?.bypass_habitat_construction || false;
+        testPath = isBypassHabitat 
+          ? `${workDir}/habitats/${habitatConfig.name}/${testScript}`
+          : `${workDir}/habitat/local/${testScript}`;
+      } else {
+        // System/shared tests
+        testPath = `${workDir}/habitat/${testType}/${testScript}`;
+      }
 
       return `
         echo "Running ${testScript}..."
         if [ -f ${testPath} ]; then
-          chmod +x ${testPath}
           ${testPath}
         else
           echo "Test not found: ${testPath}"

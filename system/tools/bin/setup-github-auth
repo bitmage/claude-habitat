@@ -50,8 +50,20 @@ fi
 
 echo "✅ Using GitHub App ID: $GITHUB_APP_ID"
 
-# Create git credential helper script in tools directory
+# Create git credential helper script in tools directory (with fallback for read-only systems)
 CREDENTIAL_HELPER="$TOOLS_DIR/bin/git-credential-github-app"
+
+# Try to write to system tools directory, fallback to user directory if read-only
+if ! touch "$CREDENTIAL_HELPER" 2>/dev/null; then
+    echo "Warning: System tools directory is read-only, using fallback location"
+    mkdir -p "$HOME/.local/bin"
+    CREDENTIAL_HELPER="$HOME/.local/bin/git-credential-github-app"
+    # Add user bin to PATH if not already there
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
+fi
+
 cat > "$CREDENTIAL_HELPER" << 'EOF'
 #!/bin/bash
 # Git credential helper for GitHub App authentication
