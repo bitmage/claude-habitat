@@ -32,6 +32,21 @@ environment:
 
 # Directory and file setup
 files:
+  # Copy entire system directory with pre-installed tools
+  - src: ./system
+    dest: /workspace/system
+    owner: "{container.user}"
+    description: "System infrastructure including pre-installed tools"
+  # Copy entire shared directory
+  - src: ./shared
+    dest: /workspace/shared
+    owner: "{container.user}"
+    description: "Shared configuration and keys"
+  # Copy habitat-specific files
+  - src: ./habitats/claude-habitat
+    dest: /workspace/habitats/claude-habitat
+    owner: "{container.user}"
+    description: "Claude-habitat specific configuration"
   # Create .claude directory structure for Claude to use
   - src: /dev/null
     dest: /home/{container.user}/.claude/.keep
@@ -43,12 +58,6 @@ files:
     mode: 600
     owner: "{container.user}"
     description: "Claude credentials for authentication"
-  # Copy GitHub App PEM key from host shared to container shared (bypass habitat only)
-  - src: ./shared/behold-the-power-of-claude.2025-06-04.private-key.pem
-    dest: /workspace/shared/behold-the-power-of-claude.2025-06-04.private-key.pem
-    mode: 600
-    owner: "{container.user}"
-    description: "GitHub App private key for authentication"
 
 volumes:
   # Mount Docker socket for container management
@@ -92,37 +101,9 @@ setup:
         echo "Testing Docker socket..."
         /usr/bin/docker ps > /dev/null 2>&1 && echo "Docker socket accessible" || echo "Docker socket not accessible"
 
-        # Install system tools as node user
-        echo "Installing system tools..."
-        # Ensure system tools directory is owned by node before installation
-        sudo chown -R node:node /workspace/system/tools
-        cd /workspace/system/tools
-        # Install all tools at once (script handles individual failures gracefully)
-        ./install-tools.sh install
-        echo "Installed tools:"
-        ls -la /workspace/system/tools/bin/ || echo "No tools installed yet"
-        
-        # Ensure shared directory structure exists
-        echo "Setting up shared directory..."
-        mkdir -p /workspace/shared/tools/bin
-        
-        # Copy gitconfig if it exists on host
-        if [ -f "$HOME/.gitconfig" ]; then
-          cp "$HOME/.gitconfig" /workspace/shared/gitconfig
-          echo "Copied gitconfig from host"
-        else
-          # Create a basic gitconfig
-          cat > /workspace/shared/gitconfig << 'EOF'
-        [user]
-          name = Claude Habitat User
-          email = claude@habitat.local
-        [init]
-          defaultBranch = main
-        [safe]
-          directory = /workspace
-        EOF
-          echo "Created default gitconfig"
-        fi
+        # System tools should be pre-installed on host and copied via files: section
+        echo "Checking for system tools..."
+        ls -la /workspace/system/tools/bin/ || echo "No tools found - ensure tools are installed on host"
 
         # Ensure .claude directory has proper permissions (credentials copied by system setup)
         mkdir -p ~/.claude

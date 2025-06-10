@@ -6,7 +6,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const { spawn } = require('child_process');
-const { colors, fileExists, sleep, rel, createWorkDirPath } = require('./utils');
+const { colors, fileExists, isDirectory, sleep, rel, createWorkDirPath } = require('./utils');
 const { getHabitatInfrastructurePath } = require('./path-helpers');
 const { dockerRun, dockerExec, dockerImageExists } = require('./container-operations');
 const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
@@ -105,11 +105,14 @@ async function copyConfigFiles(container, config) {
       srcPath = path.join(os.homedir(), srcPath.slice(2));
     }
     
-    // Check if source file exists
+    // Check if source exists
     if (!await fileExists(srcPath)) {
-      console.log(`⚠️  Source file not found: ${srcPath} - skipping ${fileSpec.description || fileSpec.dest}`);
+      console.log(`⚠️  Source not found: ${srcPath} - skipping ${fileSpec.description || fileSpec.dest}`);
       continue;
     }
+    
+    // Check if it's a directory
+    const isDir = await isDirectory(srcPath);
     
     // Replace variables in destination path
     let destPath = fileSpec.dest;
@@ -135,30 +138,58 @@ async function copyConfigFiles(container, config) {
       }
     }
     
-    console.log(`Copying ${srcPath} → ${destPath}`);
-    
-    // Create destination directory
-    const destDir = path.dirname(destPath);
-    await dockerExec(container, `mkdir -p ${destDir}`, 'root');
-    
-    // Copy the file
-    await copyFileToContainer(container, srcPath, destPath);
-    
-    // Set ownership if specified
-    if (fileSpec.owner) {
-      let owner = fileSpec.owner;
-      if (config.container && config.container.user) {
-        owner = owner.replace(/\{container\.user\}/g, config.container.user);
+    if (isDir) {
+      console.log(`Copying directory ${srcPath} → ${destPath}`);
+      
+      // Create destination directory
+      await dockerExec(container, `mkdir -p ${destPath}`, 'root');
+      
+      // Copy directory recursively (respects .habignore)
+      await copyDirectoryToContainer(container, srcPath, destPath);
+      
+      // Set ownership recursively if specified
+      if (fileSpec.owner) {
+        let owner = fileSpec.owner;
+        if (config.container && config.container.user) {
+          owner = owner.replace(/\{container\.user\}/g, config.container.user);
+        }
+        await dockerExec(container, `chown -R ${owner}:${owner} ${destPath}`, 'root');
       }
-      await dockerExec(container, `chown ${owner}:${owner} ${destPath}`, 'root');
+      
+      // Set permissions recursively if specified
+      if (fileSpec.mode) {
+        // For directories, also set execute bit for directories
+        await dockerExec(container, `find ${destPath} -type d -exec chmod ${fileSpec.mode} {} \\;`, 'root');
+        await dockerExec(container, `find ${destPath} -type f -exec chmod ${fileSpec.mode} {} \\;`, 'root');
+      }
+      
+      console.log(`✓ ${fileSpec.description || `Directory ${destPath}`}`);
+    } else {
+      console.log(`Copying ${srcPath} → ${destPath}`);
+      
+      // Create destination directory
+      const destDir = path.dirname(destPath);
+      await dockerExec(container, `mkdir -p ${destDir}`, 'root');
+      
+      // Copy the file
+      await copyFileToContainer(container, srcPath, destPath);
+      
+      // Set ownership if specified
+      if (fileSpec.owner) {
+        let owner = fileSpec.owner;
+        if (config.container && config.container.user) {
+          owner = owner.replace(/\{container\.user\}/g, config.container.user);
+        }
+        await dockerExec(container, `chown ${owner}:${owner} ${destPath}`, 'root');
+      }
+      
+      // Set permissions if specified
+      if (fileSpec.mode) {
+        await dockerExec(container, `chmod ${fileSpec.mode} ${destPath}`, 'root');
+      }
+      
+      console.log(`✓ ${fileSpec.description || destPath}`);
     }
-    
-    // Set permissions if specified
-    if (fileSpec.mode) {
-      await dockerExec(container, `chmod ${fileSpec.mode} ${destPath}`, 'root');
-    }
-    
-    console.log(`✓ ${fileSpec.description || destPath}`);
   }
 }
 

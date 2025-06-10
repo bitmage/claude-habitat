@@ -212,15 +212,18 @@ process_tools() {
     local tool_props=()
     
     while IFS= read -r line; do
+        debug "Processing line: $line"
         if [[ "$line" =~ ^TOOL_START:(.+)$ ]]; then
             # Process previous tool if exists
-            if [[ -n "$current_tool" ]]; then
+            if [[ -n "$current_tool" ]] && [[ ${#tool_props[@]} -gt 0 ]]; then
+                debug "Installing tool: $current_tool with ${#tool_props[@]} props"
                 install_tool_from_props "$current_tool" "${tool_props[@]}"
             fi
             
             # Start new tool
             current_tool="${BASH_REMATCH[1]}"
             tool_props=()
+            debug "Started new tool: $current_tool"
         elif [[ "$line" =~ ^TOOL_PROP:([^:]+):([^:]+):(.*)$ ]]; then
             local tool="${BASH_REMATCH[1]}"
             local key="${BASH_REMATCH[2]}"
@@ -228,12 +231,13 @@ process_tools() {
             
             if [[ "$tool" == "$current_tool" ]]; then
                 tool_props+=("$key:$value")
+                debug "Added prop for $tool: $key=$value"
             fi
         fi
     done < <(parse_yaml "$config_file" "$section")
     
     # Process last tool
-    if [[ -n "$current_tool" ]]; then
+    if [[ -n "$current_tool" ]] && [[ ${#tool_props[@]} -gt 0 ]]; then
         install_tool_from_props "$current_tool" "${tool_props[@]}"
     fi
 }
@@ -390,7 +394,7 @@ install_specific_tools() {
 
 # Main function
 main() {
-    local command="${1:-install}"
+    local command="${1:-help}"
     
     case "$command" in
         install)

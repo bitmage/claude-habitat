@@ -39,6 +39,15 @@ const fileExists = async (filePath) => {
   }
 };
 
+const isDirectory = async (filePath) => {
+  try {
+    const stats = await fs.stat(filePath);
+    return stats.isDirectory();
+  } catch {
+    return false;
+  }
+};
+
 // Simple glob replacement for finding .pem files
 const findPemFiles = async (dir) => {
   try {
@@ -239,6 +248,7 @@ module.exports = {
   omit,
   sleep,
   fileExists,
+  isDirectory,
   findPemFiles,
   calculateCacheHash,
   parseRepoSpec,
