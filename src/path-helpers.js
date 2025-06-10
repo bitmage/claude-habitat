@@ -96,7 +96,16 @@ class HabitatPathHelpers {
     if (typeof value !== 'string') return value;
     
     return value.replace(/\$\{([A-Z_]+)\}/g, (match, varName) => {
-      return this.environment[varName] || match;
+      if (this.environment[varName]) {
+        return this.environment[varName];
+      }
+      
+      // Special handling for PATH - use default container PATH when ${PATH} is unresolved
+      if (varName === 'PATH') {
+        return '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+      }
+      
+      return match; // Return unresolved for other variables
     });
   }
   
