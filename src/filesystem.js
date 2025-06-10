@@ -194,7 +194,7 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
     
     // Run the verify-fs script inside the container
     const command = `cd ${workDir} && ${scriptPath} ${effectiveScope}`;
-    const result = await dockerExec(containerName, command, containerUser);
+    const result = await dockerExec(containerName, command, 'root');
     
     // Parse TAP output
     const lines = result.split('\n').filter(line => line.trim());
@@ -259,19 +259,14 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
       console.log('Running habitat file initialization...');
       try {
         // Simple initialization commands
-        const initCommands = 'echo "Starting init" && ls /workspace/shared/gitconfig && sudo cp /workspace/shared/gitconfig /etc/gitconfig && sudo cp /workspace/shared/gitconfig /root/.gitconfig && cp /workspace/shared/gitconfig ~/.gitconfig && echo "Git config copied" && ls -la ~/.claude/.credentials.json && echo "Verification check:" && ls -la ~/.gitconfig && echo "Root check:" && sudo ls -la /root/.gitconfig && echo "Init complete"';
+        const initCommands = 'if [ -f /workspace/shared/gitconfig ]; then sudo cp /workspace/shared/gitconfig /etc/gitconfig && sudo cp /workspace/shared/gitconfig /root/.gitconfig && cp /workspace/shared/gitconfig ~/.gitconfig; fi';
         
-        const initResult = await dockerExec(container.name, initCommands, config.container?.user || 'node');
-        console.log('Initialization output:', initResult.trim());
+        await dockerExec(container.name, initCommands, config.container?.user || 'node');
       } catch (err) {
         console.warn(`Warning: Habitat initialization had issues: ${err.message}`);
       }
     }
     
-    // Debug: Check what user verify-fs runs as and what files it sees
-    console.log('Pre-verification debug...');
-    const debugResult = await dockerExec(container.name, 'whoami && ls -la ~/.gitconfig && sudo ls -la /root/.gitconfig && ls -la ~/.claude/.credentials.json', config.container?.user || 'node');
-    console.log('Debug result:', debugResult.trim());
     
     // Run verification using bash script
     const verifyResult = await runVerifyFsScript(container.name, scope, config);

@@ -193,9 +193,9 @@ verify-fs:
     # Git configuration files (all 3 locations)
     - /etc/gitconfig
     - /root/.gitconfig
-    - ~/.gitconfig
+    - /home/node/.gitconfig
     # Claude credentials (copied from host)
-    - ~/.claude/.credentials.json
+    - /home/node/.claude/.credentials.json
 
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)
 claude:
