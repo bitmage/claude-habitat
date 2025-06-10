@@ -4,66 +4,106 @@ const {
   getHabitatInfrastructurePath, 
   getAllHabitatPaths, 
   normalizeContainerPath, 
-  joinContainerPath 
+  joinContainerPath,
+  getWorkDir,
+  getHabitatPath
 } = require('../../src/path-helpers');
 
-test('getHabitatInfrastructurePath creates correct system path', () => {
-  const result = getHabitatInfrastructurePath('/workspace', 'system');
-  assert.strictEqual(result, '/workspace/claude-habitat/system');
+// Mock habitat configurations for testing
+const normalHabitatConfig = {
+  name: 'test-habitat',
+  container: {
+    work_dir: '/workspace'
+  }
+};
+
+const bypassHabitatConfig = {
+  name: 'claude-habitat',
+  container: {
+    work_dir: '/workspace'
+  },
+  claude: {
+    bypass_habitat_construction: true
+  }
+};
+
+test('getHabitatInfrastructurePath creates correct system path for normal habitat', () => {
+  const result = getHabitatInfrastructurePath('system', normalHabitatConfig);
+  assert.strictEqual(result, '/workspace/habitat/system');
 });
 
-test('getHabitatInfrastructurePath creates correct shared path', () => {
-  const result = getHabitatInfrastructurePath('/workspace', 'shared');
-  assert.strictEqual(result, '/workspace/claude-habitat/shared');
+test('getHabitatInfrastructurePath creates correct shared path for normal habitat', () => {
+  const result = getHabitatInfrastructurePath('shared', normalHabitatConfig);
+  assert.strictEqual(result, '/workspace/habitat/shared');
 });
 
-test('getHabitatInfrastructurePath creates correct local path', () => {
-  const result = getHabitatInfrastructurePath('/workspace', 'local');
-  assert.strictEqual(result, '/workspace/claude-habitat/local');
+test('getHabitatInfrastructurePath creates correct local path for normal habitat', () => {
+  const result = getHabitatInfrastructurePath('local', normalHabitatConfig);
+  assert.strictEqual(result, '/workspace/habitat/local');
 });
 
-test('getHabitatInfrastructurePath works with different work directories', () => {
-  const result = getHabitatInfrastructurePath('/src', 'system');
-  assert.strictEqual(result, '/src/claude-habitat/system');
+test('getHabitatInfrastructurePath creates correct system path for bypass habitat', () => {
+  const result = getHabitatInfrastructurePath('system', bypassHabitatConfig);
+  assert.strictEqual(result, '/workspace/system');
 });
 
-test('getHabitatInfrastructurePath throws on missing workDir', () => {
+test('getHabitatInfrastructurePath creates correct shared path for bypass habitat', () => {
+  const result = getHabitatInfrastructurePath('shared', bypassHabitatConfig);
+  assert.strictEqual(result, '/workspace/shared');
+});
+
+test('getHabitatInfrastructurePath creates correct local path for bypass habitat', () => {
+  const result = getHabitatInfrastructurePath('local', bypassHabitatConfig);
+  assert.strictEqual(result, '/workspace/habitats/claude-habitat');
+});
+
+test('getHabitatInfrastructurePath throws on missing habitatConfig', () => {
   assert.throws(
-    () => getHabitatInfrastructurePath(null, 'system'),
-    /workDir parameter is required/
+    () => getHabitatInfrastructurePath('system', null),
+    /habitatConfig parameter is required/
   );
 });
 
 test('getHabitatInfrastructurePath throws on missing component', () => {
   assert.throws(
-    () => getHabitatInfrastructurePath('/workspace'),
+    () => getHabitatInfrastructurePath(null, normalHabitatConfig),
     /component parameter is required/
   );
 });
 
 test('getHabitatInfrastructurePath throws on invalid component', () => {
   assert.throws(
-    () => getHabitatInfrastructurePath('/workspace', 'invalid'),
+    () => getHabitatInfrastructurePath('invalid', normalHabitatConfig),
     /Invalid component: invalid/
   );
 });
 
-test('getAllHabitatPaths returns all infrastructure paths', () => {
-  const result = getAllHabitatPaths('/workspace');
-  
-  assert.strictEqual(result.system, '/workspace/claude-habitat/system');
-  assert.strictEqual(result.shared, '/workspace/claude-habitat/shared');
-  assert.strictEqual(result.local, '/workspace/claude-habitat/local');
-  assert.strictEqual(result.root, '/workspace/claude-habitat');
+test('getHabitatInfrastructurePath throws on missing work_dir', () => {
+  const invalidConfig = { name: 'test' };
+  assert.throws(
+    () => getHabitatInfrastructurePath('system', invalidConfig),
+    /Habitat configuration missing required container.work_dir/
+  );
 });
 
-test('getAllHabitatPaths works with different work directories', () => {
-  const result = getAllHabitatPaths('/src');
+test('getAllHabitatPaths returns all infrastructure paths for normal habitat', () => {
+  const result = getAllHabitatPaths(normalHabitatConfig);
   
-  assert.strictEqual(result.system, '/src/claude-habitat/system');
-  assert.strictEqual(result.shared, '/src/claude-habitat/shared');
-  assert.strictEqual(result.local, '/src/claude-habitat/local');
-  assert.strictEqual(result.root, '/src/claude-habitat');
+  assert.strictEqual(result.system, '/workspace/habitat/system');
+  assert.strictEqual(result.shared, '/workspace/habitat/shared');
+  assert.strictEqual(result.local, '/workspace/habitat/local');
+  assert.strictEqual(result.habitat, '/workspace/habitat');
+  assert.strictEqual(result.workdir, '/workspace');
+});
+
+test('getAllHabitatPaths returns all infrastructure paths for bypass habitat', () => {
+  const result = getAllHabitatPaths(bypassHabitatConfig);
+  
+  assert.strictEqual(result.system, '/workspace/system');
+  assert.strictEqual(result.shared, '/workspace/shared');
+  assert.strictEqual(result.local, '/workspace/habitats/claude-habitat');
+  assert.strictEqual(result.habitat, '/workspace');
+  assert.strictEqual(result.workdir, '/workspace');
 });
 
 test('normalizeContainerPath converts backslashes to forward slashes', () => {
@@ -99,14 +139,36 @@ test('joinContainerPath is deterministic', () => {
 });
 
 test('path helpers work consistently across different work directories', () => {
-  const workspaceDir = '/workspace';
-  const srcDir = '/src';
+  const workspaceConfig = { name: 'test', container: { work_dir: '/workspace' } };
+  const srcConfig = { name: 'test', container: { work_dir: '/src' } };
   
-  const workspacePaths = getAllHabitatPaths(workspaceDir);
-  const srcPaths = getAllHabitatPaths(srcDir);
+  const workspacePaths = getAllHabitatPaths(workspaceConfig);
+  const srcPaths = getAllHabitatPaths(srcConfig);
   
   // Should have same structure but different roots
-  assert(workspacePaths.system.endsWith('/claude-habitat/system'));
-  assert(srcPaths.system.endsWith('/claude-habitat/system'));
+  assert(workspacePaths.system.endsWith('/habitat/system'));
+  assert(srcPaths.system.endsWith('/habitat/system'));
   assert.notStrictEqual(workspacePaths.system, srcPaths.system);
+});
+
+test('getWorkDir returns work directory from config', () => {
+  const result = getWorkDir(normalHabitatConfig);
+  assert.strictEqual(result, '/workspace');
+});
+
+test('getWorkDir throws on missing config', () => {
+  assert.throws(
+    () => getWorkDir(null),
+    /habitatConfig parameter is required/
+  );
+});
+
+test('getHabitatPath returns correct path for normal habitat', () => {
+  const result = getHabitatPath(normalHabitatConfig);
+  assert.strictEqual(result, '/workspace/habitat');
+});
+
+test('getHabitatPath returns correct path for bypass habitat', () => {
+  const result = getHabitatPath(bypassHabitatConfig);
+  assert.strictEqual(result, '/workspace');
 });

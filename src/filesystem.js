@@ -44,11 +44,9 @@ function shouldIgnoreItem(item, patterns) {
 }
 
 // File discovery and copying
-async function findFilesToCopy(sourceDir, destBase = null, isShared = false) {
-  // Use habitat path from environment if destBase not provided
+async function findFilesToCopy(sourceDir, destBase, isShared = false) {
   if (!destBase) {
-    const { getHabitatPath } = require('./path-helpers');
-    destBase = getHabitatPath();
+    throw new Error('destBase parameter is required - specify the destination base path');
   }
   const filesToCopy = [];
   
