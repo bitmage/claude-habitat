@@ -339,8 +339,10 @@ npm run test:watch         # Run tests in watch mode
 At minimum run these before you commit a feature.
 
 ```bash
-npm run test:e2e           # Run end-to-end tests
+npm run test:e2e           # Run end-to-end tests (10-minute timeout)
 ```
+
+**Note**: E2E tests take 5-8 minutes to complete as they build and test multiple habitats. Individual tests typically take 30-50 seconds. The timeout is set to 10 minutes (600 seconds) to provide 30% buffer for slower systems.
 
 ### 3. UI Testing
 
