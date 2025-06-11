@@ -1,10 +1,12 @@
 # Phase 1: Functional Composition & Code Elegance - Execution Plan
 
 ## Overview
-This plan implements the approved items from our Phase 1 discussion:
+This plan implements the approved items from our Phase 1 discussion, updated based on recent improvements:
 - Functional composition utilities (pipe, merge, when/unless, transform)
-- Declarative test framework with automatic setup/teardown
+- Declarative test framework with automatic setup/teardown  
 - Configuration validation as data (JSON Schema with terse helpers)
+
+**Recent Progress**: Path resolution and environment variable handling have been significantly improved with `HabitatPathHelpers` and `createHabitatPathHelpers()` (commits c8968cf, 1326220). This plan now focuses on remaining functional composition opportunities.
 
 ## Implementation Steps
 
@@ -109,53 +111,64 @@ function validateConfig(config, type = 'habitat') {
 - Keep old validation as fallback initially
 - Test with all existing configs (base, claude-habitat, discourse)
 
-### Step 4: Refactor Config Loading with Composition (60 minutes)
+### Step 4: Refactor Remaining Config Operations with Composition (60 minutes)
 
 **File: `src/config.js`**
 
-Replace the manual config chain loading in `claude-habitat.js` with functional composition:
+**Note**: Config loading with environment chain is already well-implemented with `createHabitatPathHelpers()`. Focus on remaining areas:
 
 ```javascript
-const { pipe } = require('./functional');
+const { pipe, transform, when } = require('./functional');
 const { validateConfig } = require('./validation');
 
-const loadConfigChain = pipe(
-  // Transform habitat path to loading plan
-  async (habitatConfigPath) => [
-    { path: rel('system', 'config.yaml'), type: 'system', optional: true },
-    { path: rel('shared', 'config.yaml'), type: 'shared', optional: true },
-    { path: habitatConfigPath, type: 'habitat', optional: false }
-  ],
+// Image lifecycle operations
+const buildImagePipeline = pipe(
+  // Validate and prepare config
+  async (config) => ({
+    ...config,
+    validated: await validateConfig(config, 'habitat')
+  }),
   
-  // Load configs sequentially, accumulating environment
-  async (configPlan) => {
-    const configs = [];
-    let accumulatedEnv = {};
-    
-    for (const { path, type, optional } of configPlan) {
-      if (optional && !await fileExists(path)) continue;
-      
-      const config = await loadConfig(path, accumulatedEnv, type === 'habitat');
-      configs.push({ ...config, _type: type });
-      accumulatedEnv = { ...accumulatedEnv, ...config._environment };
+  // Check image cache
+  when(
+    (ctx) => !ctx.rebuild,
+    async (ctx) => ({
+      ...ctx,
+      imageExists: await dockerImageExists(ctx.config.image.tag)
+    })
+  ),
+  
+  // Conditional build
+  when(
+    (ctx) => !ctx.imageExists || ctx.rebuild,
+    async (ctx) => {
+      const buildResult = await buildImage(ctx.config);
+      return { ...ctx, buildResult };
     }
-    
-    return configs;
-  },
-  
-  // Extract habitat config
-  async (configs) => configs.find(c => c._type === 'habitat')
+  )
 );
 
-function loadConfigWithEnvironmentChain(habitatConfigPath) {
-  return loadConfigChain(habitatConfigPath);
-}
+// Container operations
+const containerCreationPipeline = pipe(
+  // Prepare container config
+  transform({
+    envVars: (config) => compileEnvironmentVariables(config),
+    volumes: (config) => resolveVolumeMounts(config),
+    networks: (config) => setupNetworking(config)
+  }),
+  
+  // Create and configure container
+  async (config) => {
+    const container = await createContainer(config);
+    return { ...config, container };
+  }
+);
 ```
 
 **Integration**:
-- Export new function from `src/config.js`
-- Update `claude-habitat.js` to use new function
-- Remove old manual chain loading
+- Apply to `image-lifecycle.js` build operations
+- Apply to `container-lifecycle.js` creation logic
+- Focus on operations not yet using path helpers
 
 ### Step 5: Testing and Validation (60 minutes)
 

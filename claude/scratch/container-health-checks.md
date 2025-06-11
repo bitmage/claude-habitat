@@ -40,31 +40,69 @@ const healthCheckPipeline = [
   },
   {
     name: 'Tools Available',
-    check: async (container) => {
-      const { exitCode } = await dockerExec(container, 'which rg fd jq');
+    check: async (container, config) => {
+      // Use proper paths based on habitat type
+      const isBypassHabitat = config?.claude?.bypass_habitat_construction || false;
+      const toolsPath = isBypassHabitat ? '/workspace/system/tools/bin' : '/workspace/habitat/system/tools/bin';
+      
+      const { exitCode } = await dockerExec(container.name, `test -x ${toolsPath}/rg && test -x ${toolsPath}/fd && test -x ${toolsPath}/jq`, config.container?.user || 'root');
       return exitCode === 0;
     },
-    recovery: async (container) => {
+    recovery: async (container, config) => {
       console.log('Installing missing tools...');
-      await dockerExec(container, '/workspace/system/tools/install-tools.sh install');
+      const isBypassHabitat = config?.claude?.bypass_habitat_construction || false;
+      const installScript = isBypassHabitat ? '/workspace/system/tools/install-tools.sh' : '/workspace/habitat/system/tools/install-tools.sh';
+      
+      await dockerExec(container.name, `${installScript} install`, config.container?.user || 'root');
     },
     critical: false
   },
   {
     name: 'Git Configuration',
-    check: async (container) => {
-      const { exitCode } = await dockerExec(container, 'git config --get user.name');
+    check: async (container, config) => {
+      const { exitCode } = await dockerExec(container.name, 'git config --get user.name', config.container?.user || 'root');
       return exitCode === 0;
     },
-    recovery: async (container) => {
+    recovery: async (container, config) => {
       console.log('Setting up git configuration...');
-      await dockerExec(container, '/workspace/system/tools/bin/install-gitconfig');
+      const isBypassHabitat = config?.claude?.bypass_habitat_construction || false;
+      const gitConfigScript = isBypassHabitat ? '/workspace/system/tools/bin/install-gitconfig' : '/workspace/habitat/system/tools/bin/install-gitconfig';
+      
+      await dockerExec(container.name, gitConfigScript, config.container?.user || 'root');
+    },
+    critical: false
+  },
+  {
+    name: 'Docker Socket Access',
+    check: async (container, config) => {
+      // Only check for claude-habitat (Docker-in-Docker)
+      if (!config?.claude?.bypass_habitat_construction) {
+        return true; // Skip for normal habitats
+      }
+      
+      const { exitCode } = await dockerExec(container.name, 'docker info', config.container?.user || 'node');
+      return exitCode === 0;
+    },
+    recovery: async (container, config) => {
+      console.log('Attempting to fix Docker socket permissions...');
+      
+      // Try to detect and fix Docker socket group permissions
+      const commands = [
+        'DOCKER_GID=$(stat -c "%g" /var/run/docker.sock)',
+        'if ! getent group $DOCKER_GID > /dev/null 2>&1; then groupadd -g $DOCKER_GID docker-host; fi',
+        `usermod -aG $DOCKER_GID ${config.container?.user || 'node'}`,
+        'newgrp docker || true'
+      ];
+      
+      for (const cmd of commands) {
+        await dockerExec(container.name, cmd, 'root');
+      }
     },
     critical: false
   }
 ];
 
-async function runHealthChecks(container) {
+async function runHealthChecks(container, config) {
   const results = [];
   let criticalFailure = false;
   
@@ -72,15 +110,15 @@ async function runHealthChecks(container) {
     const result = { name: check.name, passed: false, attempted_recovery: false };
     
     try {
-      result.passed = await check.check(container);
+      result.passed = await check.check(container, config);
       
       if (!result.passed && check.recovery) {
         console.log(`Health check failed: ${check.name}, attempting recovery...`);
         result.attempted_recovery = true;
-        await check.recovery(container);
+        await check.recovery(container, config);
         
         // Retry check after recovery
-        result.passed = await check.check(container);
+        result.passed = await check.check(container, config);
       }
       
       if (!result.passed && check.critical) {
@@ -120,10 +158,10 @@ function formatHealthCheckMessage(results, criticalFailure) {
 
 ## Integration Points
 
-### Replace in habitat.js
+### Replace in container-lifecycle.js
 ```javascript
-// Replace simple dockerIsRunning check with comprehensive health checks
-const healthResult = await runHealthChecks(containerName);
+// In createHabitatContainer, replace simple startup check with comprehensive health checks
+const healthResult = await runHealthChecks(container, config);
 if (!healthResult.passed) {
   throw new Error(`Container health check failed: ${healthResult.message}`);
 } else {

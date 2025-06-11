@@ -24,6 +24,47 @@ const startupPhases = {
       }
     }
   },
+
+  dockerSocketAccess: {
+    name: 'Docker Socket Access',
+    check: async () => {
+      try {
+        // Check if docker socket exists and is accessible
+        if (!await fileExists('/var/run/docker.sock')) {
+          return {
+            healthy: false,
+            error: 'Docker socket not found at /var/run/docker.sock',
+            suggestion: 'Ensure Docker is running and socket is properly mounted'
+          };
+        }
+
+        // Get socket group ID for permission checking
+        const { stdout } = await execAsync('stat -c "%g" /var/run/docker.sock');
+        const socketGid = parseInt(stdout.trim());
+        
+        // Check if current user can access socket
+        const { stdout: groups } = await execAsync('groups');
+        const userGroups = groups.trim().split(' ');
+        const hasDockerAccess = userGroups.includes('docker') || userGroups.includes(socketGid.toString());
+        
+        if (!hasDockerAccess) {
+          return {
+            healthy: false,
+            error: `No access to Docker socket (GID ${socketGid})`,
+            suggestion: `Add current user to docker group: sudo usermod -aG ${socketGid} $(whoami) && newgrp ${socketGid}`
+          };
+        }
+
+        return { healthy: true, socketGid };
+      } catch (error) {
+        return {
+          healthy: false,
+          error: 'Cannot check Docker socket access',
+          suggestion: 'Verify Docker installation and permissions'
+        };
+      }
+    }
+  },
   
   diskSpace: {
     name: 'Disk Space Check',
@@ -131,7 +172,7 @@ async function runStartupDiagnostics(config = {}) {
       if (result.healthy) {
         console.log(colors.green(`  ✅ ${phase.name} OK`));
       } else {
-        const isCritical = ['dockerDaemon', 'workspacePermissions'].includes(key);
+        const isCritical = ['dockerDaemon', 'dockerSocketAccess', 'workspacePermissions'].includes(key);
         
         if (isCritical) {
           hasCriticalErrors = true;
