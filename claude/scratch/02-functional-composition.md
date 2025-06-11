@@ -1,40 +1,133 @@
 # Phase 1: Functional Composition & Code Elegance - Execution Plan
 
 ## Overview
-This plan implements the approved items from our Phase 1 discussion, updated based on recent improvements:
-- Functional composition utilities (pipe, merge, when/unless, transform)
+This plan implements domain-specific improvements that add unique value, updated based on RxJS decision:
+- ~~Functional composition utilities~~ **REPLACED: Use RxJS operators instead**
 - Declarative test framework with automatic setup/teardown  
 - Configuration validation as data (JSON Schema with terse helpers)
+- RxJS integration utilities for claude-habitat domain
 
-**Recent Progress**: Path resolution and environment variable handling have been significantly improved with `HabitatPathHelpers` and `createHabitatPathHelpers()` (commits c8968cf, 1326220). This plan now focuses on remaining functional composition opportunities.
+**Recent Progress**: Path resolution and environment variable handling have been significantly improved with `HabitatPathHelpers` and `createHabitatPathHelpers()` (commits c8968cf, 1326220). 
+
+**Architecture Decision**: Using RxJS for reactive patterns eliminates need for custom functional utilities. Focus on domain-specific abstractions.
 
 ## Implementation Steps
 
-### Step 1: Create Functional Composition Utilities (60 minutes)
+### Step 1: Add RxJS and Domain-Specific Utilities (60 minutes)
 
-**File: `src/functional.js`**
-
-Create core utilities that will be used throughout the codebase:
-
-```javascript
-// Essential functions to implement:
-const pipe = (...fns) => async (value) => { /* compose async functions */ };
-const merge = (key) => (objects) => { /* merge objects at key */ };
-const when = (predicate, fn) => async (value) => { /* conditional execution */ };
-const unless = (predicate, fn) => async (value) => { /* inverse conditional */ };
-const transform = (transforms) => async (input) => { /* object property transforms */ };
-const parallel = (tasks) => async (input) => { /* Promise.all with object shape */ };
+**Dependencies**: Add RxJS to package.json
+```bash
+npm install rxjs
 ```
 
-**Testing**: Create `test/unit/functional.test.js` with comprehensive tests for each utility.
+**File: `src/rxjs-habitat.js`**
 
-**Validation**: 
-- Test pipe with 3-4 function composition
-- Test merge with environment variable merging scenario
-- Test when/unless with Docker image existence checks
-- Test transform with file path resolution
-- Test parallel with concurrent operations
-- Verify all tests pass before proceeding
+Create domain-specific RxJS utilities for claude-habitat:
+
+```javascript
+const { from, Subject, EMPTY } = require('rxjs');
+const { tap, timeout, retry, map, mergeMap, catchError, finalize } = require('rxjs/operators');
+
+/**
+ * Convert async functions to RxJS observables
+ */
+const fromAsync = (asyncFn) => (...args) => from(asyncFn(...args));
+
+/**
+ * Validate required context properties
+ */
+const requireProps = (requiredProps) => (source$) =>
+  source$.pipe(
+    tap(ctx => {
+      const missing = requiredProps.filter(prop => !(prop in ctx));
+      if (missing.length > 0) {
+        throw new Error(`Missing required context properties: ${missing.join(', ')}`);
+      }
+    })
+  );
+
+/**
+ * Emit progress events for pipeline stages
+ */
+const tapProgress = (stageName, progressEmitter) => 
+  tap(result => progressEmitter.next({ 
+    stage: stageName, 
+    status: 'completed', 
+    result,
+    timestamp: Date.now()
+  }));
+
+/**
+ * Stage wrapper with timeout, retry, and progress tracking
+ */
+const stageOperator = (name, progressEmitter, options = {}) => (source$) => {
+  const startTime = Date.now();
+  
+  progressEmitter.next({ 
+    stage: name, 
+    status: 'started', 
+    timestamp: startTime 
+  });
+
+  const operators = [
+    options.timeout ? timeout(options.timeout) : tap(),
+    options.retry ? retry(options.retry) : tap(),
+    tapProgress(name, progressEmitter),
+    finalize(() => {
+      const duration = Date.now() - startTime;
+      progressEmitter.next({ 
+        stage: name, 
+        status: 'finished', 
+        duration,
+        timestamp: Date.now()
+      });
+    })
+  ].filter(op => op !== tap()); // Remove empty taps
+
+  return source$.pipe(...operators);
+};
+
+/**
+ * Conditional execution based on context predicate
+ */
+const conditionalMap = (predicate, onTrue, onFalse = map(x => x)) => (source$) =>
+  source$.pipe(
+    mergeMap(ctx => predicate(ctx) ? 
+      from([ctx]).pipe(onTrue) : 
+      from([ctx]).pipe(onFalse)
+    )
+  );
+
+/**
+ * Docker operation with habitat-specific error handling
+ */
+const dockerOperation = (operation, progressEmitter) => (source$) =>
+  source$.pipe(
+    mergeMap(ctx => fromAsync(operation)(ctx)),
+    catchError(error => {
+      // Habitat-specific error handling
+      if (error.message.includes('docker')) {
+        progressEmitter.next({ 
+          type: 'docker-error', 
+          error: error.message,
+          suggestion: 'Check Docker daemon is running and accessible'
+        });
+      }
+      throw error;
+    })
+  );
+
+module.exports = {
+  fromAsync,
+  requireProps,
+  tapProgress,
+  stageOperator,
+  conditionalMap,
+  dockerOperation
+};
+```
+
+**Testing**: Create `test/unit/rxjs-habitat.test.js` with comprehensive tests for each utility.
 
 ### Step 2: Implement Declarative Test Framework (90 minutes)
 
@@ -111,64 +204,50 @@ function validateConfig(config, type = 'habitat') {
 - Keep old validation as fallback initially
 - Test with all existing configs (base, claude-habitat, discourse)
 
-### Step 4: Refactor Remaining Config Operations with Composition (60 minutes)
+### Step 4: Apply RxJS to Core Operations (60 minutes)
 
 **File: `src/config.js`**
 
-**Note**: Config loading with environment chain is already well-implemented with `createHabitatPathHelpers()`. Focus on remaining areas:
+**Note**: Config loading with environment chain is already well-implemented with `createHabitatPathHelpers()`. Focus on validation with RxJS:
 
 ```javascript
-const { pipe, transform, when } = require('./functional');
+const { from } = require('rxjs');
+const { map, mergeMap, tap } = require('rxjs/operators');
 const { validateConfig } = require('./validation');
+const { requireProps, conditionalMap } = require('./rxjs-habitat');
 
-// Image lifecycle operations
-const buildImagePipeline = pipe(
-  // Validate and prepare config
-  async (config) => ({
-    ...config,
-    validated: await validateConfig(config, 'habitat')
-  }),
-  
-  // Check image cache
-  when(
-    (ctx) => !ctx.rebuild,
-    async (ctx) => ({
-      ...ctx,
-      imageExists: await dockerImageExists(ctx.config.image.tag)
-    })
-  ),
-  
-  // Conditional build
-  when(
-    (ctx) => !ctx.imageExists || ctx.rebuild,
-    async (ctx) => {
-      const buildResult = await buildImage(ctx.config);
-      return { ...ctx, buildResult };
-    }
-  )
-);
+// Enhanced config validation with RxJS
+function validateConfigWithProgress(config, progressEmitter) {
+  return from([config]).pipe(
+    tap(() => progressEmitter.next({ stage: 'config-validation', status: 'started' })),
+    map(validateConfig),
+    tap(result => {
+      if (!result.valid) {
+        progressEmitter.next({ 
+          type: 'validation-error', 
+          errors: result.formattedErrors,
+          suggestions: result.suggestions 
+        });
+        throw new Error(`Config validation failed: ${result.errors.join(', ')}`);
+      }
+    }),
+    map(result => ({ validatedConfig: result.config }))
+  );
+}
 
-// Container operations
-const containerCreationPipeline = pipe(
-  // Prepare container config
-  transform({
-    envVars: (config) => compileEnvironmentVariables(config),
-    volumes: (config) => resolveVolumeMounts(config),
-    networks: (config) => setupNetworking(config)
-  }),
-  
-  // Create and configure container
-  async (config) => {
-    const container = await createContainer(config);
-    return { ...config, container };
-  }
-);
+// Example usage in existing operations
+function loadConfigWithValidation(configPath, progressEmitter) {
+  return from([configPath]).pipe(
+    mergeMap(path => fromAsync(loadConfig)(path)),
+    mergeMap(config => validateConfigWithProgress(config, progressEmitter))
+  );
+}
 ```
 
 **Integration**:
-- Apply to `image-lifecycle.js` build operations
-- Apply to `container-lifecycle.js` creation logic
-- Focus on operations not yet using path helpers
+- Replace manual validation in key areas with RxJS version
+- Focus on operations that would benefit from progress reporting
+- Maintain backward compatibility with existing loadConfig calls
 
 ### Step 5: Testing and Validation (60 minutes)
 
@@ -207,13 +286,16 @@ const containerCreationPipeline = pipe(
 
 ## Success Criteria
 
-1. **Functional Composition**: Config loading uses pipe() and is more readable
+1. **RxJS Integration**: Domain-specific RxJS utilities enable reactive patterns
 2. **Test Framework**: At least 2 existing tests converted to use declarative setup
 3. **Validation**: All configs validate with new system and show helpful errors
 4. **No Regression**: All existing functionality works unchanged
 5. **Performance**: No measurable slowdown in habitat startup
 6. **Error Quality**: Config validation errors include actionable suggestions
+7. **Foundation for 03**: RxJS utilities ready for event-driven architecture implementation
 
-## Time Estimate: 6.5 hours total
+## Time Estimate: 5.5 hours total
 
-This represents a complete refactoring of core patterns while maintaining backward compatibility and improving code quality significantly.
+**Reduced from 6.5 hours** by eliminating custom functional utilities and leveraging RxJS.
+
+This represents focused improvements on domain-specific abstractions while leveraging proven libraries for reactive patterns.
