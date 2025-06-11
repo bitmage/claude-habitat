@@ -27,7 +27,9 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Create docker group with matching host GID for Docker socket access
-RUN groupadd -f -g 966 docker && usermod -aG docker node
+RUN groupdel docker 2>/dev/null || true && \
+    groupadd -g 966 docker && \
+    usermod -aG docker node
 
 # Create workspace directory structure with proper permissions
 RUN mkdir -p /workspace && \

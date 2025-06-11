@@ -29,6 +29,7 @@ env:
   - NODE_ENV=development
   - DOCKER_HOST=unix:///var/run/docker.sock
   - GITHUB_APP_ID=1357221
+  - DOCKER_HOST_GID=966
 
 # Directory and file setup
 files:
@@ -75,21 +76,26 @@ setup:
   root:
     - |
       # Fix Docker socket permissions for development
-      chmod 666 /var/run/docker.sock || true
+      echo "Fixing Docker socket access..."
       
-      # Fix Docker group ID mismatch - make container's docker group match host's
-      HOST_DOCKER_GID=$(stat -c %g /var/run/docker.sock)
-      CONTAINER_DOCKER_GID=$(getent group docker | cut -d: -f3)
-      echo "Docker GID check: host=$HOST_DOCKER_GID, container=$CONTAINER_DOCKER_GID"
-      if [ "$HOST_DOCKER_GID" != "$CONTAINER_DOCKER_GID" ]; then
-        echo "Fixing docker group ID mismatch: container=$CONTAINER_DOCKER_GID -> host=$HOST_DOCKER_GID"
-        groupmod -g $HOST_DOCKER_GID docker
-        # Re-add node user to docker group with new GID
-        usermod -aG docker node
-        echo "Docker group fixed, new GID: $(getent group docker | cut -d: -f3)"
-      else
-        echo "Docker group IDs already match: $HOST_DOCKER_GID"
+      # Use the host's docker group ID to ensure proper permissions
+      HOST_DOCKER_GID=${DOCKER_HOST_GID:-966}
+      echo "Using host docker group ID: $HOST_DOCKER_GID"
+      
+      # Create group with host's docker GID if it doesn't exist
+      if ! getent group $HOST_DOCKER_GID > /dev/null 2>&1; then
+        echo "Creating docker-host group with GID $HOST_DOCKER_GID"
+        groupadd -g $HOST_DOCKER_GID docker-host
       fi
+      
+      # Add node user to the host docker group
+      echo "Adding node user to docker group (GID $HOST_DOCKER_GID)"
+      usermod -aG $HOST_DOCKER_GID node
+      
+      # Show final permissions and user groups
+      ls -la /var/run/docker.sock
+      echo "Groups for node user after adding to docker group:"
+      groups node
 
       # Ensure .claude directory exists and has proper ownership for node user
       # Create this BEFORE any volumes are mounted to avoid ownership conflicts
