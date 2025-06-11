@@ -158,6 +158,13 @@ setup:
         echo "Setting up GitHub authentication..."
         if /workspace/system/tools/bin/setup-github-auth; then
           echo "✅ GitHub authentication configured successfully"
+          
+          # Configure git to use the credential helper with environment variables
+          export GITHUB_APP_ID=1357221
+          export GITHUB_APP_PEM_FILE=/workspace/shared/behold-the-power-of-claude.2025-06-04.private-key.pem
+          git config --global credential.helper /workspace/system/tools/bin/git-credential-github-app
+          
+          echo "✅ Git credential helper configured for GitHub App authentication"
         else
           echo "⚠️  GitHub authentication setup failed - continuing without GitHub access"
         fi
