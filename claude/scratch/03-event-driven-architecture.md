@@ -3,9 +3,6 @@
 ## Goal
 Transform long-running operations into event-driven pipelines with progress reporting and better user feedback.
 
-## MicroQL Integration Note
-MicroQL looks promising for query composition but is orthogonal to event-driven architecture. We could potentially use it later for querying system state, but events are about real-time progress and notifications.
-
 ## Architecture
 
 ### Event Pipeline Framework
@@ -373,23 +370,3 @@ function createTestPipeline(habitat, testType) {
 5. Add pipeline-based logging and metrics
 6. Create tests for pipeline scenarios
 
-## Future MicroQL Integration
-Once event pipelines are established, we could add MicroQL for querying pipeline state:
-
-```javascript
-// Query pipeline status
-const status = microql`
-  pipeline(name: "habitat-build") {
-    state
-    progress
-    currentStage
-    stages {
-      name
-      status
-      duration
-    }
-  }
-`;
-```
-
-This would allow sophisticated querying of system state but is separate from the core event-driven architecture.
