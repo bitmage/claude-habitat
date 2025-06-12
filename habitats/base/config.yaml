@@ -11,6 +11,7 @@ repositories: []
 
 # Environment configuration (inherits from system, sets explicit WORKDIR for base habitat)
 env:
+  - USER=root
   - WORKDIR=/workspace
   - GITHUB_APP_ID=1357221
 
@@ -19,7 +20,6 @@ setup: {}
 
 # Container configuration
 container:
-  user: root
   init_command: /sbin/init
   startup_delay: 2
 

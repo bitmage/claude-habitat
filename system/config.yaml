@@ -4,6 +4,7 @@ description: Core infrastructure setup for all claude-habitat containers
 
 # Default environment variables (can be overridden by shared/habitat configs)
 env:
+  - USER=root
   - WORKDIR=/workspace
   - HABITAT_PATH=${WORKDIR}/habitat
   - SYSTEM_PATH=${HABITAT_PATH}/system
@@ -11,11 +12,6 @@ env:
   - LOCAL_PATH=${HABITAT_PATH}/local
   - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
   - PATH=${PATH}:${SYSTEM_TOOLS_PATH}
-
-# Container settings for system setup
-container:
-  work_dir: ${WORKDIR}
-  user: root
 
 # System-wide volume mounts applied to all habitats
 # volumes:
@@ -33,7 +29,7 @@ files:
   - src: ~/.claude/.credentials.json
     dest: ~/.claude/.credentials.json
     mode: 600
-    owner: "{container.user}"
+    owner: "{env.USER}"
     description: "Claude credentials for authentication"
   # Future examples:
   # - src: bashrc-additions
@@ -57,7 +53,7 @@ setup:
       fi
 
   user:
-    run_as: "{container.user}"
+    run_as: "{env.USER}"
     commands:
       - |
         # Set up GitHub App authentication using tools

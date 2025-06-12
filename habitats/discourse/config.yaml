@@ -14,6 +14,7 @@ image:
 
 # Environment variables (discourse uses /discourse instead of default /workspace)
 env:
+  - USER=discourse
   - WORKDIR=/discourse
   - HABITAT_PATH=${WORKDIR}/habitat
   - SYSTEM_PATH=${HABITAT_PATH}/system
@@ -88,7 +89,6 @@ setup:
 
 # Container configuration
 container:
-  user: discourse
   init_command: /sbin/boot
   startup_delay: 10
 

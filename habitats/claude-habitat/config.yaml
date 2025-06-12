@@ -17,6 +17,7 @@ repositories:
     shallow: true
 
 env:
+  - USER=node
   - WORKDIR=/workspace
   - HABITAT_PATH=${WORKDIR}
   - SYSTEM_PATH=${WORKDIR}/system
@@ -35,27 +36,27 @@ files:
   # Copy system and shared directories for writable access
   - src: ./system
     dest: /workspace/system
-    owner: "{container.user}"
+    owner: "{env.USER}"
     description: "System tools and configuration (writable copy)"
   - src: ./shared
     dest: /workspace/shared
-    owner: "{container.user}"
+    owner: "{env.USER}"
     description: "Shared configuration and resources (writable copy)"
   # Copy habitat-specific files
   - src: ./habitats/claude-habitat
     dest: /workspace/habitats/claude-habitat
-    owner: "{container.user}"
+    owner: "{env.USER}"
     description: "Claude-habitat specific configuration"
   # Create .claude directory structure for Claude to use
   - src: /dev/null
-    dest: /home/{container.user}/.claude/.keep
+    dest: /home/{env.USER}/.claude/.keep
     mode: 644
     description: "Ensure .claude directory exists for Claude workspace"
   # Copy Claude credentials from host to container during build (bypass habitat only)
   - src: ~/.claude/.credentials.json
-    dest: /home/{container.user}/.claude/.credentials.json
+    dest: /home/{env.USER}/.claude/.credentials.json
     mode: 600
-    owner: "{container.user}"
+    owner: "{env.USER}"
     description: "Claude credentials for authentication"
   # Git configuration files (copy to all 3 locations)
   - src: ./shared/gitconfig
@@ -145,7 +146,6 @@ setup:
         echo "Claude Habitat setup complete - Docker access will be configured at container startup"
 
 container:
-  user: node
   init_command: /usr/local/bin/habitat-init
   startup_delay: 5
 
