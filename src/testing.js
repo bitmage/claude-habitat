@@ -6,7 +6,7 @@ const execAsync = promisify(exec);
 
 const { colors, sleep, fileExists, calculateCacheHash, executeCommand, processTestResults, manageContainer, rel } = require('./utils');
 const { dockerRun, dockerImageExists } = require('./docker');
-const { loadConfig } = require('./config');
+const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
 const { askToContinue } = require('./cli');
 
 // Test running functionality
@@ -27,7 +27,7 @@ async function runTestMode(testType, testTarget, rebuild = false) {
       process.exit(1);
     }
 
-    const habitatConfig = await loadConfig(habitatConfigPath);
+    const habitatConfig = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
 
     if (testType === 'system') {
       // Check if habitat bypasses system/shared infrastructure
@@ -232,7 +232,7 @@ async function showHabitatTestMenu(habitatName) {
   } else if (choice === 'h') {
     // Run only habitat-specific tests
     const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
-    const habitatConfig = await loadConfig(habitatConfigPath);
+    const habitatConfig = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
 
     if (habitatConfig.tests && habitatConfig.tests.length > 0) {
       console.log(`Running ${habitatName}-specific tests...\n`);
@@ -244,7 +244,7 @@ async function showHabitatTestMenu(habitatName) {
   } else if (choice === 'f') {
     // Run filesystem verification for this habitat
     const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
-    const habitatConfig = await loadConfig(habitatConfigPath);
+    const habitatConfig = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
 
     console.log(`Running filesystem verification for ${habitatName}...\n`);
     const { runEnhancedFilesystemVerification } = require('./filesystem');

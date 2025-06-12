@@ -1,6 +1,6 @@
 const yaml = require('js-yaml');
 const fs = require('fs').promises;
-const { fileExists } = require('./utils');
+const { fileExists, rel } = require('./utils');
 const { validateHabitatConfig, getConfigValidationHelp } = require('./config-validation');
 const { expandTemplateObject } = require('./template-expansion');
 
@@ -65,19 +65,11 @@ async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true
   // Add environment to config for template expansion
   config._environment = env;
   
-  // Expand all templates in the config using the unified template system
-  config = expandTemplateObject(config, config);
+  // Note: Template expansion is now handled in loadConfigWithEnvironmentChain
+  // for proper coalesced environment support. Individual configs only get
+  // basic environment variable processing.
   
-  // Auto-populate container settings from environment variables if missing
-  if (validateAsHabitat) {
-    if (!config.container) {
-      config.container = {};
-    }
-    // Set work_dir from WORKDIR environment variable if not explicitly set
-    if (!config.container.work_dir && env.WORKDIR) {
-      config.container.work_dir = env.WORKDIR;
-    }
-  }
+  // Note: Container settings auto-population removed as part of work_dir elimination
   
   // Only validate as habitat config if requested (not for system/shared configs)
   if (validateAsHabitat) {
@@ -94,6 +86,51 @@ async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true
   return { ...config, _configPath: configPath, _environment: env };
 }
 
+/**
+ * Load habitat environment from config with proper variable coalescing
+ * This loads system → shared → local configs and coalesces their environment variables,
+ * then performs template expansion on the final result with the coalesced environment.
+ * @param {string} habitatConfigPath - Path to the habitat config file
+ * @returns {object} Configuration with coalesced environment and expanded templates
+ */
+async function loadHabitatEnvironmentFromConfig(habitatConfigPath) {
+  if (!habitatConfigPath) throw new Error('Missing required parameter: habitatConfigPath');
+  if (!await fileExists(habitatConfigPath)) throw new Error('Habitat configuration file not found');
+
+  let coalescedEnv = {};
+  
+  // Load system config and merge its environment variables
+  const systemConfigPath = rel('system', 'config.yaml');
+  if (await fileExists(systemConfigPath)) {
+    try {
+      const systemConfig = await loadConfig(systemConfigPath, {}, false);
+      coalescedEnv = { ...coalescedEnv, ...systemConfig._environment };
+    } catch (err) {
+      console.warn(`Warning: Could not load system config: ${err.message}`);
+    }
+  }
+  
+  // Load shared config and merge its environment variables
+  const sharedConfigPath = rel('shared', 'config.yaml');
+  if (await fileExists(sharedConfigPath)) {
+    try {
+      const sharedConfig = await loadConfig(sharedConfigPath, coalescedEnv, false);
+      coalescedEnv = { ...coalescedEnv, ...sharedConfig._environment };
+    } catch (err) {
+      console.warn(`Warning: Could not load shared config: ${err.message}`);
+    }
+  }
+  
+  // Load habitat config with coalesced environment
+  const habitatConfig = await loadConfig(habitatConfigPath, coalescedEnv, true);
+  
+  // Now perform template expansion on the final config with fully coalesced environment
+  const finalConfig = expandTemplateObject(habitatConfig, habitatConfig);
+  
+  return finalConfig;
+}
+
 module.exports = {
-  loadConfig
+  loadConfig,
+  loadHabitatEnvironmentFromConfig
 };

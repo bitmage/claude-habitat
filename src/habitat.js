@@ -5,14 +5,14 @@ const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
 const { colors, calculateCacheHash, fileExists, sleep, rel } = require('./utils');
-const { loadConfig } = require('./config');
+const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
 const { buildBaseImage, buildPreparedImage, dockerImageExists, dockerRun, dockerExec, dockerIsRunning } = require('./docker');
 const { testRepositoryAccess } = require('./github');
 
 // Start a new session with the specified habitat
 async function startSession(configPath, extraRepos = [], overrideCommand = null, options = {}) {
   const { rebuild = false } = options;
-  const config = await loadConfig(configPath);
+  const config = await loadHabitatEnvironmentFromConfig(configPath);
   const hash = calculateCacheHash(config, extraRepos);
   const preparedTag = `claude-habitat-${config.name}:${hash}`;
 
@@ -45,7 +45,7 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
 
 // Build habitat image (base + prepared)
 async function buildHabitatImage(configPath, extraRepos = []) {
-  const config = await loadConfig(configPath);
+  const config = await loadHabitatEnvironmentFromConfig(configPath);
   const hash = calculateCacheHash(config, extraRepos);
   const preparedTag = `claude-habitat-${config.name}:${hash}`;
 
@@ -94,7 +94,7 @@ async function checkHabitatRepositories(habitatsDir) {
       
       try {
         if (await fileExists(configPath)) {
-          const config = await loadConfig(configPath);
+          const config = await loadHabitatEnvironmentFromConfig(configPath);
           
           if (config.repositories && Array.isArray(config.repositories)) {
             for (const repo of config.repositories) {

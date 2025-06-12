@@ -9,14 +9,14 @@
  * 
  * Template Syntax:
  * - {env.VAR} or ${VAR} - Environment variables (uses path-helpers for resolution)
- * - {config.path.to.value} - Dot-notation access to any config field
- * - {name} - Shorthand for {config.name}
- * - {image.tag} - Shorthand for {config.image.tag}
+ * - {name} - Shorthand for current config name
+ * - {image.tag} - Shorthand for current config image tag
+ * - {repositories.N.field} - Access to repository array elements
  * 
  * Examples:
  * - "/home/{env.USER}/.ssh/config"
- * - "{config.repositories.0.path}/src"
- * - "{image.tag}-{config.container.startup_delay}"
+ * - "{repositories.0.path}/src"
+ * - "{image.tag}-{name}"
  */
 
 const { HabitatPathHelpers } = require('./path-helpers');
@@ -62,8 +62,6 @@ class TemplateExpander {
     // Expand {env.VAR} and ${VAR} patterns using path helpers
     result = this._expandEnvironmentVariables(result);
     
-    // Expand {config.path.to.value} patterns using dot notation
-    result = this._expandConfigReferences(result);
     
     // Expand shorthand patterns ({name}, {image.tag}, etc.)
     result = this._expandShorthandPatterns(result);
@@ -132,16 +130,6 @@ class TemplateExpander {
   }
   
   /**
-   * Expand config references using dot notation: {config.path.to.value}
-   */
-  _expandConfigReferences(str) {
-    return str.replace(/\{config\.([^}]+)\}/g, (match, path) => {
-      const value = this._getNestedValue(this.config, path);
-      return value !== undefined ? String(value) : match;
-    });
-  }
-  
-  /**
    * Expand shorthand patterns for common config paths
    */
   _expandShorthandPatterns(str) {
@@ -156,13 +144,7 @@ class TemplateExpander {
       return value !== undefined ? String(value) : match;
     });
     
-    // {container.startup_delay} -> {config.container.startup_delay}
-    str = str.replace(/\{container\.([^}]+)\}/g, (match, containerPath) => {
-      const value = this._getNestedValue(this.config.container, containerPath);
-      return value !== undefined ? String(value) : match;
-    });
-    
-    // {repositories.N.field} -> {config.repositories.N.field}
+    // {repositories.N.field} - Direct access to repository array
     str = str.replace(/\{repositories\.([^}]+)\}/g, (match, repoPath) => {
       const value = this._getNestedValue(this.config.repositories, repoPath);
       return value !== undefined ? String(value) : match;

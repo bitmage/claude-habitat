@@ -90,7 +90,7 @@ function validateHabitatConfig(config) {
       }
       
       if (!envVar.includes('=')) {
-        throw new Error(`Environment variable ${i + 1} must be in KEY=value format in ${config.name}`);
+        throw new Error(`Environment variable ${i + 1} must be in KEY=value format in ${config.name}, got: "${envVar}"`);
       }
     }
   }

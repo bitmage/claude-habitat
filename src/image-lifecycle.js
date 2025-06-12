@@ -328,7 +328,7 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
     
     // Create workDirPath helper for this container
-    const workDirPath = createWorkDirPath(config.container.work_dir);
+    const workDirPath = createWorkDirPath(config._environment?.WORKDIR);
     
     if (!isBypassHabitat) {
       // Copy system files first
@@ -369,12 +369,12 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
         // Load system config with environment variable processing
         const systemConfig = await loadConfig(systemConfigPath);
         
-        // Ensure the system config has the correct work_dir and user from habitat config
-        if (!systemConfig.container) {
-          systemConfig.container = {};
+        // Ensure the system config has the correct environment variables
+        if (!systemConfig._environment) {
+          systemConfig._environment = {};
         }
-        systemConfig.container.work_dir = config.container?.work_dir || systemConfig._environment?.WORKDIR || '/workspace';
-        systemConfig.container.user = config.container?.user || 'root';
+        systemConfig._environment.WORKDIR = config._environment?.WORKDIR || systemConfig._environment?.WORKDIR || '/workspace';
+        systemConfig._environment.USER = config._environment?.USER || 'root';
         
         // Copy system-level files first (before setup commands)
         await copyConfigFiles(tempContainer, systemConfig);
@@ -391,9 +391,11 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
         console.log('Loading shared configuration...');
         const sharedConfig = await loadConfig(sharedConfigPath);
         
-        // Set container user for shared config processing
-        sharedConfig.container = sharedConfig.container || {};
-        sharedConfig.container.user = config.container?.user || 'root';
+        // Set environment variables for shared config processing
+        if (!sharedConfig._environment) {
+          sharedConfig._environment = {};
+        }
+        sharedConfig._environment.USER = config._environment?.USER || 'root';
         
         // Copy shared-level files
         await copyConfigFiles(tempContainer, sharedConfig);
@@ -417,7 +419,7 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     }
     
     for (const repo of allRepos) {
-      await cloneRepository(tempContainer, repo, config.container.work_dir, config.container.user);
+      await cloneRepository(tempContainer, repo, config._environment?.WORKDIR, config._environment?.USER);
     }
     
     // Copy habitat-level files first (before setup commands)
@@ -428,11 +430,11 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     
     // Fix permissions for work directory
     console.log('Setting up work directory permissions...');
-    await dockerExec(tempContainer, `chown -R $(id -u):$(id -g) ${config.container.work_dir} || true`, 'root');
+    await dockerExec(tempContainer, `chown -R $(id -u):$(id -g) ${config._environment?.WORKDIR} || true`, 'root');
     
     // Fix git safe directory ownership issues
     console.log('Configuring git safe directories...');
-    await dockerExec(tempContainer, `git config --global --add safe.directory '*'`, config.container.user);
+    await dockerExec(tempContainer, `git config --global --add safe.directory '*'`, config._environment?.USER);
     
     // Commit the container to create the prepared image
     console.log('Creating prepared image...');

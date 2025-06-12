@@ -23,9 +23,9 @@ env:
   - RAILS_ENV=test
   - RUBY_GLOBAL_METHOD_CACHE_SIZE=131072
   - LD_PRELOAD=/usr/lib/libjemalloc.so
-  - CI
-  - NO_EMBER_CLI
-  - QUNIT_RAILS_ENV
+  - CI=true
+  - NO_EMBER_CLI=1
+  - QUNIT_RAILS_ENV=test
   # GitHub App authentication
   - GITHUB_APP_ID=1357221
   - GITHUB_APP_NAME=Behold the power of Claude
