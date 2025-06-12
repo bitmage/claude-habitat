@@ -33,7 +33,7 @@ function buildDockerRunArgs(command, options = {}) {
 function buildDockerExecArgs(container, command, user = null) {
   const args = ['exec'];
   if (user) args.push('-u', user);
-  args.push(container, '/usr/bin/bash', '-c', command);
+  args.push(container, '/bin/bash', '-c', command);
   return args;
 }
 

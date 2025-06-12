@@ -392,8 +392,8 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     console.log(`Using habitat image: ${imageTag}`);
 
     // Start test container with same configuration as normal habitat
-    const workDir = habitatConfig.container.work_dir; // Config validation ensures this exists
-    const containerUser = habitatConfig.container.user; // Config validation ensures this exists
+    const workDir = habitatConfig._environment?.WORKDIR; // Config validation ensures this exists
+    const containerUser = habitatConfig._environment?.USER; // Config validation ensures this exists
 
     // Parse environment variables from config
     const envArgs = [];
@@ -453,7 +453,7 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     `;
 
     try {
-      const output = await dockerExec(container.name, testScript, habitatConfig.container?.user || 'node');
+      const output = await dockerExec(container.name, testScript, habitatConfig._environment?.USER || 'root');
       console.log(output);
       results = parseTestOutput(output, testType);
     } catch (err) {

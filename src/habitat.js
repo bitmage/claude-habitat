@@ -133,8 +133,8 @@ async function setupHabitatEnvironment(habitatName, config) {
     throw new Error(`Invalid habitat config: missing container section`);
   }
   
-  if (!config.container.work_dir) {
-    throw new Error(`Invalid habitat config: missing work_dir`);
+  if (!config._environment?.WORKDIR) {
+    throw new Error(`Invalid habitat config: missing WORKDIR environment variable`);
   }
   
   console.log(`✅ Environment setup complete for ${habitatName}`);
@@ -161,8 +161,8 @@ function interpretExitCode(exitCode) {
 async function runContainerWithSharedLogic(tag, config, overrideCommand = null, ttyOverride = null) {
   const { createHabitatContainer } = require('./container-lifecycle');
   const containerName = `${config.name}_${Date.now()}_${process.pid}`;
-  const workDir = config.container.work_dir;
-  const containerUser = config.container.user;
+  const workDir = config._environment?.WORKDIR;
+  const containerUser = config._environment?.USER;
   const claudeCommand = overrideCommand || config.claude?.command || 'claude';
   let startupCompleted = false;
 

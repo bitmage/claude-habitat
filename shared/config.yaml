@@ -8,13 +8,10 @@ tests:
 
 # Shared environment variables (add to system PATH)
 env:
+  - USER=root
+  - WORKDIR=/workspace
   - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - PATH=${PATH}:${SHARED_TOOLS_PATH}
-
-# Container settings (will be overridden by habitat-specific config)
-container:
-  work_dir: /workspace
-  user: root
 
 # Structured file operations - copy files to specific locations with permissions
 files:
@@ -37,7 +34,7 @@ files:
 # Setup commands that run after file operations
 setup:
   user:
-    run_as: "{container.user}"
+    run_as: "{env.USER}"
     commands:
       - |
         # Configure git for container user using centralized script

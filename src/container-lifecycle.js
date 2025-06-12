@@ -22,7 +22,7 @@ async function createHabitatContainer(config, options = {}) {
     temporary = false,
     command = null,
     rebuild = false,
-    workDir = config.container?.work_dir,
+    workDir = config._environment?.WORKDIR,
     preparedTag = null
   } = options;
 
@@ -49,7 +49,7 @@ async function createHabitatContainer(config, options = {}) {
     await prepareWorkspace(config, imageTag, [], { rebuild });
   }
 
-  const containerUser = config.container?.user || 'root';
+  const containerUser = config._environment?.USER || 'root';
   const containerName = name;
 
   console.log(`Creating container from prepared image: ${containerName}`);
@@ -134,15 +134,15 @@ async function createHabitatContainer(config, options = {}) {
     }
   }
   
-  // Resolve placeholder values in system volumes using dot notation
+  // Resolve placeholder values in system volumes using environment variables
   const resolvedSystemVolumes = systemVolumes.map(volume => {
     let resolved = volume;
     
-    // Find all {path.to.value} placeholders and resolve them
-    const placeholderRegex = /\\{([^}]+)\\}/g;
-    resolved = resolved.replace(placeholderRegex, (match, path) => {
-      // Resolve path like "container.user" to actual config value
-      const value = path.split('.').reduce((obj, key) => obj?.[key], config);
+    // Find all {env.VAR} placeholders and resolve them
+    const placeholderRegex = /\\{env\\.([^}]+)\\}/g;
+    resolved = resolved.replace(placeholderRegex, (match, envVar) => {
+      // Resolve environment variable from config._environment
+      const value = config._environment?.[envVar];
       return value || match; // Return original if value not found
     });
     

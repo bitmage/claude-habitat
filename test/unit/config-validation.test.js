@@ -156,14 +156,11 @@ test('config validation catches missing name', () => {
 test('config validation catches empty user', () => {
   const invalidConfig = {
     name: 'test',
-    container: {
-      work_dir: '/workspace',
-      user: ''  // Empty string
-    }
+    env: ['USER=', 'WORKDIR=/workspace']  // Empty USER value
   };
   
   assert.throws(
     () => validateHabitatConfig(invalidConfig),
-    /container.user must be a non-empty string/
+    /USER environment variable must be non-empty/
   );
 });
