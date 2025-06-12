@@ -62,6 +62,14 @@ async function buildBaseImage(config, options = {}) {
     '-f', dockerfilePath,
     '-t', baseTag
   ];
+
+  // Detect host docker group GID if docker socket is available
+  const { execSync } = require('child_process');
+  const dockerSocketPath = '/var/run/docker.sock';
+  if (require('fs').existsSync(dockerSocketPath)) {
+    const dockerGid = execSync(`stat -c '%g' ${dockerSocketPath}`, { encoding: 'utf8' }).trim();
+    buildArgs.push('--build-arg', `DOCKER_GROUP_GID=${dockerGid}`);
+  }
   
   // Add --no-cache if rebuilding
   if (rebuild) {

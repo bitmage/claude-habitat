@@ -24,16 +24,18 @@ Eliminate Dockerfiles and implement intelligent, resumable builds with stage-by-
 ```javascript
 // Standard phases for all habitat builds
 const BUILD_PHASES = [
-  { id: '1', name: 'base', description: 'Set base image' },
-  { id: '2', name: 'users', description: 'Create users and set permissions' },
-  { id: '3', name: 'env', description: 'Set environment variables' },
-  { id: '4', name: 'habitat', description: 'Create habitat directory structure' },
-  { id: '5', name: 'files', description: 'Copy files and mount volumes' },
-  { id: '6', name: 'setup', description: 'Install packages and run setup commands' },
-  { id: '7', name: 'repos', description: 'Clone repositories' },
-  { id: '8', name: 'tools', description: 'Install habitat tools' },
-  { id: '9', name: 'verify', description: 'Verify filesystem and permissions' },
-  { id: '10', name: 'final', description: 'Set final configuration and command' }
+  { id: '1', name: 'base', description: 'Set base image' }, # run_as: root
+  { id: '2', name: 'users', description: 'Create users and set permissions' }, # run_as: root
+  { id: '3', name: 'env', description: 'Set environment variables' }, # run_as: root, $USER
+  { id: '4', name: 'workdir', description: 'Create project work directory' }, # run_as: $USER
+  { id: '5', name: 'habitat', description: 'Create habitat directory structure' }, # run_as: $USER
+  { id: '6', name: 'files', description: 'Copy files and mount volumes' }, # run_as: $USER (default), root (if instructed)
+  { id: '7', name: 'setup', description: 'Install packages and run setup commands' }, # run_as: root or $USER, as instructed
+  { id: '8', name: 'repos', description: 'Clone repositories' }, # run_as: $USER
+  { id: '9', name: 'tools', description: 'Install habitat tools' }, # run_as: $USER
+  { id: '10', name: 'verify', description: 'Verify filesystem and permissions' }, # run_as: root (read only)
+  { id: '11', name: 'test', description: 'Run final system checks' }, # run_as: $USER
+  { id: '12', name: 'final', description: 'Set final configuration and command' } # run_as: $USER
 ];
 ```
 

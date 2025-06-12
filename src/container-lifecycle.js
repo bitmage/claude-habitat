@@ -60,7 +60,7 @@ async function createHabitatContainer(config, options = {}) {
     '--name', containerName
   ];
 
-  // Add environment variables - use compiled environment for normal habitats
+  // Add environment variables from configs - use traditional shell expansion, not synthetic replacement
   const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
   
   if (isBypassHabitat) {
@@ -73,26 +73,47 @@ async function createHabitatContainer(config, options = {}) {
       });
     }
   } else {
-    // For normal habitats, use compiled environment from system + shared + local
+    // For normal habitats, pass environment variables from system + shared + local configs
+    // This allows traditional shell expansion like PATH=${PATH}:${SYSTEM_TOOLS_PATH}
+    
+    // Load and add system config environment variables
     try {
-      const { createHabitatPathHelpers } = require('./path-helpers');
-      const pathHelpers = await createHabitatPathHelpers(config);
-      const compiledEnv = pathHelpers.getEnvironment();
-      
-      // Convert compiled environment to -e arguments
-      Object.entries(compiledEnv).forEach(([key, value]) => {
-        runArgs.push('-e', `${key}=${value}`);
-      });
-    } catch (err) {
-      console.warn(`Warning: Could not compile environment for normal habitat: ${err.message}`);
-      // Fallback to local config.env if compilation fails
-      if (config.env && Array.isArray(config.env)) {
-        config.env.forEach(envVar => {
-          if (typeof envVar === 'string') {
-            runArgs.push('-e', envVar);
-          }
-        });
+      const { loadConfig } = require('./config');
+      const systemConfigPath = rel('system', 'config.yaml');
+      if (await fileExists(systemConfigPath)) {
+        const systemConfig = await loadConfig(systemConfigPath);
+        if (systemConfig.env && Array.isArray(systemConfig.env)) {
+          systemConfig.env.forEach(envVar => {
+            if (typeof envVar === 'string') {
+              runArgs.push('-e', envVar);
+            }
+          });
+        }
       }
+      
+      // Load and add shared config environment variables
+      const sharedConfigPath = rel('shared', 'config.yaml');
+      if (await fileExists(sharedConfigPath)) {
+        const sharedConfig = await loadConfig(sharedConfigPath);
+        if (sharedConfig.env && Array.isArray(sharedConfig.env)) {
+          sharedConfig.env.forEach(envVar => {
+            if (typeof envVar === 'string') {
+              runArgs.push('-e', envVar);
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`Warning: Could not load system/shared configs: ${err.message}`);
+    }
+    
+    // Add local habitat config environment variables last
+    if (config.env && Array.isArray(config.env)) {
+      config.env.forEach(envVar => {
+        if (typeof envVar === 'string') {
+          runArgs.push('-e', envVar);
+        }
+      });
     }
   }
 
@@ -189,7 +210,6 @@ async function createHabitatContainer(config, options = {}) {
   }
 
   // Verify environment
-  console.log('Verifying prepared environment...');
   try {
     await dockerExec(containerName, `test -d ${workDir}`, containerUser);
   } catch {

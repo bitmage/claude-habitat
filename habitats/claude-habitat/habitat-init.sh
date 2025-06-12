@@ -4,6 +4,14 @@
 
 echo "Running habitat initialization..."
 
+# Docker group membership is now baked into the image at build time
+echo "Docker group membership configured at build time"
+echo "Current user: $(whoami)"
+echo "User groups: $(groups)"
+if [ -S /var/run/docker.sock ]; then
+  echo "Docker socket permissions: $(ls -la /var/run/docker.sock)"
+fi
+
 # Configure git for all locations (system, root, and current user)
 if [ -f /workspace/shared/gitconfig ]; then
   # Copy to system-wide location (requires sudo)

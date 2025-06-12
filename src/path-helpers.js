@@ -5,6 +5,20 @@ const { rel } = require('./utils');
 
 /**
  * Habitat path helper class that compiles environment state and resolves paths
+ * 
+ * PHILOSOPHY: No Default Values
+ * 
+ * This class intentionally does NOT provide default values for environment variables.
+ * Why? Because defaults hide configuration errors and create false confidence.
+ * 
+ * If a required environment variable like WORKDIR or PATH is not defined in the
+ * configuration files, we want to know about it immediately with a clear error,
+ * not discover it later when something mysteriously fails because our assumed
+ * default doesn't match the actual container structure.
+ * 
+ * Configuration should be explicit. What you see in the config files is what you get.
+ * No magic, no assumptions, no lies about the environment state.
+ * 
  * Usage: 
  *   const habitat_rel = new HabitatPathHelpers(habitatConfig);
  *   habitat_rel('WORKDIR', 'CLAUDE.md');
@@ -35,37 +49,29 @@ class HabitatPathHelpers {
   /**
    * Synchronously compile environment state from config files
    * This is a simplified sync version for constructor use
+   * 
+   * IMPORTANT: This method does NOT provide any default values.
+   * Environment variables must be explicitly defined in configuration files.
+   * Missing required variables will cause errors when accessed, which is
+   * intentional - fail fast with clear errors rather than mysterious issues later.
    */
   _compileEnvironmentSync() {
-    // Always start with base WORKDIR
-    this.environment = {
-      WORKDIR: '/workspace'
-    };
+    // Start with empty environment - no defaults!
+    this.environment = {};
     
     if (this.isBypassHabitat) {
       // For bypass habitats, use environment from habitat config only
       if (this.habitatConfig.env) {
         this._mergeEnvironment(this.habitatConfig.env);
-      } else {
-        // Fallback for bypass habitats without env
-        this.environment = {
-          WORKDIR: '/workspace',
-          HABITAT_PATH: '/workspace',
-          SYSTEM_PATH: '/workspace/system',
-          SHARED_PATH: '/workspace/shared',
-          LOCAL_PATH: `/workspace/habitats/${this.habitatConfig.name}`
-        };
       }
+      // No fallback defaults - if env is not defined, environment stays empty
     } else {
-      // For normal habitats, we'll use the standard environment structure
-      // The async createHabitatPathHelpers will load system and shared configs
-      this.environment = {
-        WORKDIR: '/workspace',
-        HABITAT_PATH: '/workspace/habitat',
-        SYSTEM_PATH: '/workspace/habitat/system',
-        SHARED_PATH: '/workspace/habitat/shared',
-        LOCAL_PATH: '/workspace/habitat/local'
-      };
+      // For normal habitats, if env is provided in the habitat config (e.g., for testing),
+      // use it. Otherwise, the async createHabitatPathHelpers will load system and shared configs.
+      if (this.habitatConfig.env) {
+        this._mergeEnvironment(this.habitatConfig.env);
+      }
+      // If no env provided, environment remains empty until configs are loaded asynchronously
     }
   }
   
@@ -97,18 +103,14 @@ class HabitatPathHelpers {
     if (typeof value !== 'string') return value;
     
     return value.replace(/\$\{([A-Z_]+)\}/g, (match, varName) => {
-      // Handle self-references - return empty string to avoid circular resolution
-      if (currentKey && varName === currentKey) {
-        return '';
-      }
-      
+      // Always try to resolve from current environment first
       if (this.environment[varName]) {
         return this.environment[varName];
       }
       
-      // Special handling for PATH - use default container PATH when ${PATH} is unresolved
-      if (varName === 'PATH') {
-        return '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+      // Handle self-references only when the variable doesn't exist yet
+      if (currentKey && varName === currentKey) {
+        return '';
       }
       
       return match; // Return unresolved for other variables
@@ -120,6 +122,11 @@ class HabitatPathHelpers {
    * @param {string} envVar - Environment variable name (e.g., 'WORKDIR', 'SYSTEM_PATH')
    * @param {...string} pathSegments - Path segments to join
    * @returns {string} Resolved absolute path
+   * @throws {Error} If the environment variable is not defined
+   * 
+   * NOTE: This method intentionally throws errors for undefined variables.
+   * This forces configuration to be explicit and complete, preventing
+   * mysterious failures from incorrect default assumptions.
    */
   resolvePath(envVar, ...pathSegments) {
     if (!envVar) {
@@ -128,7 +135,11 @@ class HabitatPathHelpers {
     
     const basePath = this.environment[envVar];
     if (!basePath) {
-      throw new Error(`Environment variable '${envVar}' not found in compiled environment`);
+      throw new Error(
+        `Environment variable '${envVar}' is not defined in configuration. ` +
+        `Please ensure it is defined in your habitat's config.yaml, ` +
+        `shared/config.yaml, or system/config.yaml files.`
+      );
     }
     
     if (pathSegments.length === 0) {
@@ -144,6 +155,30 @@ class HabitatPathHelpers {
    */
   getEnvironment() {
     return { ...this.environment };
+  }
+  
+  /**
+   * Validate that required environment variables are defined
+   * @param {string[]} requiredVars - List of required variable names
+   * @throws {Error} If any required variables are missing
+   * 
+   * This method supports the fail-fast philosophy by validating configuration
+   * early in the process rather than waiting for runtime failures.
+   */
+  validateRequired(requiredVars) {
+    const missing = [];
+    for (const varName of requiredVars) {
+      if (!this.environment[varName]) {
+        missing.push(varName);
+      }
+    }
+    
+    if (missing.length > 0) {
+      throw new Error(
+        `Required environment variables are not defined: ${missing.join(', ')}. ` +
+        `Please check your configuration files.`
+      );
+    }
   }
 }
 
@@ -205,6 +240,13 @@ function joinContainerPath(...segments) {
 
 // These legacy functions now create a temporary helper instance
 function getHabitatInfrastructurePath(component, habitatConfig) {
+  if (!component) {
+    throw new Error('component parameter is required');
+  }
+  if (!habitatConfig) {
+    throw new Error('habitatConfig parameter is required');
+  }
+  
   const helper = new HabitatPathHelpers(habitatConfig);
   const envVarMap = {
     'system': 'SYSTEM_PATH',

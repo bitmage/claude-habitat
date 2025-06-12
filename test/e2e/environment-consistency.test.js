@@ -53,7 +53,7 @@ test('environment variables match between host calculation and container runtime
       });
       
       // Get environment variables from container
-      const envCommand = 'env | grep -E "(WORKDIR|HABITAT_PATH|SYSTEM_PATH|SHARED_PATH|LOCAL_PATH|SYSTEM_TOOLS_PATH|SHARED_TOOLS_PATH|LOCAL_TOOLS_PATH)" | sort';
+      const envCommand = 'env | grep -E "(WORKDIR|HABITAT_PATH|SYSTEM_PATH|SHARED_PATH|LOCAL_PATH|SYSTEM_TOOLS_PATH|SHARED_TOOLS_PATH|LOCAL_TOOLS_PATH|PATH)" | sort';
       const containerEnvRaw = await dockerExec(container.name, envCommand, config.container?.user || 'node');
       
       console.log('Container environment output:', containerEnvRaw);
@@ -120,7 +120,7 @@ test('environment variables match between host calculation and container runtime
       });
       
       // Get environment variables from container
-      const envCommand = 'env | grep -E "(WORKDIR|HABITAT_PATH|SYSTEM_PATH|SHARED_PATH|LOCAL_PATH|SYSTEM_TOOLS_PATH|SHARED_TOOLS_PATH|LOCAL_TOOLS_PATH)" | sort';
+      const envCommand = 'env | grep -E "(WORKDIR|HABITAT_PATH|SYSTEM_PATH|SHARED_PATH|LOCAL_PATH|SYSTEM_TOOLS_PATH|SHARED_TOOLS_PATH|LOCAL_TOOLS_PATH|PATH)" | sort';
       const containerEnvRaw = await dockerExec(container.name, envCommand, config.container?.user || 'root');
       
       console.log('Container environment output:', containerEnvRaw);
@@ -188,6 +188,7 @@ function assertEnvironmentConsistency(hostEnv, containerEnv, habitatName) {
     'LOCAL_TOOLS_PATH'
   ];
   
+  // Check exact matches for critical path variables
   for (const varName of criticalVars) {
     const hostValue = hostEnv[varName];
     const containerValue = containerEnv[varName];
@@ -205,6 +206,34 @@ function assertEnvironmentConsistency(hostEnv, containerEnv, habitatName) {
       hostValue, 
       `Environment variable ${varName} mismatch in ${habitatName}: host="${hostValue}" container="${containerValue}"`
     );
+  }
+  
+  // Check PATH variable with substring matching (container PATH may have more entries than synthetic PATH)
+  const hostPath = hostEnv['PATH'];
+  const containerPath = containerEnv['PATH'];
+  
+  if (hostPath && containerPath) {
+    // Split paths and check that all host path entries exist in container path
+    const hostPathEntries = hostPath.split(':').filter(p => p.trim());
+    const containerPathEntries = containerPath.split(':').filter(p => p.trim());
+    
+    console.log(`Host PATH entries: ${hostPathEntries.join(', ')}`);
+    console.log(`Container PATH entries: ${containerPathEntries.join(', ')}`);
+    
+    for (const hostEntry of hostPathEntries) {
+      assert.ok(
+        containerPathEntries.includes(hostEntry),
+        `PATH entry "${hostEntry}" from synthetic environment not found in container PATH for ${habitatName}. Container PATH: "${containerPath}"`
+      );
+    }
+    
+    console.log(`✓ All synthetic PATH entries found in container PATH for ${habitatName}`);
+  } else if (hostPath) {
+    // Host has PATH but container doesn't - this is an error
+    assert.fail(`Host has PATH="${hostPath}" but container PATH is missing for ${habitatName}`);
+  } else if (containerPath) {
+    // Container has PATH but host doesn't - this is acceptable for containers that inherit system PATH
+    console.log(`✓ Container has PATH but synthetic environment doesn't - this is acceptable for ${habitatName}`);
   }
   
   console.log(`✓ All critical environment variables match between host and container for ${habitatName}`);

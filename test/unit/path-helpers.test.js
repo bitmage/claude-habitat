@@ -15,7 +15,16 @@ const normalHabitatConfig = {
   name: 'test-habitat',
   container: {
     work_dir: '/workspace'
-  }
+  },
+  // Since we're testing synchronous HabitatPathHelpers, we need to provide
+  // env variables that would normally come from system/shared configs
+  env: [
+    'WORKDIR=/workspace',
+    'HABITAT_PATH=${WORKDIR}/habitat',
+    'SYSTEM_PATH=${HABITAT_PATH}/system',
+    'SHARED_PATH=${HABITAT_PATH}/shared',
+    'LOCAL_PATH=${HABITAT_PATH}/local'
+  ]
 };
 
 const bypassHabitatConfig = {
@@ -62,7 +71,7 @@ test('HabitatPathHelpers throws on missing environment variable', () => {
   
   assert.throws(
     () => habitat_rel('INVALID_VAR'),
-    /Environment variable 'INVALID_VAR' not found/
+    /Environment variable 'INVALID_VAR' is not defined in configuration/
   );
 });
 
@@ -134,11 +143,11 @@ test('getHabitatInfrastructurePath throws on invalid component', () => {
   );
 });
 
-test('getHabitatInfrastructurePath throws on missing work_dir', () => {
+test('getHabitatInfrastructurePath throws on missing environment', () => {
   const invalidConfig = { name: 'test' };
   assert.throws(
     () => getHabitatInfrastructurePath('system', invalidConfig),
-    /Habitat configuration missing required container.work_dir/
+    /Environment variable 'SYSTEM_PATH' is not defined in configuration/
   );
 });
 
@@ -195,8 +204,28 @@ test('joinContainerPath is deterministic', () => {
 });
 
 test('path helpers work consistently across different work directories', () => {
-  const workspaceConfig = { name: 'test', container: { work_dir: '/workspace' } };
-  const srcConfig = { name: 'test', container: { work_dir: '/src' } };
+  const workspaceConfig = { 
+    name: 'test', 
+    container: { work_dir: '/workspace' },
+    env: [
+      'WORKDIR=/workspace',
+      'HABITAT_PATH=${WORKDIR}/habitat',
+      'SYSTEM_PATH=${HABITAT_PATH}/system',
+      'SHARED_PATH=${HABITAT_PATH}/shared',
+      'LOCAL_PATH=${HABITAT_PATH}/local'
+    ]
+  };
+  const srcConfig = { 
+    name: 'test', 
+    container: { work_dir: '/src' },
+    env: [
+      'WORKDIR=/src',
+      'HABITAT_PATH=${WORKDIR}/habitat',
+      'SYSTEM_PATH=${HABITAT_PATH}/system',
+      'SHARED_PATH=${HABITAT_PATH}/shared',
+      'LOCAL_PATH=${HABITAT_PATH}/local'
+    ]
+  };
   
   const workspacePaths = getAllHabitatPaths(workspaceConfig);
   const srcPaths = getAllHabitatPaths(srcConfig);

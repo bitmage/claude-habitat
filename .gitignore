@@ -24,3 +24,4 @@ system/tools/.tmp/
 
 # UI testing snapshots (generated, not committed)
 test/ui-snapshots.txt
+typescript
