@@ -11,6 +11,7 @@ const { loadConfig } = require('./config');
 // Path helpers not currently used in this module
 const { dockerRun, dockerExec, dockerImageExists } = require('./container-operations');
 const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
+const { expandTemplate } = require('./template-expansion');
 
 /**
  * Build the base Docker image from Dockerfile
@@ -123,27 +124,24 @@ async function copyConfigFiles(container, config) {
     // Check if it's a directory
     const isDir = await isDirectory(srcPath);
     
-    // Replace variables in destination path
-    let destPath = fileSpec.dest;
-    if (config.container && config.container.user) {
-      destPath = destPath.replace(/\{container\.user\}/g, config.container.user);
-    }
+    // Expand all templates in destination path using unified template system
+    let destPath = expandTemplate(fileSpec.dest, config);
     
     // Expand tilde in destination path (container context)
-    if (destPath.startsWith('~/') && config.container && config.container.user) {
+    if (destPath.startsWith('~/') && config._environment?.USER) {
       // Get container user's home directory by executing getent passwd in container
       try {
-        const homeResult = await dockerExec(container, `getent passwd ${config.container.user} | cut -d: -f6`, 'root');
+        const homeResult = await dockerExec(container, `getent passwd ${config._environment.USER} | cut -d: -f6`, 'root');
         const containerHome = homeResult.trim();
         if (containerHome) {
           destPath = path.posix.join(containerHome, destPath.slice(2));
         } else {
           // Fallback to standard home directory structure
-          destPath = path.posix.join('/home', config.container.user, destPath.slice(2));
+          destPath = path.posix.join('/home', config._environment.USER, destPath.slice(2));
         }
       } catch (err) {
         // Fallback to standard home directory structure
-        destPath = path.posix.join('/home', config.container.user, destPath.slice(2));
+        destPath = path.posix.join('/home', config._environment.USER, destPath.slice(2));
       }
     }
     
@@ -158,10 +156,7 @@ async function copyConfigFiles(container, config) {
       
       // Set ownership recursively if specified
       if (fileSpec.owner) {
-        let owner = fileSpec.owner;
-        if (config.container && config.container.user) {
-          owner = owner.replace(/\{container\.user\}/g, config.container.user);
-        }
+        const owner = expandTemplate(fileSpec.owner, config);
         await dockerExec(container, `chown -R ${owner}:${owner} ${destPath}`, 'root');
       }
       
@@ -185,10 +180,7 @@ async function copyConfigFiles(container, config) {
       
       // Set ownership if specified
       if (fileSpec.owner) {
-        let owner = fileSpec.owner;
-        if (config.container && config.container.user) {
-          owner = owner.replace(/\{container\.user\}/g, config.container.user);
-        }
+        const owner = expandTemplate(fileSpec.owner, config);
         await dockerExec(container, `chown ${owner}:${owner} ${destPath}`, 'root');
       }
       
@@ -224,12 +216,13 @@ async function runSetupCommands(container, config) {
   
   // Run user setup commands
   if (config.setup.user && config.setup.user.commands && config.setup.user.commands.length > 0) {
-    const runAsUser = config.setup.user.run_as || config.container.user;
+    const runAsUser = expandTemplate(config.setup.user.run_as || '{env.USER}', config);
     console.log(`Running user setup commands as ${runAsUser}...`);
     for (const cmd of config.setup.user.commands) {
       if (cmd && cmd.trim()) {
-        console.log(`  ${cmd}`);
-        await dockerExec(container, cmd, runAsUser);
+        const expandedCmd = expandTemplate(cmd, config);
+        console.log(`  ${expandedCmd}`);
+        await dockerExec(container, expandedCmd, runAsUser);
       }
     }
   }

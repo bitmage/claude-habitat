@@ -3,6 +3,7 @@ const { exec } = require('child_process');
 const execAsync = promisify(exec);
 const { colors, sleep, fileExists, rel } = require('./utils');
 const { dockerRun, dockerExec, dockerIsRunning, dockerImageExists } = require('./container-operations');
+const { expandTemplate } = require('./template-expansion');
 
 /**
  * Create and start a habitat container with unified setup logic
@@ -134,17 +135,9 @@ async function createHabitatContainer(config, options = {}) {
     }
   }
   
-  // Resolve placeholder values in system volumes using environment variables
+  // Resolve all templates in system volumes using unified template system
   const resolvedSystemVolumes = systemVolumes.map(volume => {
-    let resolved = volume;
-    
-    // Find all {env.VAR} placeholders and resolve them
-    const placeholderRegex = /\\{env\\.([^}]+)\\}/g;
-    resolved = resolved.replace(placeholderRegex, (match, envVar) => {
-      // Resolve environment variable from config._environment
-      const value = config._environment?.[envVar];
-      return value || match; // Return original if value not found
-    });
+    let resolved = expandTemplate(volume, config);
     
     // Expand ~ to actual home directory
     if (resolved.startsWith('~/')) {

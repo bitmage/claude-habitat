@@ -2,6 +2,7 @@ const yaml = require('js-yaml');
 const fs = require('fs').promises;
 const { fileExists } = require('./utils');
 const { validateHabitatConfig, getConfigValidationHelp } = require('./config-validation');
+const { expandTemplateObject } = require('./template-expansion');
 
 /**
  * Process environment variables from config and expand variable references
@@ -29,7 +30,8 @@ function processEnvironmentVariables(config, existingEnv = {}) {
 }
 
 /**
- * Expand ${VAR} and {env.VAR} references in a string
+ * Expand ${VAR} and {env.VAR} references in a string using current environment
+ * This is a simplified version for backward compatibility during environment processing
  */
 function expandEnvironmentVariables(str, env) {
   if (typeof str !== 'string') return str;
@@ -49,40 +51,6 @@ function expandEnvironmentVariables(str, env) {
   return result;
 }
 
-/**
- * Recursively expand variables in config object
- */
-function expandConfigVariables(obj, env, containerConfig = {}) {
-  if (typeof obj === 'string') {
-    // Expand environment variables
-    let result = expandEnvironmentVariables(obj, env);
-    
-    // Expand {container.user} and similar patterns
-    if (containerConfig.user) {
-      result = result.replace(/\{container\.user\}/g, containerConfig.user);
-    }
-    if (containerConfig.work_dir) {
-      result = result.replace(/\{container\.work_dir\}/g, containerConfig.work_dir);
-    }
-    
-    return result;
-  }
-  
-  if (Array.isArray(obj)) {
-    return obj.map(item => expandConfigVariables(item, env, containerConfig));
-  }
-  
-  if (obj && typeof obj === 'object') {
-    const result = {};
-    for (const [key, value] of Object.entries(obj)) {
-      result[key] = expandConfigVariables(value, env, containerConfig);
-    }
-    return result;
-  }
-  
-  return obj;
-}
-
 // Public API functions with simple validation
 async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true) {
   if (!configPath) throw new Error('Missing required parameter: configPath');
@@ -94,8 +62,11 @@ async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true
   // Process environment variables first
   const env = processEnvironmentVariables(config, existingEnv);
   
-  // Expand all variable references in the config
-  config = expandConfigVariables(config, env, config.container || {});
+  // Add environment to config for template expansion
+  config._environment = env;
+  
+  // Expand all templates in the config using the unified template system
+  config = expandTemplateObject(config, config);
   
   // Auto-populate container settings from environment variables if missing
   if (validateAsHabitat) {
