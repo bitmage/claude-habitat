@@ -1,0 +1,162 @@
+#!/bin/bash
+
+# Git worktree management script for claude-habitat
+# Usage: ./worktrees <command> [branch-name]
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_NAME="$(basename "$SCRIPT_DIR")"
+PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+
+show_help() {
+    echo "Git worktree management for claude-habitat"
+    echo ""
+    echo "Usage: ./worktrees <command> [branch-name]"
+    echo ""
+    echo "Commands:"
+    echo "  add <branch>     Create worktree for branch (creates branch if it doesn't exist)"
+    echo "  rm <branch>      Remove worktree for branch (with safety checks)"
+    echo "  list             List all worktrees"
+    echo "  help             Show this help"
+    echo ""
+    echo "Examples:"
+    echo "  ./worktrees add feature-branch    # Creates ../claude-habitat-feature-branch"
+    echo "  ./worktrees rm feature-branch     # Removes ../claude-habitat-feature-branch"
+    echo "  ./worktrees list                  # Shows all active worktrees"
+}
+
+list_worktrees() {
+    echo "Active worktrees:"
+    git worktree list
+}
+
+add_worktree() {
+    local branch="$1"
+    
+    if [[ -z "$branch" ]]; then
+        echo "Error: Branch name required"
+        echo "Usage: ./worktrees add <branch-name>"
+        exit 1
+    fi
+    
+    local worktree_path="$PARENT_DIR/${PROJECT_NAME}-${branch}"
+    
+    # Check if worktree already exists
+    if [[ -d "$worktree_path" ]]; then
+        echo "Error: Worktree already exists at $worktree_path"
+        exit 1
+    fi
+    
+    # Check if branch exists locally
+    if git show-ref --verify --quiet refs/heads/"$branch"; then
+        echo "Creating worktree for existing branch '$branch'..."
+        git worktree add "$worktree_path" "$branch"
+    else
+        # Check if branch exists on remote
+        if git show-ref --verify --quiet refs/remotes/origin/"$branch"; then
+            echo "Creating worktree for remote branch 'origin/$branch'..."
+            git worktree add "$worktree_path" "$branch"
+        else
+            echo "Creating worktree and new branch '$branch'..."
+            git worktree add -b "$branch" "$worktree_path"
+        fi
+    fi
+    
+    echo "✅ Worktree created at: $worktree_path"
+    echo "💡 To work in this branch: cd $worktree_path"
+}
+
+remove_worktree() {
+    local branch="$1"
+    
+    if [[ -z "$branch" ]]; then
+        echo "Error: Branch name required"
+        echo "Usage: ./worktrees rm <branch-name>"
+        exit 1
+    fi
+    
+    local worktree_path="$PARENT_DIR/${PROJECT_NAME}-${branch}"
+    
+    # Check if worktree exists
+    if [[ ! -d "$worktree_path" ]]; then
+        echo "Error: Worktree does not exist at $worktree_path"
+        exit 1
+    fi
+    
+    # Check for uncommitted changes
+    cd "$worktree_path"
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "⚠️  Warning: Worktree has uncommitted changes!"
+        echo ""
+        echo "Uncommitted changes in $worktree_path:"
+        git status --porcelain
+        echo ""
+        read -p "Are you sure you want to remove this worktree? (y/N): " -r
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Cancelled"
+            exit 0
+        fi
+    fi
+    
+    # Check for unpushed commits
+    if git log --oneline @{u}..HEAD 2>/dev/null | grep -q .; then
+        echo "⚠️  Warning: Branch has unpushed commits!"
+        echo ""
+        echo "Unpushed commits:"
+        git log --oneline @{u}..HEAD 2>/dev/null || git log --oneline HEAD -5
+        echo ""
+        read -p "Are you sure you want to remove this worktree? (y/N): " -r
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Cancelled"
+            exit 0
+        fi
+    fi
+    
+    cd "$SCRIPT_DIR"
+    
+    # Remove the worktree
+    git worktree remove "$worktree_path"
+    
+    echo "✅ Worktree removed: $worktree_path"
+    
+    # Ask if user wants to delete the branch too
+    if git show-ref --verify --quiet refs/heads/"$branch"; then
+        echo ""
+        read -p "Also delete the branch '$branch'? (y/N): " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            git branch -d "$branch" 2>/dev/null || {
+                echo "⚠️  Branch has unmerged changes. Use -D to force delete:"
+                echo "   git branch -D $branch"
+            }
+        fi
+    fi
+}
+
+# Main command handling
+case "${1:-}" in
+    "add")
+        add_worktree "$2"
+        ;;
+    "rm"|"remove")
+        remove_worktree "$2"
+        ;;
+    "list"|"ls")
+        list_worktrees
+        ;;
+    "help"|"-h"|"--help")
+        show_help
+        ;;
+    "")
+        echo "Error: Command required"
+        echo ""
+        show_help
+        exit 1
+        ;;
+    *)
+        echo "Error: Unknown command '$1'"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac

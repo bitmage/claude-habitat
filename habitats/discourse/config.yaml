@@ -9,8 +9,6 @@ tests:
 image:
   dockerfile: Dockerfile
   tag: claude-habitat-discourse:latest
-  build_args:
-    - "DISCOURSE_IMAGE=discourse/discourse_dev:release"
 
 # Environment variables (discourse uses /discourse instead of default /workspace)
 env:

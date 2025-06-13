@@ -13,7 +13,6 @@ repositories: []
 env:
   - USER=root
   - WORKDIR=/workspace
-  - GITHUB_APP_ID=1357221
 
 # No additional setup needed
 setup: {}
