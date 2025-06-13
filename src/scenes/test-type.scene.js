@@ -1,4 +1,21 @@
-const { runTestMode } = require('../testing');
+/**
+ * @module scenes/test-type.scene
+ * @description Test type scene for specific habitat testing options
+ * 
+ * Shows test options for a specific habitat including system tests,
+ * filesystem verification, and specialized testing modes. Manages
+ * test execution and result display within the scene architecture.
+ * 
+ * @requires module:testing - Test execution system
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * @requires module:standards/testing - Testing approach and conventions
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e -- test/e2e/ui-verification.test.js`
+ * - UI tests: `npm run test:ui`
+ */
+
+const { runTestMode } = require('../habitat-testing');
 
 /**
  * Test type scene - shows test options for a specific habitat
@@ -15,7 +32,7 @@ async function testTypeScene(context, habitatName = 'base', rebuild = false) {
       try {
         const { loadConfig } = require('../config');
         const { rel, fileExists } = require('../utils');
-        const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
+        const habitatConfigPath = rel('habitats/' + habitatName + '/config.yaml');
         if (await fileExists(habitatConfigPath)) {
           habitatConfig = await loadConfig(habitatConfigPath);
           isBypassHabitat = habitatConfig.claude?.bypass_habitat_construction || false;

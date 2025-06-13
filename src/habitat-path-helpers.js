@@ -1,6 +1,23 @@
+/**
+ * @module habitat-path-helpers
+ * @description Advanced path resolution utilities for Claude Habitat
+ * 
+ * Provides habitat-aware path resolution with environment state compilation.
+ * Implements the path resolution standards for complex container workspace
+ * scenarios with multiple path contexts.
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:standards/path-resolution - Path handling conventions
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/path-helpers.test.js`
+ * - Run all tests: `npm test`
+ */
+
 const path = require('path');
 const fs = require('fs').promises;
 const yaml = require('js-yaml');
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { rel } = require('./utils');
 
 /**
@@ -198,7 +215,7 @@ async function createHabitatPathHelpers(habitatConfig) {
   if (!helper.isBypassHabitat) {
     try {
       // Load system config
-      const systemConfigPath = rel('system', 'config.yaml');
+      const systemConfigPath = rel('system/config.yaml');
       const systemConfigData = await fs.readFile(systemConfigPath, 'utf8');
       const systemConfig = yaml.load(systemConfigData);
       if (systemConfig.env) {
@@ -206,7 +223,7 @@ async function createHabitatPathHelpers(habitatConfig) {
       }
       
       // Load shared config
-      const sharedConfigPath = rel('shared', 'config.yaml');
+      const sharedConfigPath = rel('shared/config.yaml');
       const sharedConfigData = await fs.readFile(sharedConfigPath, 'utf8');
       const sharedConfig = yaml.load(sharedConfigData);
       if (sharedConfig.env) {

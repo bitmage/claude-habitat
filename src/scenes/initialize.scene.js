@@ -1,3 +1,19 @@
+/**
+ * @module scenes/initialize.scene
+ * @description Initialize scene for system setup and verification
+ * 
+ * Guides users through the initialization process including GitHub
+ * authentication setup, Docker verification, and system prerequisite
+ * checking. Provides setup guidance and error recovery.
+ * 
+ * @requires module:init - Initialization operations
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e`
+ * - Initialization is tested across all E2E scenarios
+ */
+
 const { runInitialization } = require('../init');
 
 /**

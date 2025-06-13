@@ -1,6 +1,17 @@
 /**
- * Docker container runtime operations
- * Handles running containers, executing commands, and checking container status
+ * @module container-operations
+ * @description Docker container runtime operations for Claude Habitat
+ * 
+ * Handles running containers, executing commands, and checking container status.
+ * Provides low-level Docker operations with consistent error handling and
+ * argument construction patterns.
+ * 
+ * @requires module:types - Domain model definitions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e -- test/e2e/claude-in-habitat.test.js`
+ * - Run all tests: `npm test`
  */
 
 const { spawn } = require('child_process');

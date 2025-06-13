@@ -1,3 +1,17 @@
+/**
+ * @fileoverview E2E tests for build failure handling and error recovery
+ * @description Tests graceful handling of various build failure scenarios and invalid configurations
+ * 
+ * These tests ensure that Claude Habitat fails gracefully when encountering missing files,
+ * invalid configurations, or other build errors. They verify that error messages are helpful
+ * and the system doesn't crash or hang when facing expected failure conditions.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/build-failures.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: Error handling and graceful failure patterns
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { ProductTestBase } = require('./product-test-base');

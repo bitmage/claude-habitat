@@ -1,15 +1,23 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { ProductTestBase } = require('./product-test-base');
-const { HabitatPathHelpers } = require('../../src/path-helpers');
+const { HabitatPathHelpers } = require('../../src/habitat-path-helpers');
 const { loadConfig } = require('../../src/config');
 const { dockerExec } = require('../../src/container-operations');
 const { createHabitatContainer } = require('../../src/container-lifecycle');
 
 /**
- * Test environment variable consistency between host calculation and container runtime
- * This ensures that the synthetic environment state computed by HabitatPathHelpers
- * matches what actually gets set in running containers.
+ * @fileoverview E2E tests for environment variable consistency between host and container
+ * @description Tests that synthetic environment calculations match actual container runtime environment
+ * 
+ * These tests ensure that the synthetic environment state computed by HabitatPathHelpers
+ * on the host exactly matches what actually gets set in running containers. This is critical
+ * for maintaining consistency between habitat configuration and runtime behavior.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/environment-consistency.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: HabitatPathHelpers and container environment synchronization
  */
 
 test('environment variables match between host calculation and container runtime for claude-habitat', async () => {
@@ -26,7 +34,7 @@ test('environment variables match between host calculation and container runtime
     
     // Host side: Calculate synthetic environment using createHabitatPathHelpers (async version)
     console.log('Calculating host-side synthetic environment...');
-    const { createHabitatPathHelpers } = require('../../src/path-helpers');
+    const { createHabitatPathHelpers } = require('../../src/habitat-path-helpers');
     const pathHelpers = await createHabitatPathHelpers(config);
     const hostEnv = pathHelpers.getEnvironment();
     console.log('Host environment variables:', Object.keys(hostEnv));
@@ -93,7 +101,7 @@ test('environment variables match between host calculation and container runtime
     
     // Host side: Calculate synthetic environment using createHabitatPathHelpers (async version)
     console.log('Calculating host-side synthetic environment...');
-    const { createHabitatPathHelpers } = require('../../src/path-helpers');
+    const { createHabitatPathHelpers } = require('../../src/habitat-path-helpers');
     const pathHelpers = await createHabitatPathHelpers(config);
     const hostEnv = pathHelpers.getEnvironment();
     console.log('Host environment variables:', Object.keys(hostEnv));

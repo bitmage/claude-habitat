@@ -12,6 +12,11 @@ env:
   - WORKDIR=/workspace
   - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - PATH=${PATH}:${SHARED_TOOLS_PATH}
+  - GITHUB_APP_ID=1357221
+  - GITHUB_APP_PEM_FILE=${SHARED_PATH}/behold-the-power-of-claude.2025-06-04.private-key.pem
+
+# Container settings (will be overridden by habitat-specific config)
+container: {}
 
 # Structured file operations - copy files to specific locations with permissions
 files:

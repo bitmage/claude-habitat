@@ -1,6 +1,19 @@
 #!/bin/bash
-# Test GitHub App authentication functionality
-# This test ensures that git authentication never gets stuck
+# System Test: GitHub App Authentication
+# @fileoverview Validates GitHub App authentication configuration and credential handling
+# @description This test ensures that git authentication never gets stuck by verifying
+#              that GitHub App credentials are properly configured, the credential helper
+#              is installed and functional, and tokens can be generated successfully.
+#
+# This test prevents authentication failures that could block Claude from accessing
+# GitHub repositories by validating the complete authentication chain from PEM keys
+# to credential helper to token generation.
+#
+# @tests
+# - Run this test: ./system/tests/test-git-auth.sh
+# - Run all system tests: ./claude-habitat test --system
+# - Run all tests: npm test
+# - Related config: system/config.yaml, shared/github-app-config.yaml
 
 set -e
 

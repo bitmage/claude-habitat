@@ -29,7 +29,8 @@ total_failures=0
 if [ -f "$LOCAL_PATH/config.yaml" ]; then
   if yq eval '.claude.bypass_habitat_construction' "$LOCAL_PATH/config.yaml" 2>/dev/null | grep -q "true"; then
     SCOPE="habitat"
-    echo "# Detected bypass habitat - limiting scope to 'habitat' only" >&2
+    # Output informational message to stdout as a comment (TAP allows comments)
+    echo "# Detected bypass habitat - limiting scope to 'habitat' only"
   fi
 fi
 

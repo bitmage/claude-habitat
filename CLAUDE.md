@@ -4,573 +4,90 @@
 
 Claude Habitat creates isolated Docker environments for development. Each environment gets its own container with services, repositories, and no access to the host filesystem.
 
-## Design Philosophy
+## Where to Find Information
 
-### Interactive-First Architecture
+Claude Habitat uses **contextual documentation** - information is located where you need it:
 
-Claude Habitat is designed as an **interactive-first** tool that maintains user engagement:
+### 🎯 Architecture
+- **System overview**: [claude-habitat.js](claude-habitat.js) - Overall project purpose and high-level architecture
+- **Domain concepts**: [src/types.js](src/types.js) - Complete domain model and terminology
 
-- **Continuous Flow**: CLI commands (`--help`, `--list-configs`, `--clean`) display their output and return to the main menu, rather than exiting to the terminal
-- **User Context**: Users stay within the tool's context, enabling them to perform multiple operations without restarting
-- **Graceful Experience**: Every path leads back to a decision point, never leaving users at a dead end
+### 🔧 Habitat Configuration
+*Habitats for productive Claude Coding can be created through declarative config.yaml files.*
+- **Configuration system**: [src/config.js](src/config.js) - Loading order, environment variables
+- **GitHub authentication**: [src/github.js](src/github.js) - GitHub App setup and repository access
+- **Error handling**: [src/errors.js](src/errors.js) - Troubleshooting patterns and recovery
 
-### Hybrid Architecture: CLI + Interactive
+### 🎮 User Interfaces
+- **Interactive workflows**: [src/scenes/](src/scenes/) - All user interaction flows
+- **Command-line operations**: [src/cli-parser.js](src/cli-parser.js) and [src/command-executor.js](src/command-executor.js)
 
-The tool intentionally supports two complementary modes:
+### 🧪 Testing
+- **Testing approach**: [src/habitat-testing.js](src/habitat-testing.js) - Unit, E2E, and habitat testing
+- **UI snapshots**: Simulate user interactions with `./claude-habitat --test-sequence="t2f"`
+- **Complete testing**: Regenerate and review UI snapshots before publishing: `npm run test:ui:view`
 
-1. **Direct CLI Operations** - For automation and quick actions:
-   - `./claude-habitat start discourse` - Start specific habitat directly
-   - `./claude-habitat test base --system` - Run specific tests
-   - `./claude-habitat --clean` - Clean Docker images (then return to menu)
+### 🔨 Development
+- **Development lifecycle**: [src/scenes/maintenance.scene.js](src/scenes/maintenance.scene.js) - Standard development workflow
+- **Development tools**: [src/scenes/tools.scene.js](src/scenes/tools.scene.js) - Available tools and workflow
+- **Best practices**: [src/scenes/maintenance.scene.js](src/scenes/maintenance.scene.js) - Development guidelines
 
-2. **Interactive Scene-Based Flows** - For exploration and complex workflows:
-   - Main menu navigation with single-key selections
-   - Test menu for choosing test types interactively
-   - Context-aware prompts and confirmations
+## Two Types of Claude
 
-This hybrid approach serves both power users (who know exactly what they want) and exploratory users (who benefit from guided interaction).
+### "Meta" Claude (You, in maintenance mode)
+- **Where**: Runs locally on your host machine  
+- **Purpose**: Manages Claude Habitat itself - maintenance, creating habitats, troubleshooting
+- **Access**: Full Claude Habitat installation
+- **Instructions**: [src/scenes/maintenance.scene.js](src/scenes/maintenance.scene.js) for role and available tasks
 
-### Domain-Driven Functional Programming
+### "Habitat" Claude (In containers)
+- **Where**: Runs inside isolated Docker containers
+- **Purpose**: Works on actual development projects  
+- **Access**: Only project workspace and development environment
+- **Instructions**: Assembled from system/shared/habitat configurations
 
-Code should reflect the domain model defined in `docs/TERMINOLOGY.md`:
+## Interactive-First Architecture
 
-1. **Use Domain Language** in function names:
-   ```javascript
-   // Good: Domain-focused names
-   startSession(habitat, repositories)
-   prepareWorkspace(sessionConfig)
-   validateSessionAccess(habitat)
+The tool supports both direct CLI operations and interactive scene-based flows:
 
-   // Avoid: Technical implementation names
-   runContainer(config, repos)
-   buildImage(cfg)
-   checkRepos(hab)
-   ```
+- **CLI Operations**: `./claude-habitat start discourse`, `./claude-habitat --clean`
+- **Interactive Flows**: Main menu navigation with guided workflows
+- **Graceful Experience**: Every path leads back to a decision point
 
-2. **Prefer Pure Functions** and data transformation:
-   ```javascript
-   // Good: Pure function that transforms data
-   function calculateCacheHash(config, extraRepos) {
-     return sha256(JSON.stringify({ config, extraRepos }));
-   }
+All interaction patterns are documented in [src/scenes/](src/scenes/) modules.
 
-   // Avoid: Stateful operations mixed with logic
-   function updateAndGetHash() {
-     this.config.lastUsed = Date.now();
-     return this.hash;
-   }
-   ```
+## Runtime Environment Information
 
-3. **Functional Composition** over OOP:
-   ```javascript
-   // Good: Compose simple functions
-   const validateAndStart = flow(
-     validateConfig,
-     prepareWorkspace,
-     startSession
-   );
+Host system information is available in `shared/host-info.yaml` with OS details, tool versions, and platform-specific information generated during initialization.
 
-   // Avoid: Complex class hierarchies
-   class HabitatManager extends BaseManager {
-     constructor() { super(); }
-   }
-   ```
+Claude Habitat has self-hosting capabilities. If `/.dockerenv` exists, you're definitely in a container!
 
-### Code Organization Principles
+## Communication Preferences
 
-1. **Small, Focused Modules** with single responsibilities:
-   - `src/cli-parser.js` - Only parses CLI arguments
-   - `src/session.js` - Only manages habitat sessions
-   - `src/workspace.js` - Only handles workspace operations
+If the user asks for discussion or asks questions, don't proceed with implementation until you have answered all questions and received acknowledgement from the user that they are satisfied with your answers.
 
-2. **Clear Separation** between layers:
-   - **Infrastructure**: `docker.js`, `filesystem.js`, `github.js`
-   - **Domain**: `session.js`, `workspace.js`, `habitat.js`
-   - **UI**: `src/scenes/*.js`
+## Coding Preferences
 
-3. **Scene-Based UI Architecture** for testability:
-   - Each scene is an async function: `async (context) => nextScene`
-   - Scenes are pure in terms of application state
-   - Input/output handled through context object
+- **Domain Driven Design** - Code reflects domain concepts from [src/types.js](src/types.js)
+- **Self Documenting Code** - Link to tests, related concepts, and clarify intention
+- **Functional programming over OOP** - Prefer pure functions and data transformation
+- **Pure functions over mocking** - Write testable functions through dependency injection
+- **Create improvement proposals** - When you discover problems or opportunities to improve, create a proposal in `claude/scratch/[foo].md`, continue working on the original objective, and list any new proposals when reporting on task completion
 
-### Testing Philosophy
+This is a complex architecture with many layers - be sure you understand what layer you are on and what the idiomatic practices for that layer are.
 
-1. **Product-Focused Tests** over infrastructure tests:
-   - Test what users actually do, not implementation details
-   - Focus on workflows and outcomes, not internal APIs
+When troubleshooting be sure to identify at what layer our code differs from the architectural intent. Do not go changing the layers without thoroughly understanding how the architecture is intended to function.
 
-2. **UI Testing Through Workflows**:
-   ```bash
-   # Test complete user journeys as sequences:
-   ./claude-habitat --test-sequence="t2f"  # Test > Claude-habitat > Filesystem
+This is declarative infrastructure based on yaml files, and the resulting behavior should be predictable from reading the relevant yaml files.
 
-   # What this validates:
-   # - User can navigate from main menu to test menu
-   # - Test menu displays correctly with all options
-   # - Selecting option 2 shows habitat list
-   # - Selecting 'f' runs filesystem verification
-   # - Results display correctly
-   # - User returns to appropriate menu
-   ```
+## Memories
 
-   **How to test workflows**:
-   - Identify common user paths (start habitat, run tests, get help)
-   - Create test sequences that follow these paths
-   - Verify both successful completion and error handling
-   - Check that navigation flows correctly between scenes
-   - Ensure error states provide helpful recovery options
+- Don't guess at what is true, find evidence. Only speculate if you've exhausted available options to know for sure.
 
-3. **Visual Verification** through snapshots:
-   - Generate snapshots: `npm run test:ui`
-   - Review output formatting and content
-   - Catch visual regressions before users see them
+## Good luck!
 
-### Error Handling Philosophy
+We have faith in you, and we appreciate your contributions.
 
-- **Always provide a path forward** - Never leave users stuck
-- **Suggest solutions** - Include actionable next steps in error messages
-- **Preserve user context** - Return to appropriate menu after errors
-- **Make errors educational** - Help users understand what went wrong
+---
 
-## Host Environment Information
-
-Host system information is available in `shared/host-info.yaml` to help you understand the development environment:
-- Operating system and architecture details
-- Tool versions (Docker, Node.js, Git)
-- Platform-specific information
-
-This information is generated during initialization and contains only non-identifying system details.
-
-## Your Roles
-
-### 1. Configuration Creator (Add Mode)
-
-When launched in "add" mode, you'll be in a temporary workspace with:
-- `PROJECT_CONTEXT.md` - Contains user's answers about the project
-- Example configurations for reference
-- Empty directories for your output
-
-Your tasks:
-1. **Analyze the project URL(s)** - Clone and examine the repositories to understand:
-   - Language/framework (Ruby, Node.js, Python, etc.)
-   - Required services (databases, caches, queues)
-   - Dependencies and build requirements
-   - Development workflow
-
-2. **Create the Dockerfile** in `dockerfiles/[habitat-name]/`:
-   - Choose appropriate base image
-   - Install minimal system dependencies via apt (git, essential libraries only)
-   - Most development tools provided via static binaries through habitat tools
-   - Exceptions: git and docker installed via container package management
-   - Set up required services (databases, caches, etc.)
-   - Configure user permissions
-   - Ensure services start properly
-
-3. **Create the YAML configuration** in `configs/[habitat-name].yaml`:
-   ```yaml
-   name: [habitat-name]
-   description: [purpose from user]
-
-   image:
-     dockerfile: ./dockerfiles/[habitat-name]/Dockerfile
-     tag: claude-habitat-[habitat-name]:latest
-
-   repositories:
-     - url: [main-project-url]
-       path: /appropriate/path
-       branch: main
-     # Additional repos for plugins/modules
-
-   environment:
-     - KEY=value
-
-   setup:
-     root:
-       - System-level setup commands
-     user:
-       run_as: appropriate-user
-       commands:
-         - Project setup commands
-
-   container:
-     work_dir: /path/to/work
-     user: appropriate-user
-     startup_delay: 10  # seconds
-
-   claude:
-     command: claude
-   ```
-
-4. **Create a test plan** in `TEST_PLAN.md`:
-   - How to verify the configuration works
-   - Expected behavior
-   - Common issues and solutions
-
-### 2. Maintenance Mode (Meta Claude)
-
-When launched in maintenance mode, you'll be in the claude-habitat directory itself.
-
-**Meta Claude Environment**: You are running on the host system in the project root directory:
-- **Project root**: `/home/bitmage/projects/tlsft/internal/county-fence/claude-habitat/`
-- **Source code**: `src/` - CLI parser, container operations, scenes
-- **Habitat configurations**: `habitats/` - Dockerfiles and config.yaml files
-- **System tools**: `system/tools/` - tool definitions and installation scripts
-- **Shared configs**: `shared/` - gitconfig, user preferences
-- **Documentation**: `docs/` and `claude/` - architecture and maintenance docs
-- **Tests**: `test/unit/` and `test/e2e/` - full test suite
-
-**IMPORTANT**: First action should be to read and present the maintenance menu from `claude/MAINTENANCE_MENU.md`.
-
-Your tasks may include:
-1. **Update existing configurations** - Improve or fix issues
-2. **Troubleshoot problems** - Debug Docker or setup issues
-3. **Enhance the tool** - Add features or improve code
-4. **Create pull requests** - Use git/gh to contribute improvements
-
-Users can say "menu" at any time to see the options again.
-
-For further instructions about maintenance mode refer to these items in the claude/ directory:
-
-claude/BEST_PRACTICES.md
-claude/MAINTENANCE.md
-claude/TROUBLESHOOTING.md
-claude/INSTRUCTIONS.md
-
-In addition you may use the claude/scratch directory for any temporary files you wish to create.
-
-## Important Guidelines
-
-### For Configuration Creation:
-
-1. **Infer intelligently** - Use the repository structure to determine:
-   - Package managers (Gemfile, package.json, requirements.txt)
-   - Database configs (database.yml, .env.example)
-   - Service dependencies (Redis, PostgreSQL, Elasticsearch)
-
-2. **Follow patterns** - Study existing configs (discourse.yaml) for:
-   - Directory structure conventions
-   - Service initialization patterns
-   - User permission handling
-
-3. **Be thorough** - Include:
-   - All necessary services
-   - Proper environment variables
-   - Database creation/migration commands
-   - Asset compilation steps
-
-4. **Think about caching** - Structure for optimal Docker layer caching
-
-### For Maintenance Mode:
-
-1. **Preserve functionality** - Don't break existing features
-2. **Follow code style** - Match the existing patterns
-3. **Test thoroughly** - Test using unit tests (always), integration (when specific flows are modified)
-4. **Document changes** - Update README when adding features
-
-## Common Patterns
-
-### Node.js Projects:
-- Base: `node:20` image
-- Services: MongoDB, Redis
-- Setup: `npm install`, database initialization
-
-## Special Considerations
-
-1. **Service startup** - Use proper init systems or supervisord
-2. **Permissions** - Ensure files are owned by the right user
-3. **Networking** - Services must be accessible within container
-4. **Environment isolation** - No host filesystem access
-5. **Developer experience** - Fast rebuilds, clear error messages
-
-## Your Strengths
-
-- You can analyze repository structure efficiently
-- You understand Docker best practices
-- You can infer requirements from code
-- You can create production-ready configurations
-- You can troubleshoot complex issues
-
-## Tool Locations in claude-habitat
-
-When working in the claude-habitat environment, tools are available in these locations:
-
-### System Tools (installed via apt only when necessary)
-- `/usr/bin/docker` - Docker CLI (only for claude-habitat self-hosting)
-- `/usr/bin/git` - Git version control (no reliable static binaries available)
-
-### Habitat Tools (installed via system/tools/install-tools.sh)
-- `/workspace/system/tools/bin/rg` - ripgrep for fast searching
-- `/workspace/system/tools/bin/fd` - fd for file finding  
-- `/workspace/system/tools/bin/jq` - JSON processor
-- `/workspace/system/tools/bin/yq` - YAML processor
-- `/workspace/system/tools/bin/gh` - GitHub CLI
-- `/workspace/system/tools/bin/eza` - Modern ls with tree functionality (replaces tree command)
-- `/workspace/system/tools/bin/bat` - Enhanced cat with syntax highlighting (optional)
-- `/workspace/system/tools/bin/delta` - Enhanced git diffs (optional)
-- `/workspace/system/tools/bin/fzf` - Fuzzy finder (optional)
-
-### Configuration Files
-- `~/.gitconfig` - Git configuration (copied from /workspace/shared/gitconfig)
-- `~/.claude/.credentials.json` - Claude credentials (copied from host)
-- `/workspace/shared/gitconfig` - Shared git configuration template
-
-### Important Paths
-- Working directory: `/workspace` (the claude-habitat repository)
-- System tools: `/workspace/system/tools/bin/`
-- Shared configs: `/workspace/shared/`
-- Local habitat files: `/workspace/local/`
-
-## Testing Lifecycle
-
-When developing features, always run the full test suite to ensure nothing is broken:
-
-### 1. Unit Tests
-
-Use these constantly to find the state of the system.  Add to these rather than creating ad-hoc requests into the system.
-
-```bash
-npm test                    # Run all unit tests
-npm run test:unit          # Same as above
-npm run test:watch         # Run tests in watch mode
-```
-
-### 2. E2E Tests
-
-At minimum run these before you commit a feature.
-
-```bash
-npm run test:e2e           # Run end-to-end tests (10-minute timeout)
-```
-
-**Note**: E2E tests take 5-8 minutes to complete as they build and test multiple habitats. Individual tests typically take 30-50 seconds. The timeout is set to 10 minutes (600 seconds) to provide 30% buffer for slower systems.
-
-### 3. UI Testing
-
-At minimum run these before you commit a feature.  Snapshots require manual verification.  Look at them and ensure that what is happening is what you expected.
-
-```bash
-npm run test:ui            # Generate UI snapshots
-npm run test:ui:view       # Generate and view snapshots
-```
-
-### 4. Habitat Tests
-
-You should always be working with a test habitat in mind, and run the tests for that habitat.  Then run tests for all habitats before committing.
-
-```bash
-npm run test:habitat       # Run base habitat system tests
-./claude-habitat test base --system    # Manual habitat testing
-```
-
-### 5. Complete Test Suite
-```bash
-npm run test:all           # Run unit + e2e tests
-```
-
-## UI Snapshot Review
-
-After making changes that affect the user interface, always check the UI snapshots:
-
-1. **Generate snapshots**: `npm run test:ui`
-2. **Review the output**: Check `test/ui-snapshots.txt` (gitignored)
-3. **Look for issues**:
-   - Crashes or errors in any sequence
-   - Broken menu formatting
-   - Missing options or incorrect navigation
-   - Error messages that don't make sense
-   - Different screen than you expected to be on
-
-## Generate UI Snapshots
-
-Use these to quickly Generate UI Snapshots from a simulated sequence of key presses:
-
-- `./claude-habitat --test-sequence="q"` - Test main menu
-- `./claude-habitat --test-sequence="tq"` - Test navigation to test menu
-- `./claude-habitat --test-sequence="t2f"` - Test filesystem verification
-- `./claude-habitat --test-sequence="h"` - Test help display
-- `./claude-habitat --test-sequence="q" --preserve-colors` - Test with colors preserved
-
-## Coding Guidelines
-
-### Explicit Configuration Over Magic Detection
-
-**NEVER** implement logic that changes fundamental system behavior based on innocuous inference. This drives users insane.
-
-**❌ Bad Examples:**
-```javascript
-// DON'T: Magic string detection for TTY behavior
-// a -p in the command line leading to a non interactive TTY is completely random from a user perspective
-const isNonInteractive = claudeCommand.includes('-p') || claudeCommand.includes('--prompt');
-const dockerFlags = isNonInteractive ? ['-i'] : ['-it'];
-```
-
-**✅ Good Examples:**
-```yaml
-# DO: Explicit configuration in habitat config
-container:
-  tty: true           # or false - explicit and clear
-  user: developer
-  work_dir: /workspace
-
-# DO: Feature flags and explicit options
-ui:
-  colors: true
-  verbose: false
-```
-
-### Configuration Design Principles
-
-1. **Explicit over implicit** - All behavior should be configurable in config files
-2. **Predictable defaults** - Default values should work for 90% of use cases
-3. **No hidden dependencies** - Behavior should not depend on parsing command content
-4. **Clear documentation** - Every config option should be documented
-5. **Backward compatibility** - New options should have sensible defaults
-
-### TTY Configuration
-
-TTY allocation should be explicit in habitat configuration:
-
-```yaml
-container:
-  tty: true    # Default: true for interactive applications
-               # Set to false for headless/batch operations
-```
-
-**Default behavior:** Interactive TTY enabled (`docker exec -it`)
-**When to disable:** Batch jobs, CI/CD, non-interactive automation
-
-## Additional Guidelines
-
-- Always check the user experience to ensure it complies with intended design
-- Use UI snapshots to verify that changes don't break the interface
-- Test both successful and error scenarios
-
-Remember: The goal is to create a perfect, isolated development environment that "just works" when developers run it!
-
-## Path Resolution Standards
-
-To eliminate path resolution bugs and regressions, always follow these standards:
-
-### Host-Side Paths
-
-**Rule: Always use `rel()` for host filesystem paths (relative to project root)**
-
-```javascript
-// Import the helper
-const { rel } = require('./utils');
-
-// Good: Consistent project-root relative paths
-const dockerfilePath = rel('habitats', 'claude-habitat', 'Dockerfile');
-const systemDir = rel('system');
-const sharedDir = rel('shared');
-const configPath = rel('habitats', 'discourse', 'config.yaml');
-
-// Bad: Manual path construction prone to errors
-const dockerfilePath = path.join(__dirname, '..', 'habitats', 'claude-habitat', 'Dockerfile');
-const systemDir = path.join(process.cwd(), 'system');
-```
-
-### Container-Side Paths
-
-**Rule 1: Use absolute strings for fixed container paths**
-
-```javascript
-// Good: Clear, fixed container paths
-const claudeCredentials = '/opt/claude-credentials.json';
-const homeDir = '/home/node';
-const systemBin = '/usr/bin/docker';
-
-// Bad: Unnecessary helper overhead
-const homeDir = containerPath('/home', 'node');
-```
-
-**Rule 2: Use `createWorkDirPath()` for workspace-relative paths**
-
-```javascript
-// Import the helper factory
-const { createWorkDirPath } = require('./utils');
-
-// Create workspace-relative helper for this container
-const workDirPath = createWorkDirPath(config.container.work_dir);
-
-// Good: Workspace-relative paths
-const repoPath = workDirPath('my-repo');
-const habitatSystem = workDirPath('claude-habitat', 'system');
-const toolPath = workDirPath('claude-habitat', 'system', 'tools', 'bin', 'setup-github-auth');
-
-// Bad: Manual construction with repetition
-const repoPath = path.posix.join(config.container.work_dir, 'my-repo');
-const toolPath = path.posix.join(config.container.work_dir, 'claude-habitat', 'system', 'tools', 'bin', 'setup-github-auth');
-```
-
-### Configuration Files
-
-**Rule: Dockerfile and other paths in configs are always relative to project root**
-
-```yaml
-# Good: Relative to project root (no leading ./)
-image:
-  dockerfile: habitats/claude-habitat/Dockerfile
-
-# Bad: Ambiguous relative paths
-image:
-  dockerfile: ./habitats/claude-habitat/Dockerfile  # Relative to what?
-```
-
-### Variable Templates
-
-**Rule: Use simplified variable names in template substitution**
-
-```yaml
-# Good: Simple, clear variable names
-setup:
-  user:
-    commands:
-      - ${work_dir}/claude-habitat/system/tools/bin/setup-github-auth
-
-# Avoid: Verbose nested references
-setup:
-  user:
-    commands:
-      - ${container.work_dir}/claude-habitat/system/tools/bin/setup-github-auth
-```
-
-### Benefits of This Approach
-
-1. **Eliminates path duplication bugs**: No more `habitats/habitat/habitats/habitat` errors
-2. **Clear context separation**: `rel()` = host, `workDirPath()` = container workspace, `'/absolute'` = container fixed
-3. **Self-documenting code**: Function names indicate the path context immediately
-4. **Centralized logic**: Path resolution logic is in one place
-5. **Consistent mental model**: Always know which context you're working in
-
-### Migration Guide
-
-When updating existing code:
-
-1. **Replace project-relative constructions with `rel()`**:
-   ```javascript
-   // Before
-   const configPath = path.join(__dirname, '..', 'system', 'config.yaml');
-   
-   // After  
-   const configPath = rel('system', 'config.yaml');
-   ```
-
-2. **Replace workspace-relative constructions with `workDirPath()`**:
-   ```javascript
-   // Before
-   const toolPath = path.posix.join(config.container.work_dir, 'claude-habitat', 'system', 'tools', 'bin', 'tool');
-   
-   // After
-   const workDirPath = createWorkDirPath(config.container.work_dir);
-   const toolPath = workDirPath('claude-habitat', 'system', 'tools', 'bin', 'tool');
-   ```
-
-3. **Simplify absolute container paths**:
-   ```javascript
-   // Before
-   const containerPath = buildContainerPath('/home', 'node', '.claude');
-   
-   // After
-   const containerPath = '/home/node/.claude';
-   ```
+*For complete details on any topic, check the relevant source code module - all information is now contextually documented where it's used.*

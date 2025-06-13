@@ -1,3 +1,17 @@
+/**
+ * @fileoverview E2E tests for container rebuild functionality and forced recreation
+ * @description Tests full container rebuild workflows including --rebuild flag and fresh container generation
+ * 
+ * These tests verify that the rebuild functionality works correctly, including forcing fresh
+ * container builds and handling rebuild scenarios without crashing. They ensure that the
+ * --rebuild flag properly triggers complete container recreation with appropriate progress indicators.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/rebuild-functionality.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: Container rebuild and forced recreation workflows
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { ProductTestBase } = require('./product-test-base');

@@ -1,6 +1,17 @@
 #!/bin/bash
-# Test core system tools are available
-# These are tools that should always be present in any habitat
+# System Test: Core Tools Availability
+# @fileoverview Tests for core system tools that should be available in all habitats
+# @description Validates that essential development tools (rg, fd, jq, yq, gh) are properly
+#              installed and accessible in the container environment.
+#
+# This test ensures the foundational toolset is available for Claude's development work
+# across all habitat configurations.
+#
+# @tests
+# - Run this test: ./system/tests/test-core-tools.sh
+# - Run all system tests: ./claude-habitat test --system
+# - Run all tests: npm test
+# - Related config: system/config.yaml - System tool definitions
 
 set -e
 

@@ -1,6 +1,19 @@
 #!/bin/bash
-# Test Discourse environment setup
-# Validates that Discourse development environment is working
+# Habitat Test: Discourse Development Environment
+# @fileoverview Validates Discourse-specific development environment setup
+# @description This test validates that the Discourse development environment is properly
+#              configured with all required dependencies, including Ruby/Rails environment,
+#              PostgreSQL database connectivity, and essential project files.
+#
+# This test ensures that Claude can effectively work on Discourse development by validating
+# the complete Rails development stack and database connectivity required for Discourse
+# forum software development and testing.
+#
+# @tests
+# - Run this test: ./habitats/discourse/tests/test-discourse-setup.sh
+# - Run all discourse tests: ./claude-habitat test discourse
+# - Run all tests: npm test
+# - Related config: habitats/discourse/config.yaml
 
 set -e
 

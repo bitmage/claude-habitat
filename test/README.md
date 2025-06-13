@@ -1,6 +1,6 @@
 # Claude Habitat Test Suite
 
-This directory contains tests organized by performance and scope to optimize development workflows.
+This directory contains comprehensive test coverage organized by performance and scope to optimize development workflows. All test files include JSDoc preambles explaining their purpose, testing approach, and execution commands.
 
 ## Test Categories
 
@@ -12,72 +12,112 @@ This directory contains tests organized by performance and scope to optimize dev
 
 ```bash
 npm test              # Default: runs unit tests only
-npm run test:unit     # Explicit unit test run
-npm run test:watch    # Watch mode for development
+node --test test/unit/*.js  # Explicit unit test run
 ```
 
 **Files:**
-- `pure-functions.test.js` - Pure functions (parseRepoPath, buildDockerArgs, etc.)
-- `claude-habitat.test.js` - Core logic and configuration parsing
-- `menu.test.js` - Menu and CLI interaction logic
-- `github-functions.test.js` - GitHub API functions (mocked)
-
-### 🔗 Integration Tests (`test/integration/`)
-**Medium-speed tests with external dependencies (10-30 seconds)**
-- System tools integration
-- Repository access workflows
-- Authentication flows
-- Run before commits or after significant changes
-
-```bash
-npm run test:integration
-```
-
-**Files:**
-- `repository-access.test.js` - Full repository access workflow testing
-- `../github-system-tools.test.js` - System tools fix verification
-
-**Performance Notes:**
-- May download system tools (gh, rg, fd, etc.) if not present
-- Tests real GitHub API integration (with expected auth failures)
-- Uses actual system tools infrastructure
+- `claude-habitat.test.js` - Core functionality, cache hashing, repository parsing
+- `cli-commands.test.js` - CLI command parsing and execution behaviors
+- `colors.test.js` - Terminal color formatting utilities
+- `command-builders.test.js` - Docker command argument construction
+- `config-validation.test.js` - Habitat configuration validation system
+- `filesystem-verification.test.js` - Filesystem verification and operations
+- `github-pure.test.js` - Pure GitHub utility functions
+- `github-system-tools.test.js` - GitHub system tools integration
+- `habitat-detection.test.js` - Habitat detection and path resolution
+- `main-entry-point.test.js` - Main application entry point validation
+- `menu.test.js` - Interactive menu system functionality
+- `path-helpers.test.js` - Habitat path helper utilities
+- `tilde-menu.test.js` - Tilde-based menu navigation system
+- `verify-fs.test.js` - Filesystem verification script testing
 
 ### 🐳 End-to-End Tests (`test/e2e/`)
-**Slow tests with heavy operations (30+ seconds)**
+**Comprehensive workflow tests with full system integration (30+ seconds)**
 - Full Docker container lifecycle
-- Tool installation simulation
 - Complete habitat workflows
+- Authentication and repository access
+- UI and CLI interaction flows
 - Run before releases or major deployments
 
 ```bash
-npm run test:e2e
+npm run test:e2e               # All E2E tests
+npm run test:e2e -- test/e2e/specific.test.js  # Specific test
 ```
 
 **Files:**
-- `e2e.test.js` - Docker operations, container creation, tool installation
+- `base-habitat-product.test.js` - Base habitat lifecycle and performance validation
+- `build-failures.test.js` - Build failure handling and error recovery workflows
+- `claude-authentication.test.js` - Claude authentication and API connectivity
+- `claude-in-habitat.test.js` - Claude execution within habitat containers
+- `e2e.test.js` - Core CLI and configuration functionality
+- `environment-consistency.test.js` - Environment variable consistency across layers
+- `github-functions.test.js` - GitHub integration and repository access workflows
+- `rebuild-functionality.test.js` - Container rebuild and caching functionality
+- `repository-access.test.js` - Repository access verification workflows
+- `ui-colors.test.js` - UI color rendering and terminal formatting
+- `ui-sequences.test.js` - UI sequence execution and error handling
+- `ui-verification.test.js` - UI testing methodology and gap analysis
 
 **Performance Notes:**
 - Downloads Docker images (ubuntu:22.04, ~29MB)
 - Runs apt-get operations inside containers
 - Creates and destroys actual Docker containers
+- Tests real GitHub API integration
+- May download system tools (gh, rg, fd, etc.) if not present
+
+### 🏠 Habitat Tests
+**Environment-specific tests for different habitat configurations**
+- System tests validate infrastructure and tool availability
+- Shared tests validate user configuration and environment setup
+- Habitat tests validate specific project environment configurations
+
+```bash
+./claude-habitat test --system      # System infrastructure tests
+./claude-habitat test --shared      # User configuration tests  
+./claude-habitat test discourse     # Specific habitat tests
+./claude-habitat test --all         # All habitat tests
+```
+
+**System Tests (`system/tests/`):**
+- `test-core-tools.sh` - Core system tools availability (rg, fd, jq, yq, gh)
+- `test-file-operations.sh` - File operations and directory structure validation
+- `test-git-auth.sh` - GitHub App authentication configuration
+
+**Shared Tests (`shared/tests/`):**
+- `test-user-config.sh` - User configuration and shared environment validation
+
+**Habitat-Specific Tests (`habitats/*/tests/`):**
+- `discourse/tests/test-discourse-setup.sh` - Discourse development environment
+- `claude-habitat/tests/test-tools-and-auth.sh` - Self-hosting tools and authentication
+- `claude-habitat/tests/test-claude-habitat-inception.sh` - Self-hosting validation
 
 ## Development Workflow
 
 ### 🔄 During Active Development
 ```bash
-npm test              # Fast unit tests only
-npm run test:watch    # Continuous testing
+npm test                    # Fast unit tests only
+node --test test/unit/*.js  # Explicit unit test run
 ```
 
 ### 🚀 Before Committing
 ```bash
-npm run test:integration  # Verify system integration
-npm test                  # Quick final check
+npm run test:e2e -- test/e2e/e2e.test.js  # Core E2E validation
+npm test                                   # Quick final unit test check
 ```
 
 ### 📦 Before Releases
 ```bash
-npm run test:all      # Complete test suite
+npm run test:e2e          # Complete E2E test suite
+npm run test:ui:view      # Verify UI snapshots
+./claude-habitat test --all  # All habitat tests
+```
+
+### 🎨 UI Testing
+```bash
+npm run test:ui           # Generate UI test snapshots
+npm run test:ui:view      # View and verify UI snapshots
+./claude-habitat --test-sequence="q"     # Test specific UI sequence
+./claude-habitat --test-sequence="t2f"   # Test complete workflow
 ```
 
 ## Test Performance Guidelines
@@ -88,21 +128,32 @@ npm run test:all      # Complete test suite
 - ✅ Test pure functions and business logic
 - ✅ Be deterministic and repeatable
 
-### Integration Tests May:
-- ⚠️ Take 10-30 seconds due to tool downloads
-- ⚠️ Access real external systems (with controlled failures)
-- ⚠️ Download system tools if missing
-
 ### E2E Tests Will:
 - 🐌 Take 30+ seconds due to Docker operations
 - 🐌 Download images and packages
 - 🐌 Create real containers and test full workflows
+- 🐌 Test complete authentication and repository workflows
+
+### Habitat Tests May:
+- ⚠️ Take 10-60 seconds depending on environment setup
+- ⚠️ Download and install system tools if missing
+- ⚠️ Access real external systems (GitHub, repositories)
+- ⚠️ Create temporary containers for validation
 
 ## Adding New Tests
 
-### For Pure Functions:
+### For Unit Tests:
 ```javascript
-// test/unit/new-feature.test.js
+/**
+ * @fileoverview Unit tests for [specific functionality]
+ * @description Tests [what is being tested and why]
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/new-feature.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:module-name} - [description]
+ */
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { myPureFunction } = require('../../src/module');
@@ -112,16 +163,32 @@ test('myPureFunction handles edge cases', () => {
 });
 ```
 
-### For Integration:
+### For E2E Tests:
 ```javascript
-// test/integration/new-workflow.test.js
-// May use real file system, system tools, GitHub API
+/**
+ * @fileoverview E2E tests for [specific workflow]
+ * @description Tests [end-to-end workflow description]
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/new-workflow.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test modules: [relevant modules being tested]
+ */
+
+// May create Docker containers, install tools, full workflows
 ```
 
-### For E2E:
-```javascript
-// test/e2e/full-habitat.test.js
-// May create Docker containers, install tools, full workflows
+### For Habitat Tests:
+```bash
+#!/bin/bash
+# [Test Type]: [Test Purpose]
+# @fileoverview [What this test validates]
+# @description [Detailed explanation]
+# 
+# @tests
+# - Run this test: ./path/to/test.sh
+# - Run all habitat tests: ./claude-habitat test --all
+# - Related config: [relevant config file]
 ```
 
 ## Troubleshooting

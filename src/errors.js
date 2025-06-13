@@ -1,6 +1,41 @@
 /**
- * Centralized error classes for Claude Habitat
- * Provides consistent error handling across the application
+ * @module errors
+ * @description Centralized error classes for Claude Habitat
+ * 
+ * Provides consistent error handling across the application with structured
+ * error codes, details, and recovery suggestions. Implements the error
+ * philosophy of always providing a path forward.
+ * 
+ * ## Common Troubleshooting Patterns
+ * 
+ * ### Repository Cloning Issues
+ * - **Symptom**: Script exits during repository cloning without errors
+ * - **Cause**: Bash arithmetic in loops triggering `set -e` on zero result
+ * - **Solution**: Use explicit assignment `repo_idx=$((repo_idx + 1))` instead of `((repo_idx++))`
+ * 
+ * ### Setup Command Failures  
+ * - **Symptom**: Multi-line setup commands fail unexpectedly
+ * - **Cause**: Line-ending issues or improper YAML formatting
+ * - **Solution**: Use proper YAML literal blocks and check line endings
+ * 
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * ### Container Startup Issues
+ * - **Symptom**: Container exits immediately or services don't start
+ * - **Cause**: Missing dependencies or improper init commands
+ * - **Solution**: Check logs with `docker logs <container>` and verify Dockerfile
+ * 
+ * ### Debug Methods
+ * - Enable debug mode: `set -x` in scripts
+ * - Check container logs: `docker logs <container>`
+ * - Verify image build: `docker build --no-cache`
+ * - Test commands manually: `docker exec -it <container> bash`
+ * 
+ * @requires module:standards/error-handling - Error recovery patterns
+ * 
+ * @tests
+ * - All tests: `npm test`
+ * - Error handling is tested across all module tests
  */
 
 /**

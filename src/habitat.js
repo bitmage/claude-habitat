@@ -1,18 +1,77 @@
+/**
+ * @module habitat
+ * @description Core habitat session management for Claude Habitat
+ * 
+ * Manages habitat container sessions, including starting, stopping, and
+ * maintaining active development environments. Handles cache management,
+ * repository setup, and session lifecycle operations.
+ * 
+ * ## Runtime Commands for Active Sessions
+ * 
+ * When a habitat is running, you can interact with the container:
+ * 
+ * ### Get Container Name
+ * ```bash
+ * docker ps | grep claude-habitat
+ * ```
+ * 
+ * ### Execute Commands in Running Container
+ * ```bash
+ * # Get container name, then:
+ * CONTAINER_NAME="claude-habitat_123456789_987654"  # Replace with actual
+ * 
+ * # Interactive bash session
+ * docker exec -it $CONTAINER_NAME bash
+ * 
+ * # Run commands as the node user
+ * docker exec -it -u node $CONTAINER_NAME bash
+ * docker exec -u node $CONTAINER_NAME ls -la /workspace
+ * docker exec -u node $CONTAINER_NAME git status
+ * ```
+ * 
+ * ### Monitor Activity
+ * ```bash
+ * # Watch container logs
+ * docker logs -f $CONTAINER_NAME
+ * 
+ * # Check system processes
+ * docker exec -u node $CONTAINER_NAME ps aux
+ * 
+ * # Monitor git activity
+ * docker exec -u node $CONTAINER_NAME git log --oneline -5
+ * docker exec -u node $CONTAINER_NAME git status
+ * ```
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:config - Configuration loading
+ * @requires module:container-operations - Docker container operations
+ * @requires module:image-lifecycle - Docker image build and management
+ * @requires module:github - Repository access operations
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/claude-habitat.test.js`
+ * - Run all tests: `npm test`
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
 const { spawn } = require('child_process');
 const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, calculateCacheHash, fileExists, sleep, rel } = require('./utils');
-const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
-const { buildBaseImage, buildPreparedImage, dockerImageExists, dockerRun, dockerExec, dockerIsRunning } = require('./docker');
+const { loadConfig } = require('./config');
+const { buildBaseImage, prepareWorkspace } = require('./image-lifecycle');
+const { dockerImageExists, dockerRun, dockerExec, dockerIsRunning } = require('./container-operations');
 const { testRepositoryAccess } = require('./github');
 
 // Start a new session with the specified habitat
 async function startSession(configPath, extraRepos = [], overrideCommand = null, options = {}) {
   const { rebuild = false } = options;
-  const config = await loadHabitatEnvironmentFromConfig(configPath);
+  const config = await loadConfig(configPath);
   const hash = calculateCacheHash(config, extraRepos);
   const preparedTag = `claude-habitat-${config.name}:${hash}`;
 
@@ -33,7 +92,7 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
     const baseTag = await buildBaseImage(config, { rebuild });
     
     // Build prepared image with all setup (with rebuild option)
-    await buildPreparedImage(config, preparedTag, extraRepos, { rebuild });
+    await prepareWorkspace(config, preparedTag, extraRepos, { rebuild });
   } else {
     console.log('Using cached prepared image');
   }
@@ -45,7 +104,7 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
 
 // Build habitat image (base + prepared)
 async function buildHabitatImage(configPath, extraRepos = []) {
-  const config = await loadHabitatEnvironmentFromConfig(configPath);
+  const config = await loadConfig(configPath);
   const hash = calculateCacheHash(config, extraRepos);
   const preparedTag = `claude-habitat-${config.name}:${hash}`;
 
@@ -53,7 +112,7 @@ async function buildHabitatImage(configPath, extraRepos = []) {
   const baseTag = await buildBaseImage(config);
   
   // Build prepared image
-  await buildPreparedImage(config, preparedTag, extraRepos);
+  await prepareWorkspace(config, preparedTag, extraRepos);
   
   return { baseTag, preparedTag };
 }
@@ -94,7 +153,7 @@ async function checkHabitatRepositories(habitatsDir) {
       
       try {
         if (await fileExists(configPath)) {
-          const config = await loadHabitatEnvironmentFromConfig(configPath);
+          const config = await loadConfig(configPath);
           
           if (config.repositories && Array.isArray(config.repositories)) {
             for (const repo of config.repositories) {
@@ -133,7 +192,12 @@ async function setupHabitatEnvironment(habitatName, config) {
     throw new Error(`Invalid habitat config: missing container section`);
   }
   
-  if (!config._environment?.WORKDIR) {
+  // Validate WORKDIR environment variable is set
+  const { createHabitatPathHelpers } = require('./habitat-path-helpers');
+  const pathHelpers = await createHabitatPathHelpers(config);
+  const compiledEnv = pathHelpers.getEnvironment();
+  
+  if (!compiledEnv.WORKDIR) {
     throw new Error(`Invalid habitat config: missing WORKDIR environment variable`);
   }
   
@@ -161,8 +225,13 @@ function interpretExitCode(exitCode) {
 async function runContainerWithSharedLogic(tag, config, overrideCommand = null, ttyOverride = null) {
   const { createHabitatContainer } = require('./container-lifecycle');
   const containerName = `${config.name}_${Date.now()}_${process.pid}`;
-  const workDir = config._environment?.WORKDIR;
-  const containerUser = config._environment?.USER;
+  // Get resolved environment variables
+  const { createHabitatPathHelpers } = require('./habitat-path-helpers');
+  const pathHelpers = await createHabitatPathHelpers(config);
+  const compiledEnv = pathHelpers.getEnvironment();
+  
+  const workDir = compiledEnv.WORKDIR;
+  const containerUser = compiledEnv.USER;
   const claudeCommand = overrideCommand || config.claude?.command || 'claude';
   let startupCompleted = false;
 

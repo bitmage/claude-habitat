@@ -1,6 +1,18 @@
 #!/bin/bash
-# Test file operations and directory structure
-# Ensures the habitat file structure is set up correctly
+# System Test: File Operations and Directory Structure
+# @fileoverview Validates the core habitat filesystem layout and access permissions
+# @description This test ensures that the habitat file structure is set up correctly
+#              and that Claude has proper access to required directories and can perform
+#              basic file operations within its workspace.
+#
+# This test validates the foundational filesystem requirements for habitat operation,
+# including proper directory structure, work area accessibility, and tool availability.
+#
+# @tests
+# - Run this test: ./system/tests/test-file-operations.sh
+# - Run all system tests: ./claude-habitat test --system
+# - Run all tests: npm test
+# - Related config: system/config.yaml
 
 set -e
 

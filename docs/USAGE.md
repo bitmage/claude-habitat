@@ -1,159 +1,386 @@
-# Usage
+# Claude Habitat Usage Guide
 
-📖 **See [TERMINOLOGY.md](TERMINOLOGY.md) for domain concepts** including habitats, sessions, composition layers, etc.
+Practical examples and workflows for using Claude Habitat development environments.
 
-## Basic Commands
+> **Quick Start**: For installation, see [SETUP.md](SETUP.md). For architecture overview, see [README.md](../README.md).
+
+## Core Concepts
+
+Before diving into usage, understand these key concepts from [src/types.js](../src/types.js):
+
+- **Habitat**: A complete development environment configuration (code + services + tools)
+- **Session**: An active running instance of a habitat 
+- **Workspace**: The container's `/workspace` directory containing your code
+- **Meta Claude**: Claude running on your host system (maintenance, habitat creation)
+- **Habitat Claude**: Claude running inside the container (development work)
+
+## Basic Usage Patterns
+
+### Starting a Habitat
 
 ```bash
-./claude-habitat                    # Interactive menu
-./claude-habitat <name>             # Start specific habitat
-./claude-habitat add                # Create new habitat (with AI assistance)
-./claude-habitat --list-configs     # List available habitats
+# Interactive menu (choose from available habitats)
+./claude-habitat
+
+# Direct start by name
+./claude-habitat discourse
+./claude-habitat my-project
+
+# Start with additional repositories  
+./claude-habitat discourse https://github.com/user/plugin:/plugins/my-plugin
+
+# Rebuild environment from scratch
+./claude-habitat discourse --rebuild
 ```
 
-## Creating Your Environment
+### Managing Habitats
 
-### Option 1: AI-Assisted Creation (Recommended)
+```bash
+# List all available habitats
+./claude-habitat --list-configs
+
+# Create new habitat (with AI assistance)
+./claude-habitat add
+
+# Enter maintenance mode (update claude-habitat itself)
+./claude-habitat maintain
+```
+
+### Testing and Verification
+
+```bash
+# Test a specific habitat
+./claude-habitat test discourse --all
+
+# Test only system infrastructure
+./claude-habitat test discourse --system
+
+# Test filesystem operations
+./claude-habitat test discourse --verify-fs
+
+# Interactive testing menu
+./claude-habitat test
+```
+
+## Creating Your First Habitat
+
+### Method 1: AI-Assisted Creation
+
+The easiest way to create a new habitat:
+
 ```bash
 ./claude-habitat add
 ```
-The AI will analyze your repository and create a complete habitat configuration automatically.
 
-### Option 2: Manual Setup
+You'll be prompted for:
+- **Project repositories**: One or more Git URLs
+- **Project description**: What the project does
+- **Required services**: Databases, caches, etc.
+- **Special requirements**: Language versions, tools, etc.
 
-#### 1. Create Habitat Structure
+Claude will analyze your repositories and create appropriate configuration.
+
+### Method 2: Manual Configuration
+
+For advanced users, create habitat configurations manually:
+
 ```bash
-mkdir habitats/my-project
+mkdir -p habitats/my-project
 ```
 
-#### 2. Create Configuration (`habitats/my-project/config.yaml`)
+Create `habitats/my-project/config.yaml`:
 ```yaml
 name: my-project
-description: My project development environment
+description: My awesome project
 
 image:
-  dockerfile: Dockerfile
+  dockerfile: ./habitats/my-project/Dockerfile
   tag: claude-habitat-my-project:latest
 
 repositories:
-  - url: https://github.com/user/repo
-    path: /workspace
+  - url: https://github.com/user/my-project
+    path: /workspace/my-project
     branch: main
+
+env:
+  - USER=node
+  - WORKDIR=/workspace
+  - HABITAT_PATH=${WORKDIR}/habitat
+  - SYSTEM_PATH=${HABITAT_PATH}/system
+  - SHARED_PATH=${HABITAT_PATH}/shared
+  - LOCAL_PATH=${HABITAT_PATH}/local
 
 container:
   work_dir: /workspace
-  user: developer
+  user: node
+  startup_delay: 10
 
+claude:
+  command: claude
+```
+
+Create corresponding `Dockerfile` based on [existing examples](../habitats/).
+
+## Common Workflows
+
+### Development Session
+
+1. **Start habitat**:
+   ```bash
+   ./claude-habitat my-project
+   ```
+
+2. **Work within the container**: Claude has access to:
+   - Your project code at `/workspace/my-project/`
+   - Development tools in `/workspace/habitat/system/tools/bin/`
+   - Your personal configs in `/workspace/habitat/shared/`
+   - Scratch space for notes and experiments
+
+3. **Exit cleanly**: Use `exit` or Ctrl+D in the container
+
+### Adding Extra Repositories
+
+For projects with multiple repositories or plugins:
+
+```bash
+# Add a plugin repository to main project
+./claude-habitat my-project \\
+  https://github.com/user/plugin:/workspace/plugins/my-plugin
+
+# Add multiple extra repos  
+./claude-habitat my-project \\
+  https://github.com/user/plugin1:/workspace/plugins/plugin1 \\
+  https://github.com/user/plugin2:/workspace/plugins/plugin2:feature-branch
+```
+
+### Debugging and Troubleshooting
+
+```bash
+# Rebuild habitat completely (fixes most issues)
+./claude-habitat my-project --rebuild
+
+# Test specific components
+./claude-habitat test my-project --system     # System infrastructure
+./claude-habitat test my-project --shared     # Personal configurations  
+./claude-habitat test my-project --habitat    # Project-specific tests
+
+# Check filesystem operations
+./claude-habitat test my-project --verify-fs
+
+# Generate UI interaction snapshots for debugging
+npm run test:ui
+```
+
+### Working with Private Repositories
+
+Ensure authentication is set up ([SETUP.md](SETUP.md)), then use normal commands:
+
+```bash
+# SSH authentication (recommended)
+./claude-habitat add
+# Enter private repository URLs when prompted
+
+# Works with additional repos too
+./claude-habitat my-project \\
+  git@github.com:private-org/internal-lib:/workspace/libs/internal
+```
+
+## Advanced Usage
+
+### Custom Environment Variables
+
+Add project-specific environment variables to your habitat configuration:
+
+```yaml
+env:
+  - DATABASE_URL=postgresql://localhost:5432/myproject
+  - REDIS_URL=redis://localhost:6379
+  - NODE_ENV=development
+  - API_KEY=${SHARED_PATH}/secrets/api-key.txt
+```
+
+### Service Dependencies
+
+For projects requiring databases or other services:
+
+```yaml
+# In your Dockerfile
+RUN apt-get update && apt-get install -y \\
+    postgresql \\
+    redis-server
+
+# In config.yaml setup commands
 setup:
   root:
-    - apt-get update && apt-get install -y build-essential
+    - systemctl enable postgresql
+    - systemctl enable redis
   user:
-    run_as: developer
+    run_as: node
     commands:
-      - npm install  # or your project's setup commands
+      - createdb myproject
+      - npm install
 ```
 
-#### 3. Create Dockerfile (`habitats/my-project/Dockerfile`)
-```dockerfile
-FROM ubuntu:22.04
+### Custom Development Tools
 
-# Install basic tools
-RUN apt-get update && apt-get install -y \
-    curl git sudo \
-    && rm -rf /var/lib/apt/lists/*
+Add project-specific tools to `system/tools/tools.yaml` or include them in your Dockerfile:
 
-# Install your language runtime (example: Node.js)
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs
-
-# Create user
-RUN useradd -m developer
-
-CMD ["/sbin/init"]
+```yaml
+# In config.yaml
+setup:
+  user:
+    commands:
+      - npm install -g your-special-tool
+      - pip install your-python-package
 ```
 
-#### 4. Add Project Instructions (Optional)
-Create `habitats/my-project/claude.md` with project-specific guidance.
+### Sharing Configurations
 
-## Customizing Your Environment
-
-### Personal Preferences (`shared/`)
-
-Add your personal configurations that apply to all projects:
-
-#### Personal Claude Instructions
-```bash
-# Copy the template
-cp shared/claude.md.example shared/claude.md
-
-# Edit your preferences
-# - Your development workflow
-# - Your preferred tools and aliases
-# - Your coding style preferences
-```
-
-#### Personal Git Configuration
-```bash
-# Create shared/gitconfig
-[user]
-    name = Your Name
-    email = your.email@example.com
-[core]
-    editor = nano
-[alias]
-    st = status
-    co = checkout
-    br = branch
-```
-
-#### Personal Aliases
-```bash
-# Create shared/aliases.sh
-#!/bin/bash
-alias ll='ls -la'
-alias gs='git status'
-alias gc='git commit'
-alias gp='git push'
-```
-
-#### Personal Tools
-```bash
-# Add your own tools in shared/tools/
-mkdir -p shared/tools
-# Add your custom tools and install scripts
-```
-
-### Authentication Setup
+Habitat configurations can be committed to your project repository:
 
 ```bash
-# SSH keys for repository access
-ssh-keygen -t ed25519 -f shared/github_deploy_key -N ""
-# Add shared/github_deploy_key.pub to GitHub as deploy key
+# In your project repo, create .claude-habitat/
+mkdir .claude-habitat
+cp claude-habitat/habitats/my-project/* .claude-habitat/
 
-# GitHub App authentication (optional)
-# Place your GitHub App .pem file in shared/
+# Others can use it with:
+./claude-habitat add --from-project /path/to/project
 ```
 
-**Note**: Sensitive files are automatically git-ignored via `shared/.gitignore`
+## Interactive Features
 
-## Running Your Habitat
+### Menu Navigation
+
+The interactive menu supports single-key navigation:
+
+- **Numbers**: Select habitats (1, 2, 3, ...)
+- **Letters**: Actions (a=add, t=test, c=clean, q=quit)
+- **Shift+Numbers**: Force rebuild (!@#$%^&*() for habitats 1-9)
+
+### Test Menu
 
 ```bash
-# Start your environment
-./claude-habitat my-project
-
-# With additional repositories
-./claude-habitat my-project --repo "https://github.com/user/plugin:/workspace/plugins/plugin"
+./claude-habitat test
 ```
 
-## Maintenance
+Navigate with:
+- **Numbers**: Select habitat to test
+- **Letters**: Test types (a=all, s=system, h=habitat, f=filesystem)
+- **b**: Back to previous menu
+
+### UI Testing
+
+Generate snapshots of user interactions:
 
 ```bash
-./claude-habitat maintain    # Maintenance menu
-./claude-habitat --clean     # Remove old images
+# Test main menu display
+./claude-habitat --test-sequence="q"
+
+# Test navigation flows
+./claude-habitat --test-sequence="tq"    # test menu → quit
+./claude-habitat --test-sequence="t2f"   # test → habitat 2 → filesystem
+
+# Generate comprehensive snapshots
+npm run test:ui:view
 ```
 
-Your environment combines:
-- **System**: Managed tools and base configuration
-- **Shared**: Your personal preferences across all projects  
-- **Habitat**: Project-specific setup and instructions
+## Best Practices
+
+### Project Organization
+
+1. **One habitat per project**: Don't mix unrelated projects
+2. **Clear naming**: Use descriptive habitat names 
+3. **Version control**: Include habitat configs in project repos
+4. **Documentation**: Add project-specific instructions to `claude.md`
+
+### Development Workflow
+
+1. **Test first**: Always run habitat tests before development
+2. **Clean rebuilds**: Use `--rebuild` when configuration changes
+3. **Incremental development**: Use `npm run test:watch` for rapid iteration
+4. **Document changes**: Update configurations when adding dependencies
+
+### Security Practices
+
+1. **Isolation**: Never mount host directories into containers
+2. **Credentials**: Store keys in `shared/` directory only
+3. **Minimal privileges**: Use non-root users in containers
+4. **Regular updates**: Keep base images and tools updated
+
+## Troubleshooting Common Issues
+
+### Container Won't Start
+
+```bash
+# Check configuration validity
+./claude-habitat test my-project --system
+
+# Rebuild completely
+./claude-habitat my-project --rebuild
+
+# Check Docker resources
+docker system df
+docker system prune  # If low on space
+```
+
+### Repository Access Issues
+
+```bash
+# Test SSH access
+ssh -T git@github.com
+
+# Check key permissions  
+ls -la shared/id_*
+
+# Verify repository URLs
+git ls-remote https://github.com/user/repo
+```
+
+### Performance Issues
+
+```bash
+# Check resource usage
+docker stats
+
+# Clean up unused images
+docker image prune
+
+# Use faster rebuild with cache
+./claude-habitat my-project --rebuild --cache
+```
+
+## Integration Examples
+
+### VS Code Integration
+
+You can use VS Code with Remote-Containers extension:
+
+```json
+// .devcontainer/devcontainer.json in your project
+{
+  "name": "Claude Habitat",
+  "dockerComposeFile": "../claude-habitat/docker-compose.yml",
+  "service": "habitat",
+  "workspaceFolder": "/workspace"
+}
+```
+
+### CI/CD Integration
+
+Use habitats in CI environments:
+
+```yaml
+# GitHub Actions example
+- name: Setup Claude Habitat
+  run: |
+    git clone https://github.com/org/claude-habitat
+    cd claude-habitat && npm install
+    
+- name: Test in Habitat
+  run: |
+    ./claude-habitat test my-project --all
+```
+
+---
+
+> **Next Steps**: Explore the [architectural overview](../claude-habitat.js) and [domain model](../src/types.js) to understand how Claude Habitat works internally.

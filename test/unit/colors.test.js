@@ -1,3 +1,16 @@
+/**
+ * @fileoverview Unit tests for color utility functions
+ * @description Tests terminal color formatting and styling utilities
+ * 
+ * Validates color function behavior, ANSI escape code generation,
+ * and color utility helper functions used throughout the application.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/colors.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:utils} - Color utilities
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { colors } = require('../../src/utils');

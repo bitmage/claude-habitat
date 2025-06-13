@@ -1,6 +1,14 @@
 /**
- * Application constants
- * Centralized configuration values used throughout the application
+ * @module constants
+ * @description Application constants for Claude Habitat
+ * 
+ * Centralized configuration values used throughout the application.
+ * Includes timeouts, default paths, container settings, and other
+ * cross-cutting configuration values.
+ * 
+ * @tests
+ * - All unit tests: `npm test`
+ * - Constants are tested implicitly through all module tests
  */
 
 module.exports = {
@@ -8,14 +16,6 @@ module.exports = {
     SEQUENCE_TIMEOUT: 30000,
     CONTAINER_START: 120000,
     DEFAULT_STARTUP_DELAY: 10
-  },
-  
-  PATHS: {
-    DEFAULT_WORKSPACE: '/workspace',
-    CLAUDE_HABITAT_DIR: 'claude-habitat',
-    SYSTEM_DIR: 'system',
-    SHARED_DIR: 'shared',
-    LOCAL_DIR: 'local'
   },
   
   DOCKER: {

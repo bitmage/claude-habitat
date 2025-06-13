@@ -1,5 +1,16 @@
 /**
- * Help scene - shows usage information
+ * @module scenes/help.scene
+ * @description Help scene displaying usage information and command reference
+ * 
+ * Shows comprehensive usage information, CLI options, shortcuts, and
+ * workflow guidance. Implements the help system within the interactive
+ * scene architecture.
+ * 
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e -- test/e2e/ui-verification.test.js`
+ * - UI tests: `npm run test:ui`
  */
 async function helpScene(context) {
   context.log(`

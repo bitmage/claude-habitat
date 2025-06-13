@@ -1,6 +1,18 @@
 /**
- * Docker image management utilities for Claude Habitat
- * Provides functions for listing, cleaning, and managing Docker images
+ * @module image-management
+ * @description Docker image management utilities for Claude Habitat
+ * 
+ * Provides functions for listing, cleaning, and managing Docker images.
+ * Handles habitat-specific image cleanup operations and provides image
+ * summary information for maintenance operations.
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:container-operations - Docker execution operations
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e -- test/e2e/rebuild-functionality.test.js`
+ * - Run all tests: `npm test`
  */
 
 const { promisify } = require('util');

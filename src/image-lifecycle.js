@@ -1,6 +1,21 @@
 /**
- * Docker image lifecycle management
- * Handles building base images, preparing images with setup, and caching
+ * @module image-lifecycle
+ * @description Docker image lifecycle management for Claude Habitat
+ * 
+ * Handles building base images, preparing images with setup commands, and
+ * managing image caching strategies. Provides the core image operations
+ * that support habitat container environments.
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:config - Configuration loading
+ * @requires module:container-operations - Docker execution operations
+ * @requires module:filesystem - File copying operations
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e -- test/e2e/rebuild-functionality.test.js`
+ * - Run all tests: `npm test`
  */
 
 const fs = require('fs').promises;
@@ -11,7 +26,6 @@ const { loadConfig } = require('./config');
 // Path helpers not currently used in this module
 const { dockerRun, dockerExec, dockerImageExists } = require('./container-operations');
 const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
-const { expandTemplate } = require('./template-expansion');
 
 /**
  * Build the base Docker image from Dockerfile
@@ -49,7 +63,7 @@ async function buildBaseImage(config, options = {}) {
     dockerfilePath = rel(config.image.dockerfile);
   } else {
     // Default to dockerfiles/[name]/Dockerfile
-    dockerfilePath = rel('dockerfiles', config.name, 'Dockerfile');
+    dockerfilePath = rel('dockerfiles/' + config.name + '/Dockerfile');
   }
   
   // Check if dockerfile exists
@@ -97,7 +111,7 @@ async function buildBaseImage(config, options = {}) {
 /**
  * Copy files specified in the files section of config
  */
-async function copyConfigFiles(container, config) {
+async function copyConfigFiles(container, config, resolvedUser = 'root', resolvedWorkDir = '/workspace') {
   if (!config.files || !Array.isArray(config.files)) return;
   
   console.log('Copying configuration files...');
@@ -124,24 +138,27 @@ async function copyConfigFiles(container, config) {
     // Check if it's a directory
     const isDir = await isDirectory(srcPath);
     
-    // Expand all templates in destination path using unified template system
-    let destPath = expandTemplate(fileSpec.dest, config);
+    // Replace variables in destination path using resolved environment
+    let destPath = fileSpec.dest;
+    
+    // Replace {env.USER} with resolved user
+    destPath = destPath.replace(/\{env\.USER\}/g, resolvedUser);
     
     // Expand tilde in destination path (container context)
-    if (destPath.startsWith('~/') && config._environment?.USER) {
+    if (destPath.startsWith('~/')) {
       // Get container user's home directory by executing getent passwd in container
       try {
-        const homeResult = await dockerExec(container, `getent passwd ${config._environment.USER} | cut -d: -f6`, 'root');
+        const homeResult = await dockerExec(container, `getent passwd ${resolvedUser} | cut -d: -f6`, 'root');
         const containerHome = homeResult.trim();
         if (containerHome) {
           destPath = path.posix.join(containerHome, destPath.slice(2));
         } else {
           // Fallback to standard home directory structure
-          destPath = path.posix.join('/home', config._environment.USER, destPath.slice(2));
+          destPath = path.posix.join('/home', resolvedUser, destPath.slice(2));
         }
       } catch (err) {
         // Fallback to standard home directory structure
-        destPath = path.posix.join('/home', config._environment.USER, destPath.slice(2));
+        destPath = path.posix.join('/home', resolvedUser, destPath.slice(2));
       }
     }
     
@@ -156,7 +173,9 @@ async function copyConfigFiles(container, config) {
       
       // Set ownership recursively if specified
       if (fileSpec.owner) {
-        const owner = expandTemplate(fileSpec.owner, config);
+        let owner = fileSpec.owner;
+        // Replace {env.USER} with resolved user
+        owner = owner.replace(/\{env\.USER\}/g, resolvedUser);
         await dockerExec(container, `chown -R ${owner}:${owner} ${destPath}`, 'root');
       }
       
@@ -180,7 +199,9 @@ async function copyConfigFiles(container, config) {
       
       // Set ownership if specified
       if (fileSpec.owner) {
-        const owner = expandTemplate(fileSpec.owner, config);
+        let owner = fileSpec.owner;
+        // Replace {env.USER} with resolved user
+        owner = owner.replace(/\{env\.USER\}/g, resolvedUser);
         await dockerExec(container, `chown ${owner}:${owner} ${destPath}`, 'root');
       }
       
@@ -198,7 +219,7 @@ async function copyConfigFiles(container, config) {
  * Run setup commands inside a container
  * Note: Config is already fully expanded with environment variables and container values
  */
-async function runSetupCommands(container, config) {
+async function runSetupCommands(container, config, resolvedUser = 'root', resolvedWorkDir = '/workspace') {
   if (!config.setup) return;
   
   console.log('Running setup commands...');
@@ -216,13 +237,12 @@ async function runSetupCommands(container, config) {
   
   // Run user setup commands
   if (config.setup.user && config.setup.user.commands && config.setup.user.commands.length > 0) {
-    const runAsUser = expandTemplate(config.setup.user.run_as || '{env.USER}', config);
+    const runAsUser = config.setup.user.run_as || resolvedUser;
     console.log(`Running user setup commands as ${runAsUser}...`);
     for (const cmd of config.setup.user.commands) {
       if (cmd && cmd.trim()) {
-        const expandedCmd = expandTemplate(cmd, config);
-        console.log(`  ${expandedCmd}`);
-        await dockerExec(container, expandedCmd, runAsUser);
+        console.log(`  ${cmd}`);
+        await dockerExec(container, cmd, runAsUser);
       }
     }
   }
@@ -298,6 +318,19 @@ async function cloneRepository(container, repoInfo, workDir, containerUser = nul
 async function prepareWorkspace(config, tag, extraRepos, options = {}) {
   const { rebuild = false } = options;
   
+  // Get resolved environment variables that will be used throughout
+  let resolvedUser = 'root';
+  let resolvedWorkDir = '/workspace';
+  try {
+    const { createHabitatPathHelpers } = require('./habitat-path-helpers');
+    const pathHelpers = await createHabitatPathHelpers(config);
+    const compiledEnv = pathHelpers.getEnvironment();
+    resolvedUser = compiledEnv.USER || 'root';
+    resolvedWorkDir = compiledEnv.WORKDIR || '/workspace';
+  } catch (err) {
+    console.warn(`Warning: Could not resolve environment variables: ${err.message}`);
+  }
+  
   // Handle rebuild: remove existing prepared image if rebuilding
   const preparedTag = `${config.image.tag}:${tag}`;
   if (rebuild) {
@@ -328,7 +361,7 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
     
     // Create workDirPath helper for this container
-    const workDirPath = createWorkDirPath(config._environment?.WORKDIR);
+    const workDirPath = createWorkDirPath(resolvedWorkDir);
     
     if (!isBypassHabitat) {
       // Copy system files first
@@ -361,7 +394,7 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     
     // Run system setup commands first if not in bypass mode
     if (!isBypassHabitat) {
-      const systemConfigPath = rel('system', 'config.yaml');
+      const systemConfigPath = rel('system/config.yaml');
       if (await fileExists(systemConfigPath)) {
         console.log('Loading system configuration...');
         const { loadConfig } = require('./config');
@@ -369,39 +402,34 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
         // Load system config with environment variable processing
         const systemConfig = await loadConfig(systemConfigPath);
         
-        // Ensure the system config has the correct environment variables
-        if (!systemConfig._environment) {
-          systemConfig._environment = {};
+        // Ensure the system config has the correct work_dir and user from resolved environment
+        if (!systemConfig.container) {
+          systemConfig.container = {};
         }
-        systemConfig._environment.WORKDIR = config._environment?.WORKDIR || systemConfig._environment?.WORKDIR || '/workspace';
-        systemConfig._environment.USER = config._environment?.USER || 'root';
+        // Note: Container fields removed - using environment variables directly
         
         // Copy system-level files first (before setup commands)
-        await copyConfigFiles(tempContainer, systemConfig);
+        await copyConfigFiles(tempContainer, systemConfig, resolvedUser, resolvedWorkDir);
         
         console.log('Running system setup commands...');
-        await runSetupCommands(tempContainer, systemConfig);
+        await runSetupCommands(tempContainer, systemConfig, resolvedUser, resolvedWorkDir);
       }
     }
     
     // Process shared configuration files for normal habitats
     if (!isBypassHabitat) {
-      const sharedConfigPath = rel('shared', 'config.yaml');
+      const sharedConfigPath = rel('shared/config.yaml');
       if (await fileExists(sharedConfigPath)) {
         console.log('Loading shared configuration...');
         const sharedConfig = await loadConfig(sharedConfigPath);
         
-        // Set environment variables for shared config processing
-        if (!sharedConfig._environment) {
-          sharedConfig._environment = {};
-        }
-        sharedConfig._environment.USER = config._environment?.USER || 'root';
+        // Note: Container user field removed - using environment variables directly
         
         // Copy shared-level files
-        await copyConfigFiles(tempContainer, sharedConfig);
+        await copyConfigFiles(tempContainer, sharedConfig, resolvedUser, resolvedWorkDir);
         
         console.log('Running shared setup commands...');
-        await runSetupCommands(tempContainer, sharedConfig);
+        await runSetupCommands(tempContainer, sharedConfig, resolvedUser, resolvedWorkDir);
       }
     }
     
@@ -419,22 +447,22 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
     }
     
     for (const repo of allRepos) {
-      await cloneRepository(tempContainer, repo, config._environment?.WORKDIR, config._environment?.USER);
+      await cloneRepository(tempContainer, repo, resolvedWorkDir, resolvedUser);
     }
     
     // Copy habitat-level files first (before setup commands)
-    await copyConfigFiles(tempContainer, config);
+    await copyConfigFiles(tempContainer, config, resolvedUser, resolvedWorkDir);
     
     // Run habitat setup commands
-    await runSetupCommands(tempContainer, config);
+    await runSetupCommands(tempContainer, config, resolvedUser, resolvedWorkDir);
     
     // Fix permissions for work directory
     console.log('Setting up work directory permissions...');
-    await dockerExec(tempContainer, `chown -R $(id -u):$(id -g) ${config._environment?.WORKDIR} || true`, 'root');
+    await dockerExec(tempContainer, `chown -R $(id -u):$(id -g) ${resolvedWorkDir} || true`, 'root');
     
     // Fix git safe directory ownership issues
     console.log('Configuring git safe directories...');
-    await dockerExec(tempContainer, `git config --global --add safe.directory '*'`, config._environment?.USER);
+    await dockerExec(tempContainer, `git config --global --add safe.directory '*'`, resolvedUser);
     
     // Commit the container to create the prepared image
     console.log('Creating prepared image...');
@@ -452,7 +480,6 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
 module.exports = {
   buildBaseImage,
   prepareWorkspace,
-  buildPreparedImage: prepareWorkspace, // Backward compatibility alias
   runSetupCommands,
   copyConfigFiles,
   cloneRepository

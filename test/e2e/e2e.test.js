@@ -1,11 +1,20 @@
+/**
+ * @fileoverview E2E tests for core Claude Habitat CLI and configuration functionality
+ * @description Tests fundamental CLI operations and configuration processing workflows
+ * 
+ * These are product-focused E2E tests that verify the essential Claude Habitat functionality:
+ * CLI interface, help system, configuration listing, and system testing. They focus on our
+ * actual product features rather than external Docker infrastructure or generic Unix operations.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/e2e.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: CLI interface and configuration system
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { ProductTestBase } = require('./product-test-base');
-
-/**
- * Product-focused E2E tests that test our actual claude-habitat functionality
- * Not external Docker infrastructure or generic Unix operations
- */
 
 test('claude-habitat command line interface works', async () => {
   const testRunner = new ProductTestBase();
@@ -147,7 +156,7 @@ test('claude-habitat wrapper functions work correctly', async () => {
     console.log('Testing claude-habitat wrapper functions...');
     
     // Import and test our wrapper functions directly
-    const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('../../src/docker');
+    const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('../../src/container-operations');
     
     // Test that functions exist and are callable
     assert.strictEqual(typeof dockerRun, 'function', 'dockerRun should be a function');
@@ -188,10 +197,10 @@ test('claude-habitat module integration works', async () => {
     // Test that all our core modules can be imported without errors
     const modules = [
       '../../src/config',
-      '../../src/docker', 
+      '../../src/container-operations', 
       '../../src/filesystem',
       '../../src/github',
-      '../../src/testing',
+      '../../src/habitat-testing',
       '../../src/utils',
       '../../src/habitat',
       '../../src/init',

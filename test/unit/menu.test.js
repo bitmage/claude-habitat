@@ -1,3 +1,18 @@
+/**
+ * @fileoverview Unit tests for interactive menu system
+ * @description Tests the interactive menu functionality that displays when no arguments
+ * are provided to the application, including configuration file discovery and menu
+ * display logic.
+ * 
+ * Validates that configuration files can be read from the configs directory and
+ * that the menu system can enumerate available habitat configurations.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/menu.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:menu} - Interactive menu system and configuration discovery
+ */
+
 const test = require('node:test');
 const assert = require('assert');
 const path = require('path');

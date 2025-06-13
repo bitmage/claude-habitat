@@ -7,14 +7,14 @@
     "claude-habitat": "./claude-habitat.js"
   },
   "scripts": {
-    "test": "node --test 'test/unit/**/*.test.js'",
-    "test:unit": "node --test 'test/unit/**/*.test.js'",
-    "test:e2e": "node --test --test-timeout=600000 'test/e2e/**/*.test.js'",
+    "test": "node --test test/unit/*.js",
+    "test:unit": "node --test test/unit/*.js",
+    "test:e2e": "node --test --test-timeout=600000 test/e2e/*.js",
     "test:habitat": "./claude-habitat test base --system",
     "test:ui": "node test/e2e/ui-snapshot-generator.js",
     "test:ui:view": "npm run test:ui && less test/ui-snapshots.txt",
     "test:all": "npm run test:unit && npm run test:e2e",
-    "test:watch": "node --test --watch 'test/unit/**/*.test.js'"
+    "test:watch": "node --test --watch test/unit/*.js"
   },
   "keywords": [
     "claude",

@@ -1,3 +1,20 @@
+/**
+ * @module scenes/scene-runner
+ * @description Scene execution engine for Claude Habitat interactive flows
+ * 
+ * Implements the scene-based UI architecture by running scenes in sequence.
+ * Manages scene transitions, error handling, and context cleanup for both
+ * interactive and test modes.
+ * 
+ * @requires module:scenes/scene-context - Scene execution context
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - UI tests: `npm run test:ui`
+ * - Scene flow testing through UI snapshots
+ */
+
 const { SceneContext } = require('./scene-context');
 
 /**

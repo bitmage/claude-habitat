@@ -6,6 +6,20 @@ const os = require('os');
 
 const { parseRepoPath, testGitAccess, testGitHubCliAccess, testRepositoryAccess } = require('../../src/github');
 
+/**
+ * @fileoverview E2E tests for GitHub integration and repository access functionality
+ * @description Tests GitHub authentication, repository parsing, and access verification workflows
+ * 
+ * These tests verify the GitHub integration functionality including repository URL parsing,
+ * SSH key authentication, GitHub CLI access, and comprehensive repository access testing.
+ * They test both pure functions and integration scenarios with dependency injection.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/github-functions.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: GitHub integration and repository access verification
+ */
+
 // Pure function tests (already covered in pure-functions.test.js, but adding a few more)
 test('parseRepoPath handles complex repository names', () => {
   assert.strictEqual(parseRepoPath('git@github.com:org-name/repo-with-dashes.git'), 'org-name/repo-with-dashes');

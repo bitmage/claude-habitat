@@ -1,8 +1,50 @@
+/**
+ * @module config
+ * @description Configuration loading and processing for Claude Habitat
+ * 
+ * Handles loading habitat configurations from YAML files, processing environment
+ * variables, and managing the configuration chain. Supports environment variable
+ * expansion and validation integration.
+ * 
+ * ## Configuration System
+ * 
+ * Uses a three-layer configuration system with environment variables as the
+ * coordination mechanism between system, shared, and habitat configurations.
+ * 
+ * ### Loading Order
+ * 1. **System** (`system/config.yaml`) - Infrastructure variables
+ * 2. **Shared** (`shared/config.yaml`) - User preferences and paths  
+ * 3. **Habitat** (`habitats/PROJECT/config.yaml`) - Project-specific configuration
+ * 
+ * ### Environment Variable Syntax
+ * Two syntaxes supported for referencing environment variables:
+ * - **Bash-Style**: `${VAR}` - `WORKSPACE_PATH=${WORKDIR}/projects`
+ * - **Claude Habitat**: `{env.VAR}` - `dest: "{env.WORKSPACE_PATH}/config.json"`
+ * 
+ * ### Required Environment Variables
+ * *These values are required and control automatic configurations of the habitat.*
+ * - **WORKDIR**: `/workspace` - Main working directory
+ * - **HABITAT_PATH**: `${WORKDIR}/claude-habitat` - Infrastructure location
+ * - **SYSTEM_PATH**: `${HABITAT_PATH}/system` - System tools directory
+ * - **SHARED_PATH**: `${HABITAT_PATH}/shared` - User configuration directory
+ * - **LOCAL_PATH**: `${HABITAT_PATH}/local` - Habitat-specific directory
+ * - **USER**: User account for container operations
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:config-validation - Configuration validation logic
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/config-validation.test.js`
+ * - Run all tests: `npm test`
+ */
+
 const yaml = require('js-yaml');
 const fs = require('fs').promises;
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { fileExists, rel } = require('./utils');
 const { validateHabitatConfig, getConfigValidationHelp } = require('./config-validation');
-const { expandTemplateObject } = require('./template-expansion');
 
 /**
  * Process environment variables from config and expand variable references
@@ -30,8 +72,7 @@ function processEnvironmentVariables(config, existingEnv = {}) {
 }
 
 /**
- * Expand ${VAR} and {env.VAR} references in a string using current environment
- * This is a simplified version for backward compatibility during environment processing
+ * Expand ${VAR} and {env.VAR} references in a string
  */
 function expandEnvironmentVariables(str, env) {
   if (typeof str !== 'string') return str;
@@ -51,6 +92,35 @@ function expandEnvironmentVariables(str, env) {
   return result;
 }
 
+/**
+ * Recursively expand variables in config object
+ */
+function expandConfigVariables(obj, env, containerConfig = {}) {
+  if (typeof obj === 'string') {
+    // Expand environment variables
+    let result = expandEnvironmentVariables(obj, env);
+    
+    // Note: {container.user} and {container.work_dir} template patterns have been removed
+    // Use {env.USER} and {env.WORKDIR} instead
+    
+    return result;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => expandConfigVariables(item, env, containerConfig));
+  }
+  
+  if (obj && typeof obj === 'object') {
+    const result = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = expandConfigVariables(value, env, containerConfig);
+    }
+    return result;
+  }
+  
+  return obj;
+}
+
 // Public API functions with simple validation
 async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true) {
   if (!configPath) throw new Error('Missing required parameter: configPath');
@@ -62,14 +132,10 @@ async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true
   // Process environment variables first
   const env = processEnvironmentVariables(config, existingEnv);
   
-  // Add environment to config for template expansion
-  config._environment = env;
+  // Expand all variable references in the config
+  config = expandConfigVariables(config, env, config.container || {});
   
-  // Note: Template expansion is now handled in loadConfigWithEnvironmentChain
-  // for proper coalesced environment support. Individual configs only get
-  // basic environment variable processing.
-  
-  // Note: Container settings auto-population removed as part of work_dir elimination
+  // Note: Auto-population of container.work_dir removed - use WORKDIR environment variable directly
   
   // Only validate as habitat config if requested (not for system/shared configs)
   if (validateAsHabitat) {
@@ -87,47 +153,30 @@ async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true
 }
 
 /**
- * Load habitat environment from config with proper variable coalescing
- * This loads system → shared → local configs and coalesces their environment variables,
- * then performs template expansion on the final result with the coalesced environment.
- * @param {string} habitatConfigPath - Path to the habitat config file
- * @returns {object} Configuration with coalesced environment and expanded templates
+ * Load config with environment variable chain: system → shared → habitat
  */
 async function loadHabitatEnvironmentFromConfig(habitatConfigPath) {
-  if (!habitatConfigPath) throw new Error('Missing required parameter: habitatConfigPath');
-  if (!await fileExists(habitatConfigPath)) throw new Error('Habitat configuration file not found');
-
-  let coalescedEnv = {};
+  // Start with empty environment
+  let accumulatedEnv = {};
   
-  // Load system config and merge its environment variables
-  const systemConfigPath = rel('system', 'config.yaml');
+  // 1. Load system config first (sets foundational variables like WORKDIR)
+  const systemConfigPath = rel('system/config.yaml');
   if (await fileExists(systemConfigPath)) {
-    try {
-      const systemConfig = await loadConfig(systemConfigPath, {}, false);
-      coalescedEnv = { ...coalescedEnv, ...systemConfig._environment };
-    } catch (err) {
-      console.warn(`Warning: Could not load system config: ${err.message}`);
-    }
+    const systemConfig = await loadConfig(systemConfigPath, accumulatedEnv, false); // Don't validate as habitat
+    accumulatedEnv = { ...accumulatedEnv, ...systemConfig._environment };
   }
   
-  // Load shared config and merge its environment variables
-  const sharedConfigPath = rel('shared', 'config.yaml');
+  // 2. Load shared config second (can reference system variables and add user-specific ones)
+  const sharedConfigPath = rel('shared/config.yaml');
   if (await fileExists(sharedConfigPath)) {
-    try {
-      const sharedConfig = await loadConfig(sharedConfigPath, coalescedEnv, false);
-      coalescedEnv = { ...coalescedEnv, ...sharedConfig._environment };
-    } catch (err) {
-      console.warn(`Warning: Could not load shared config: ${err.message}`);
-    }
+    const sharedConfig = await loadConfig(sharedConfigPath, accumulatedEnv, false); // Don't validate as habitat
+    accumulatedEnv = { ...accumulatedEnv, ...sharedConfig._environment };
   }
   
-  // Load habitat config with coalesced environment
-  const habitatConfig = await loadConfig(habitatConfigPath, coalescedEnv, true);
+  // 3. Load habitat config last (can reference system and shared variables)
+  const habitatConfig = await loadConfig(habitatConfigPath, accumulatedEnv, true); // Validate as habitat
   
-  // Now perform template expansion on the final config with fully coalesced environment
-  const finalConfig = expandTemplateObject(habitatConfig, habitatConfig);
-  
-  return finalConfig;
+  return habitatConfig;
 }
 
 module.exports = {

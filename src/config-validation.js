@@ -1,4 +1,27 @@
 /**
+ * @module config-validation
+ * @description Configuration validation and help system for Claude Habitat
+ * 
+ * Provides comprehensive validation of habitat YAML configurations, including
+ * required fields checking, type validation, and helpful error messages.
+ * Ensures configurations meet the expected schema before container operations.
+ * 
+ * @requires module:types - Domain model definitions
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/config-validation.test.js`
+ * - Run all tests: `npm test`
+ */
+
+// USER and WORKDIR are now required as environment variables, not container fields
+const REQUIRED_CONTAINER_FIELDS = [];
+
+const OPTIONAL_CONTAINER_FIELDS = [
+  'init_command',
+  'startup_delay'
+];
+
+/**
  * Validate habitat configuration structure and required fields
  * @param {Object} config - The loaded habitat configuration
  * @throws {Error} If configuration is invalid
@@ -13,47 +36,52 @@ function validateHabitatConfig(config) {
     throw new Error('Missing required config: name');
   }
 
-  // Parse environment variables from config._environment (populated by loadConfig) or config.env
-  let envVars = config._environment || {};
+  // Validate container section exists
+  if (!config.container) {
+    throw new Error(`Missing required section: container in ${config.name}`);
+  }
   
-  // If _environment is not populated, parse from config.env
-  if (Object.keys(envVars).length === 0 && config.env && Array.isArray(config.env)) {
-    for (const envVar of config.env) {
-      if (typeof envVar === 'string' && envVar.includes('=')) {
-        const [key, ...valueParts] = envVar.split('=');
-        const value = valueParts.join('='); // Handle values with = in them
-        envVars[key] = value;
+  // Validate required environment variables
+  if (!config.env || !Array.isArray(config.env)) {
+    throw new Error(`Missing required section: env (must be array) in ${config.name}`);
+  }
+  
+  // Parse environment variables and check for required ones
+  const envVars = {};
+  config.env.forEach(envStr => {
+    if (typeof envStr === 'string') {
+      const match = envStr.match(/^([A-Z_]+)=(.*)$/);
+      if (match) {
+        envVars[match[1]] = match[2];
       }
     }
-  }
-
+  });
+  
   // Check for required USER environment variable
   if (envVars.USER === undefined) {
     throw new Error(`Missing required environment variable: USER in ${config.name}`);
   }
-
+  
   // Validate USER is non-empty
   if (!envVars.USER || !envVars.USER.trim()) {
     throw new Error(`USER environment variable must be non-empty in ${config.name}`);
   }
-
-  // Check for required WORKDIR environment variable
-  if (envVars.WORKDIR === undefined) {
+  
+  // Check for required WORKDIR environment variable  
+  if (!envVars.WORKDIR) {
     throw new Error(`Missing required environment variable: WORKDIR in ${config.name}`);
   }
-
+  
   // Validate WORKDIR is absolute path
-  if (!envVars.WORKDIR || !envVars.WORKDIR.startsWith('/')) {
+  const workdir = envVars.WORKDIR.replace(/\$\{[^}]+\}/g, '/workspace'); // Handle variable refs for validation
+  if (!workdir.startsWith('/')) {
     throw new Error(`WORKDIR environment variable must be absolute path in ${config.name}, got: ${envVars.WORKDIR}`);
   }
 
-  // Validate container section if present (for backward compatibility and other fields)
-  if (config.container) {
-    // Validate optional startup_delay field
-    if (config.container.startup_delay !== undefined) {
-      if (typeof config.container.startup_delay !== 'number' || config.container.startup_delay < 0) {
-        throw new Error(`container.startup_delay must be a non-negative number in ${config.name}`);
-      }
+  // Validate optional fields if present
+  if (config.container.startup_delay !== undefined) {
+    if (typeof config.container.startup_delay !== 'number' || config.container.startup_delay < 0) {
+      throw new Error(`container.startup_delay must be a non-negative number in ${config.name}`);
     }
   }
 
@@ -65,83 +93,71 @@ function validateHabitatConfig(config) {
 
     for (let i = 0; i < config.repositories.length; i++) {
       const repo = config.repositories[i];
-      
       if (!repo.url) {
-        throw new Error(`Repository ${i + 1} missing required field: url in ${config.name}`);
+        throw new Error(`repositories[${i}].url is required in ${config.name}`);
       }
-      
-      if (typeof repo.url !== 'string') {
-        throw new Error(`Repository ${i + 1} url must be a string in ${config.name}`);
+      if (!repo.path) {
+        throw new Error(`repositories[${i}].path is required in ${config.name}`);
       }
-    }
-  }
-
-  // Validate environment variables section if present  
-  if (config.env) {
-    if (!Array.isArray(config.env)) {
-      throw new Error(`env must be an array in ${config.name}`);
-    }
-
-    for (let i = 0; i < config.env.length; i++) {
-      const envVar = config.env[i];
-      
-      if (typeof envVar !== 'string') {
-        throw new Error(`Environment variable ${i + 1} must be a string in ${config.name}`);
-      }
-      
-      if (!envVar.includes('=')) {
-        throw new Error(`Environment variable ${i + 1} must be in KEY=value format in ${config.name}, got: "${envVar}"`);
+      if (!repo.path.startsWith('/')) {
+        throw new Error(`repositories[${i}].path must be absolute path in ${config.name}, got: ${repo.path}`);
       }
     }
   }
 
+  // Validate image section if present
+  if (config.image) {
+    if (!config.image.dockerfile && !config.image.base) {
+      throw new Error(`image section must specify either dockerfile or base in ${config.name}`);
+    }
+  }
+  
   return true;
 }
 
 /**
- * Provide helpful suggestions based on validation errors
+ * Validate that all required paths are specified in configuration
+ * @param {Object} config - The habitat configuration
+ * @throws {Error} If paths are missing or invalid
+ */
+function validatePathConfiguration(config) {
+  validateHabitatConfig(config);
+  
+  // Additional path-specific validation can go here
+  // For now, the main validation is in validateHabitatConfig
+}
+
+/**
+ * Get helpful error message for common configuration mistakes
  * @param {Error} error - The validation error
- * @returns {string} Helpful error message with suggestions
+ * @returns {string} User-friendly error message with suggestions
  */
 function getConfigValidationHelp(error) {
   const message = error.message;
-  let help = '\n💡 Configuration Help:\n\n';
-
-  if (message.includes('USER environment variable')) {
-    help += 'Suggestion: Add USER environment variable to your habitat config:\n';
-    help += 'env:\n';
-    help += '  - USER=root\n';
-    help += '  - WORKDIR=/workspace\n\n';
-  } else if (message.includes('WORKDIR environment variable')) {
-    help += 'Suggestion: Add WORKDIR environment variable to your habitat config:\n';
-    help += 'env:\n';
-    help += '  - USER=root\n';
-    help += '  - WORKDIR=/workspace\n\n';
-  } else if (message.includes('container section')) {
-    help += 'Note: container.work_dir and container.user have been replaced with environment variables.\n';
-    help += 'Use this format instead:\n';
-    help += 'env:\n';
-    help += '  - USER=root\n';
-    help += '  - WORKDIR=/workspace\n\n';
-  } else if (message.includes('repositories must be an array')) {
-    help += 'Suggestion: Fix repositories section:\n';
-    help += 'repositories:\n';
-    help += '  - url: https://github.com/user/repo\n';
-    help += '    path: /workspace/repo\n\n';
-  } else if (message.includes('env must be an array')) {
-    help += 'Suggestion: Fix environment variables section:\n';
-    help += 'env:\n';
-    help += '  - USER=root\n';
-    help += '  - WORKDIR=/workspace\n';
-    help += '  - NODE_ENV=development\n\n';
-  }
-
-  help += 'See docs/CONFIGURATION.md for complete examples.';
   
-  return help;
+  if (message.includes('WORKDIR environment variable must be absolute')) {
+    return `${message}\n\nSuggestion: Use absolute paths like '/workspace' or '/src', not relative paths like 'workspace'`;
+  }
+  
+  if (message.includes('Missing required environment variable: USER')) {
+    return `${message}\n\nSuggestion: Add USER to your env section:\nenv:\n  - USER=node\n  - WORKDIR=/workspace`;
+  }
+  
+  if (message.includes('Missing required environment variable: WORKDIR')) {
+    return `${message}\n\nSuggestion: Add WORKDIR to your env section:\nenv:\n  - WORKDIR=/workspace\n  - USER=node`;
+  }
+  
+  if (message.includes('Missing required section: env')) {
+    return `${message}\n\nSuggestion: Add an env section to your config.yaml:\nenv:\n  - USER=node\n  - WORKDIR=/workspace`;
+  }
+  
+  return message;
 }
 
 module.exports = {
   validateHabitatConfig,
-  getConfigValidationHelp
+  validatePathConfiguration,
+  getConfigValidationHelp,
+  REQUIRED_CONTAINER_FIELDS,
+  OPTIONAL_CONTAINER_FIELDS
 };

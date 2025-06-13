@@ -1,3 +1,18 @@
+/**
+ * @fileoverview Unit tests for tilde menu navigation system
+ * @description Tests the tilde-based menu navigation system that allows users to
+ * select from large numbers of menu options using a tilde prefix system
+ * (~1, ~~2, ~~~3, etc.) for items beyond the first 9 direct number keys.
+ * 
+ * Validates menu key generation and parsing logic to ensure users can navigate
+ * through extensive menu lists with predictable keyboard shortcuts.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/tilde-menu.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:tilde-menu} - Tilde-based menu navigation system
+ */
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 

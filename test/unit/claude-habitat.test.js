@@ -1,8 +1,23 @@
+/**
+ * @fileoverview Unit tests for claude-habitat core functionality
+ * @description Tests main entry point routing, configuration loading, and core utilities
+ * 
+ * Validates the primary claude-habitat module functions including cache hash generation,
+ * repository specification parsing, and configuration loading workflows.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/claude-habitat.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:claude-habitat} - Main entry point
+ * - Test module: {@link module:utils} - Core utilities
+ */
+
 const test = require('node:test');
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs').promises;
 const habitat = require('../../claude-habitat.js');
+const { calculateCacheHash, parseRepoSpec } = require('../../src/utils.js');
 
 // Helper to create a temporary config file for testing
 async function createTempConfig(config) {
@@ -31,13 +46,13 @@ test('calculateCacheHash generates consistent hashes', () => {
   };
   
   // Same config should produce same hash
-  const hash1 = habitat.calculateCacheHash(config, []);
-  const hash2 = habitat.calculateCacheHash(config, []);
+  const hash1 = calculateCacheHash(config, []);
+  const hash2 = calculateCacheHash(config, []);
   assert.strictEqual(hash1, hash2);
   
   // Environment changes should not affect hash
   const configWithDiffEnv = { ...config, environment: ['TEST=different'] };
-  const hash3 = habitat.calculateCacheHash(configWithDiffEnv, []);
+  const hash3 = calculateCacheHash(configWithDiffEnv, []);
   assert.strictEqual(hash1, hash3);
   
   // Repository changes should affect hash
@@ -45,11 +60,11 @@ test('calculateCacheHash generates consistent hashes', () => {
     ...config, 
     repositories: [{ url: 'https://github.com/test/other', path: '/src' }]
   };
-  const hash4 = habitat.calculateCacheHash(configWithDiffRepo, []);
+  const hash4 = calculateCacheHash(configWithDiffRepo, []);
   assert.notStrictEqual(hash1, hash4);
   
   // Extra repos should affect hash
-  const hash5 = habitat.calculateCacheHash(config, ['https://github.com/extra/repo:/plugins/extra']);
+  const hash5 = calculateCacheHash(config, ['https://github.com/extra/repo:/plugins/extra']);
   assert.notStrictEqual(hash1, hash5);
   
   // Hash should be 12 characters
@@ -58,7 +73,7 @@ test('calculateCacheHash generates consistent hashes', () => {
 
 test('parseRepoSpec correctly parses repository specifications', () => {
   // Basic URL:PATH format
-  const repo1 = habitat.parseRepoSpec('https://github.com/user/repo:/src');
+  const repo1 = parseRepoSpec('https://github.com/user/repo:/src');
   assert.deepStrictEqual(repo1, {
     url: 'https://github.com/user/repo',
     path: '/src',
@@ -66,7 +81,7 @@ test('parseRepoSpec correctly parses repository specifications', () => {
   });
   
   // With branch specification
-  const repo2 = habitat.parseRepoSpec('https://github.com/user/repo:/src:develop');
+  const repo2 = parseRepoSpec('https://github.com/user/repo:/src:develop');
   assert.deepStrictEqual(repo2, {
     url: 'https://github.com/user/repo',
     path: '/src',
@@ -74,7 +89,7 @@ test('parseRepoSpec correctly parses repository specifications', () => {
   });
   
   // SSH format
-  const repo3 = habitat.parseRepoSpec('git@github.com:user/repo:/plugins/my-plugin:feature');
+  const repo3 = parseRepoSpec('git@github.com:user/repo:/plugins/my-plugin:feature');
   assert.deepStrictEqual(repo3, {
     url: 'git@github.com:user/repo',
     path: '/plugins/my-plugin',
@@ -83,7 +98,7 @@ test('parseRepoSpec correctly parses repository specifications', () => {
   
   // Should throw on invalid format
   assert.throws(
-    () => habitat.parseRepoSpec('invalid-format'),
+    () => parseRepoSpec('invalid-format'),
     /Invalid repo spec format \(expected URL:PATH\[:BRANCH\]\)/
   );
 });
@@ -91,13 +106,13 @@ test('parseRepoSpec correctly parses repository specifications', () => {
 test('parseRepoSpec validates input', () => {
   // Missing required parameter
   assert.throws(
-    () => habitat.parseRepoSpec(),
+    () => parseRepoSpec(),
     /Missing required parameter: spec/
   );
   
   // Invalid format
   assert.throws(
-    () => habitat.parseRepoSpec('no-colon'),
+    () => parseRepoSpec('no-colon'),
     /Invalid repo spec format \(expected URL:PATH\[:BRANCH\]\)/
   );
 });
@@ -120,6 +135,10 @@ test('loadConfig loads and parses valid YAML file', async () => {
     repositories: [
       { url: 'https://github.com/test/repo', path: '/src' }
     ],
+    container: {
+      work_dir: '/workspace',
+      user: 'root'
+    },
     env: [
       'USER=root',
       'WORKDIR=/workspace'
@@ -141,19 +160,19 @@ test('loadConfig loads and parses valid YAML file', async () => {
 test('calculateCacheHash validates inputs', () => {
   // Missing config
   assert.throws(
-    () => habitat.calculateCacheHash(),
+    () => calculateCacheHash(),
     /Invalid config/
   );
   
   // Invalid config type
   assert.throws(
-    () => habitat.calculateCacheHash('not-an-object'),
+    () => calculateCacheHash('not-an-object'),
     /Invalid config/
   );
   
   // Invalid extraRepos type
   assert.throws(
-    () => habitat.calculateCacheHash({}, 'not-an-array'),
+    () => calculateCacheHash({}, 'not-an-array'),
     /extraRepos must be an array/
   );
 });
@@ -163,13 +182,13 @@ test('internal functions are not exposed in public API', () => {
   assert.strictEqual(typeof habitat.buildBaseImage, 'undefined');
   assert.strictEqual(typeof habitat.cloneRepository, 'undefined');
   assert.strictEqual(typeof habitat.runSetupCommands, 'undefined');
-  assert.strictEqual(typeof habitat.buildPreparedImage, 'undefined');
+  assert.strictEqual(typeof habitat.prepareWorkspace, 'undefined');
   assert.strictEqual(typeof habitat.runContainer, 'undefined');
+  assert.strictEqual(typeof habitat.calculateCacheHash, 'undefined');
+  assert.strictEqual(typeof habitat.parseRepoSpec, 'undefined');
   
   // Only these public methods should be exposed
   assert.strictEqual(typeof habitat.loadConfig, 'function');
-  assert.strictEqual(typeof habitat.calculateCacheHash, 'function');
-  assert.strictEqual(typeof habitat.parseRepoSpec, 'function');
   assert.strictEqual(typeof habitat.runHabitat, 'function');
 });
 
@@ -229,12 +248,12 @@ test('environment variable parsing handles special cases', () => {
 
 test('default values are applied correctly', () => {
   // parseRepoSpec defaults branch to 'main'
-  const repo = habitat.parseRepoSpec('https://github.com/user/repo:/src');
+  const repo = parseRepoSpec('https://github.com/user/repo:/src');
   assert.strictEqual(repo.branch, 'main');
   
   // calculateCacheHash works with defaults
   const config = { name: 'test' };
-  const hash = habitat.calculateCacheHash(config);
+  const hash = calculateCacheHash(config);
   assert.ok(hash); // Should not throw
 });
 
@@ -253,8 +272,8 @@ test('cache hash excludes internal fields', () => {
     repositories: [{ url: 'test' }]        // Same, so hash should match
   };
   
-  const hash1 = habitat.calculateCacheHash(config1);
-  const hash2 = habitat.calculateCacheHash(config2);
+  const hash1 = calculateCacheHash(config1);
+  const hash2 = calculateCacheHash(config2);
   
   assert.strictEqual(hash1, hash2);
 });

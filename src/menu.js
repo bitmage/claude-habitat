@@ -1,5 +1,48 @@
+/**
+ * @module menu
+ * @description Interactive menu system for Claude Habitat
+ * 
+ * Provides tilde-based menu generation, habitat listing, and interactive
+ * selection systems. Implements the UI architecture pattern of single-key
+ * navigation and context-aware menu generation.
+ * 
+ * ## UI Sequence Testing
+ * 
+ * Test menu interactions through simulated keypress sequences:
+ * 
+ * ```bash
+ * # Test main menu display
+ * ./claude-habitat --test-sequence="q"
+ * 
+ * # Test navigation to test menu and back
+ * ./claude-habitat --test-sequence="tq"
+ * 
+ * # Test complete workflow: test menu → habitat selection → filesystem test
+ * ./claude-habitat --test-sequence="t2f"
+ * 
+ * # Test help display
+ * ./claude-habitat --test-sequence="h"
+ * 
+ * # Generate and review all UI snapshots
+ * npm run test:ui:view
+ * ```
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:config - Configuration loading
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/menu.test.js`
+ * - Unit tests: `npm test -- test/unit/tilde-menu.test.js`
+ * - UI sequence tests: `./claude-habitat --test-sequence="<keys>"`
+ * - Run all tests: `npm test`
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, fileExists } = require('./utils');
 const { loadConfig } = require('./config');
 

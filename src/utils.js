@@ -1,3 +1,20 @@
+/**
+ * @module utils
+ * @description Core utility functions for Claude Habitat
+ * 
+ * Provides fundamental utilities used across the application including
+ * path resolution, file operations, colors, command execution, and
+ * cross-cutting helper functions. Implements path resolution standards.
+ * 
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/verify-fs.test.js`
+ * - Utilities are tested across all module tests
+ * - Run all tests: `npm test`
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');

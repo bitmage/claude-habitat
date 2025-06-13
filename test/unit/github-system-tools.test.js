@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Test: GitHub System Tools Fix
- * 
- * Verifies that repository access checking uses system tools instead of host tools,
+ * @fileoverview Unit tests for GitHub system tools integration
+ * @description Tests that repository access checking uses system tools instead of host tools,
  * preventing "gh: command not found" errors that users were experiencing.
  * 
  * ISSUE FIXED: Previously, pre-flight checks used `gh auth status` from host system,
@@ -11,6 +10,11 @@
  * 
  * SOLUTION: Modified testRepositoryAccess to use system/tools/bin/gh with dependency
  * injection, ensuring consistent behavior regardless of host system configuration.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/github-system-tools.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:github} - GitHub system tools and repository access testing
  */
 
 const assert = require('assert');

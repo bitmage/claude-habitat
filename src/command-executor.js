@@ -1,12 +1,32 @@
+/**
+ * @module command-executor
+ * @description Command execution engine for Claude Habitat CLI operations
+ * 
+ * Handles direct CLI command execution that produces output and exits.
+ * These commands bypass the interactive menu system and provide immediate
+ * results for automation and scripting scenarios.
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:container-operations - Docker container operations
+ * @requires module:image-management - Image cleanup operations
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/command-builders.test.js`
+ * - Run all tests: `npm test`
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
 const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
 const yaml = require('js-yaml');
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, fileExists } = require('./utils');
 const { askToContinue } = require('./cli');
-const { dockerRun } = require('./docker');
+const { dockerRun } = require('./container-operations');
 const { cleanAllImages, cleanHabitatImages, cleanOrphanImages, showImageSummary } = require('./image-management');
 
 /**

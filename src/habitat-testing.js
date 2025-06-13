@@ -1,12 +1,44 @@
+/**
+ * @module habitat-testing
+ * @description Habitat-specific test execution and validation system
+ * 
+ * Provides test orchestration for habitat environments including system tests
+ * (infrastructure), shared tests (user configuration), and habitat tests 
+ * (environment-specific validation). Manages test execution within containers
+ * and provides interactive test menus and result reporting.
+ * 
+ * ## Key Functions
+ * - **runTestMode**: Main entry point for habitat test execution
+ * - **runSystemTests**: Execute system infrastructure tests in habitat container
+ * - **runSharedTests**: Execute shared configuration tests in habitat container  
+ * - **runHabitatTests**: Execute habitat-specific tests in habitat container
+ * - **showTestMenu**: Interactive habitat selection and test type menus
+ * 
+ * See README.md for complete testing documentation including unit tests,
+ * E2E tests, UI snapshots, and development workflows.
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:config - Configuration loading
+ * @requires module:container-operations - Docker container operations
+ * @requires module:standards/testing - Testing approach and conventions
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - All tests: `npm test`
+ * - Testing infrastructure is verified through all test execution
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
 const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
 
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, sleep, fileExists, calculateCacheHash, executeCommand, processTestResults, manageContainer, rel } = require('./utils');
-const { dockerRun, dockerImageExists } = require('./docker');
-const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
+const { dockerRun, dockerImageExists } = require('./container-operations');
+const { loadConfig } = require('./config');
 const { askToContinue } = require('./cli');
 
 // Test running functionality
@@ -21,13 +53,13 @@ async function runTestMode(testType, testTarget, rebuild = false) {
     await showTestMenu();
   } else if (testTarget) {
     // Run tests for specific habitat
-    const habitatConfigPath = rel('habitats', testTarget, 'config.yaml');
+    const habitatConfigPath = rel('habitats/' + testTarget + '/config.yaml');
     if (!await fileExists(habitatConfigPath)) {
       console.error(colors.red(`Habitat ${testTarget} not found`));
       process.exit(1);
     }
 
-    const habitatConfig = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
+    const habitatConfig = await loadConfig(habitatConfigPath);
 
     if (testType === 'system') {
       // Check if habitat bypasses system/shared infrastructure
@@ -231,8 +263,8 @@ async function showHabitatTestMenu(habitatName) {
     testResults = await runSharedTests(null, true);
   } else if (choice === 'h') {
     // Run only habitat-specific tests
-    const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
-    const habitatConfig = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
+    const habitatConfigPath = rel('habitats/' + habitatName + '/config.yaml');
+    const habitatConfig = await loadConfig(habitatConfigPath);
 
     if (habitatConfig.tests && habitatConfig.tests.length > 0) {
       console.log(`Running ${habitatName}-specific tests...\n`);
@@ -243,8 +275,8 @@ async function showHabitatTestMenu(habitatName) {
     }
   } else if (choice === 'f') {
     // Run filesystem verification for this habitat
-    const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
-    const habitatConfig = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
+    const habitatConfigPath = rel('habitats/' + habitatName + '/config.yaml');
+    const habitatConfig = await loadConfig(habitatConfigPath);
 
     console.log(`Running filesystem verification for ${habitatName}...\n`);
     const { runEnhancedFilesystemVerification } = require('./filesystem');
@@ -297,11 +329,11 @@ async function runSystemTests(habitatConfig = null, captureResults = false, rebu
 
   // If no habitat provided, use the base habitat
   if (!habitatConfig) {
-    const baseConfigPath = rel('habitats', 'base', 'config.yaml');
+    const baseConfigPath = rel('habitats/base/config.yaml');
     habitatConfig = await loadConfig(baseConfigPath);
   }
 
-  const systemConfig = await loadConfig(rel('system', 'config.yaml'));
+  const systemConfig = await loadConfig(rel('system/config.yaml'));
   if (systemConfig.tests && systemConfig.tests.length > 0) {
     return await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig, captureResults, rebuild);
   } else {
@@ -315,11 +347,11 @@ async function runSharedTests(habitatConfig = null, captureResults = false, rebu
 
   // If no habitat provided, use the base habitat
   if (!habitatConfig) {
-    const baseConfigPath = rel('habitats', 'base', 'config.yaml');
+    const baseConfigPath = rel('habitats/base/config.yaml');
     habitatConfig = await loadConfig(baseConfigPath);
   }
 
-  const sharedConfig = await loadConfig(rel('shared', 'config.yaml'));
+  const sharedConfig = await loadConfig(rel('shared/config.yaml'));
   if (sharedConfig.tests && sharedConfig.tests.length > 0) {
     return await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig, captureResults, rebuild);
   } else {
@@ -331,7 +363,7 @@ async function runSharedTests(habitatConfig = null, captureResults = false, rebu
 async function runHabitatTests(habitatName, captureResults = false, rebuild = false) {
   console.log(colors.yellow(`Running tests for ${habitatName} habitat...\n`));
 
-  const habitatConfigPath = rel('habitats', habitatName, 'config.yaml');
+  const habitatConfigPath = rel('habitats/' + habitatName + '/config.yaml');
   if (!await fileExists(habitatConfigPath)) {
     console.error(colors.red(`Configuration file not found for ${habitatName}`));
     return captureResults ? [{ type: 'error', message: `Configuration file not found for ${habitatName}` }] : undefined;
@@ -391,9 +423,18 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
 
     console.log(`Using habitat image: ${imageTag}`);
 
-    // Start test container with same configuration as normal habitat
-    const workDir = habitatConfig._environment?.WORKDIR; // Config validation ensures this exists
-    const containerUser = habitatConfig._environment?.USER; // Config validation ensures this exists
+    // Get resolved environment variables for USER and WORKDIR
+    let containerUser = 'root';
+    let workDir = '/workspace';
+    try {
+      const { createHabitatPathHelpers } = require('./habitat-path-helpers');
+      const pathHelpers = await createHabitatPathHelpers(habitatConfig);
+      const compiledEnv = pathHelpers.getEnvironment();
+      containerUser = compiledEnv.USER || 'root';
+      workDir = compiledEnv.WORKDIR || '/workspace';
+    } catch (err) {
+      console.warn(`Warning: Could not resolve environment variables: ${err.message}`);
+    }
 
     // Parse environment variables from config
     const envArgs = [];
@@ -429,8 +470,15 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
           ? `${workDir}/habitats/${habitatConfig.name}/${testScript}`
           : `${workDir}/habitat/local/${testScript}`;
       } else {
-        // System/shared tests
-        testPath = `${workDir}/habitat/${testType}/${testScript}`;
+        // System/shared tests - check for bypass habitat to use correct path
+        const isBypassHabitat = habitatConfig?.claude?.bypass_habitat_construction || false;
+        if (isBypassHabitat) {
+          // For bypass habitats, tests are not copied to habitat/ structure
+          testPath = `${workDir}/${testType}/${testScript}`;
+        } else {
+          // For normal habitats, tests are in habitat/ structure
+          testPath = `${workDir}/habitat/${testType}/${testScript}`;
+        }
       }
 
       return `
@@ -445,15 +493,24 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     }).join('\n');
 
     // Execute tests inside the properly configured container
-    const testScript = `
-      #!/bin/bash
-      set -e
-      ${testCommands}
-      echo "All tests completed"
-    `;
+    const testScript = `#!/bin/bash
+set -e
+
+# Set up environment variables (matching the habitat environment)
+export USER="${containerUser}"
+export WORKDIR="${workDir}"
+export SHARED_PATH="/workspace/habitat/shared"
+export SHARED_TOOLS_PATH="/workspace/habitat/system/tools/bin"
+
+# Fix PATH by preserving system paths and adding habitat tools
+export PATH="/workspace/habitat/system/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+${testCommands}
+echo "All tests completed"
+`;
 
     try {
-      const output = await dockerExec(container.name, testScript, habitatConfig._environment?.USER || 'root');
+      const output = await dockerExec(container.name, testScript, containerUser);
       console.log(output);
       results = parseTestOutput(output, testType);
     } catch (err) {
@@ -648,7 +705,7 @@ function getTestTypeName(choice) {
 async function saveTestResults(results, habitatName, testChoice, duration) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `test-results-${habitatName}-${getTestTypeName(testChoice).replace(/\s+/g, '-').toLowerCase()}-${timestamp}.json`;
-  const filepath = rel('test-results', filename);
+  const filepath = rel('test-results/' + filename);
 
   // Ensure test-results directory exists
   await fs.mkdir(path.dirname(filepath), { recursive: true });

@@ -1,9 +1,29 @@
+/**
+ * @module init
+ * @description Initialization and setup verification for Claude Habitat
+ * 
+ * Handles system initialization checking, GitHub authentication setup,
+ * Docker verification, and guided setup processes. Ensures all prerequisites
+ * are met before habitat operations can begin.
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:github - Repository access operations
+ * @requires module:config - Configuration loading
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e`
+ * - System tests: Initialization is tested across all E2E scenarios
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
 const { promisify } = require('util');
 const { exec, spawn } = require('child_process');
 const execAsync = promisify(exec);
 
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, findPemFiles, fileExists } = require('./utils');
 const { testRepositoryAccess } = require('./github');
 const { loadConfig } = require('./config');

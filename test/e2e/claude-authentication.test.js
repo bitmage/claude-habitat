@@ -1,3 +1,17 @@
+/**
+ * @fileoverview E2E tests for Claude authentication and API connectivity
+ * @description Tests Claude authentication setup and basic API communication within habitats
+ * 
+ * These tests verify that Claude can authenticate successfully and respond to simple prompts
+ * without requiring manual login. They ensure credentials are properly configured and accessible
+ * within the habitat environment, testing the complete authentication flow.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/claude-authentication.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: Claude authentication and API integration
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { ProductTestBase } = require('./product-test-base');

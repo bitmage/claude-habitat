@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install only essential system dependencies (development tools via habitat tools)
 RUN apt-get update && apt-get install -y \
+    bash \
     curl \
     git \
     openssl \

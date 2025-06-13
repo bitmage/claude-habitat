@@ -1,3 +1,17 @@
+/**
+ * @fileoverview Unit tests for CLI command parsing and execution
+ * @description Tests command-line interface behaviors, exit codes, and option parsing
+ * 
+ * Validates that CLI commands handle arguments correctly, exit with appropriate codes,
+ * and complete execution without hanging or waiting for input unexpectedly.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/cli-commands.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:cli-parser} - CLI argument parsing
+ * - Test module: {@link module:command-executor} - CLI command execution
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { spawn } = require('child_process');

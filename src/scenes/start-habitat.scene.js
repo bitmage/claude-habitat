@@ -1,3 +1,19 @@
+/**
+ * @module scenes/start-habitat.scene
+ * @description Start habitat scene for launching specific habitats
+ * 
+ * Handles habitat startup with configuration selection, validation,
+ * and session initiation. Manages the transition from menu selection
+ * to active habitat session.
+ * 
+ * @requires module:habitat - Habitat session management
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e -- test/e2e/claude-in-habitat.test.js`
+ * - UI tests: `npm run test:ui`
+ */
+
 const { runHabitat, saveLastUsedConfig } = require('../habitat');
 
 /**

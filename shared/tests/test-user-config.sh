@@ -1,6 +1,19 @@
 #!/bin/bash
-# Test user configuration is properly set up
-# Validates shared user preferences and tools
+# Shared Test: User Configuration Validation
+# @fileoverview Validates user configuration and shared environment setup
+# @description This test ensures that shared user preferences and tools are properly
+#              configured across all habitats, including git identity, development tools
+#              accessibility, and Claude instruction availability.
+#
+# This test validates the shared configuration layer that provides consistent user
+# identity and tool access across different habitat environments, ensuring Claude
+# has access to necessary development tools and user-specific settings.
+#
+# @tests
+# - Run this test: ./shared/tests/test-user-config.sh
+# - Run all shared tests: ./claude-habitat test --shared
+# - Run all tests: npm test
+# - Related config: shared/config.yaml, shared/CLAUDE.md
 
 set -e
 

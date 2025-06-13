@@ -1,5 +1,19 @@
 #!/bin/bash
-# Test tools installation and GitHub authentication in claude-habitat
+# Habitat Test: Claude-Habitat Tools and Authentication
+# @fileoverview Validates tool installation and GitHub authentication in self-hosted environment
+# @description This test ensures that the claude-habitat self-hosting environment has all
+#              required development tools properly installed and that GitHub App authentication
+#              is working correctly for repository access and operations.
+#
+# This test validates the complete toolchain required for Claude to maintain and develop
+# the claude-habitat project itself, including development tools, GitHub authentication,
+# and proper PATH configuration for seamless tool access.
+#
+# @tests
+# - Run this test: ./habitats/claude-habitat/tests/test-tools-and-auth.sh
+# - Run all claude-habitat tests: ./claude-habitat test claude-habitat
+# - Run all tests: npm test
+# - Related config: habitats/claude-habitat/config.yaml
 
 set -e
 

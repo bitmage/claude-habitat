@@ -1,6 +1,16 @@
 /**
- * CLI argument parser for Claude Habitat
- * Handles all command-line option parsing and validation
+ * @module cli-parser
+ * @description CLI argument parser for Claude Habitat
+ * 
+ * Handles all command-line option parsing and validation. Transforms raw argv
+ * into structured options objects that drive the application's routing logic.
+ * 
+ * @requires module:types - Domain model definitions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/cli-commands.test.js`
+ * - Run all tests: `npm test`
  */
 
 /**

@@ -6,7 +6,39 @@ AI-powered development environments that are isolated, reproducible, and ready f
 
 Claude Habitat creates isolated Docker containers where "Habitat" Claude can work on your projects safely. Each **habitat** includes your code, required services, and development tools with no access to your host filesystem.
 
-Perfect for AI pair programming without risk! See **[TERMINOLOGY.md](TERMINOLOGY.md)** for complete domain concepts.
+Perfect for AI pair programming without risk! 
+
+## Where to Find Information
+
+Claude Habitat now uses **contextual documentation** - information is located where you need it:
+
+### Domain Concepts & Types
+- **Start here**: `src/types.js` - Complete domain model and terminology
+- Understanding habitats, sessions, workspaces, and repositories
+
+### Configuration
+- **Configuration system**: `src/config.js` - Loading order, environment variables, path variables
+- **Validation**: `src/config-validation.js` - Configuration validation and help
+
+### GitHub Integration  
+- **Authentication setup**: `src/github.js` - GitHub App creation and setup
+- **Repository operations**: `src/github.js` - Access verification and error handling
+
+### Tools & Workflows
+- **Development tools**: `src/scenes/tools.scene.js` - Available tools and installation
+- **Interactive workflows**: `src/scenes/` - All user interaction flows
+
+### Runtime Operations
+- **Session management**: `src/habitat.js` - Starting, stopping, monitoring active sessions  
+- **Container operations**: `src/container-operations.js` - Docker runtime operations
+
+### Error Handling & Troubleshooting
+- **Common issues**: `src/errors.js` - Troubleshooting patterns and debug methods
+- **Error recovery**: `src/errors.js` - Structured error handling
+
+### Testing
+- **Test approach**: `src/testing.js` - Testing philosophy and execution
+- **All test commands**: Each module's JSDoc header links to relevant tests
 
 ## Quick Start
 

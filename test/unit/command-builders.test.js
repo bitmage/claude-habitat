@@ -1,8 +1,21 @@
+/**
+ * @fileoverview Unit tests for Docker command building functions
+ * @description Tests pure functions that construct Docker command arguments
+ * 
+ * Validates Docker command argument construction for container operations,
+ * focusing on pure functions without external dependencies or side effects.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/command-builders.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:container-operations} - Docker command building
+ */
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 
 // Test pure functions without any mocking
-const { buildDockerRunArgs, buildDockerExecArgs } = require('../../src/docker');
+const { buildDockerRunArgs, buildDockerExecArgs } = require('../../src/container-operations');
 const { calculateCacheHash, parseRepoSpec } = require('../../src/utils');
 
 // Docker pure functions

@@ -30,6 +30,7 @@ env:
   - NODE_ENV=development
   - DOCKER_HOST=unix:///var/run/docker.sock
   - GITHUB_APP_ID=1357221
+  - GITHUB_APP_PEM_FILE=${SHARED_PATH}/behold-the-power-of-claude.2025-06-04.private-key.pem
 
 # Directory and file setup
 files:

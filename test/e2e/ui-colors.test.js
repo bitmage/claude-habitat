@@ -1,3 +1,17 @@
+/**
+ * @fileoverview E2E tests for UI color rendering and terminal formatting
+ * @description Tests color codes, formatting, and visual presentation in interactive menus
+ * 
+ * These tests verify that the interactive UI properly displays colors and formatting codes
+ * including title colors, menu option highlighting, error message formatting, and terminal
+ * color code consistency across different menu states and transitions.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/ui-colors.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: Interactive scene UI formatting and color presentation
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { runSequence } = require('../../src/scenes/scene-runner');

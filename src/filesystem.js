@@ -1,6 +1,26 @@
+/**
+ * @module filesystem
+ * @description Filesystem operations and verification for Claude Habitat
+ * 
+ * Handles file copying, permission management, ignore patterns, and filesystem
+ * verification tests. Provides utilities for managing files between host and
+ * container environments with proper permission handling.
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:container-operations - Docker execution operations
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/filesystem-verification.test.js`
+ * - System tests: `npm test -- test/unit/verify-fs.test.js`
+ * - Run all tests: `npm test`
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
 
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, sleep, fileExists, calculateCacheHash, executeCommand, setFilePermissions, manageContainer, rel } = require('./utils');
 const { dockerRun, dockerExec } = require('./container-operations');
 
@@ -199,6 +219,11 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
     const command = `cd ${workDir} && ${scriptPath} ${effectiveScope}`;
     const result = await dockerExec(containerName, command, 'root');
     
+    // For bypass habitats, inform user about scope limitation
+    if (isBypassHabitat && scope === 'all') {
+      console.log(colors.yellow('ℹ️  Bypass habitat detected - running habitat scope only'));
+    }
+    
     // Parse TAP output
     const lines = result.split('\n').filter(line => line.trim());
     let passed = 0;
@@ -215,6 +240,11 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
       }
     });
     
+    // If total wasn't found from TAP format, calculate from passed + failed
+    if (total === 0) {
+      total = passed + failed;
+    }
+    
     const success = failed === 0 && total > 0;
     const message = success 
       ? `Filesystem verification passed (${passed}/${total} files verified)`
@@ -223,7 +253,7 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
     return {
       passed: success,
       message,
-      scope,
+      scope: effectiveScope,  // Use effective scope not requested scope
       totalFiles: total,
       passedFiles: passed,
       failedFiles: failed,

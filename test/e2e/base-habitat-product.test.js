@@ -1,3 +1,17 @@
+/**
+ * @fileoverview E2E tests for base habitat lifecycle and performance
+ * @description Tests complete lifecycle of base habitat: build, verification, and performance timing
+ * 
+ * These tests verify that the base habitat (minimal configuration) can be built from scratch,
+ * functions correctly, and completes within reasonable time limits. Base habitat serves as
+ * the foundation for other habitats and must be reliable.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/base-habitat-product.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: Base habitat configuration and Docker container lifecycle
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { ProductTestBase } = require('./product-test-base');

@@ -1,3 +1,19 @@
+/**
+ * @fileoverview Unit tests for pure GitHub utility functions
+ * @description Tests the pure functional components of GitHub integration including
+ * repository path parsing, JWT token building, API response parsing, and error
+ * categorization for both GitHub CLI and SSH operations.
+ * 
+ * These tests focus on pure functions without external dependencies, ensuring
+ * reliable URL parsing, token generation, and error handling across different
+ * GitHub repository access patterns.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/github-pure.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:github} - GitHub integration utilities and authentication
+ */
+
 const { test } = require('node:test');
 const assert = require('node:assert');
 

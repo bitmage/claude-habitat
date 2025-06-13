@@ -1,3 +1,17 @@
+/**
+ * @fileoverview E2E tests for UI sequence execution and error handling
+ * @description Tests interactive UI sequences for completeness, crash resistance, and graceful error handling
+ * 
+ * These tests run various UI interaction sequences to ensure they complete without crashing,
+ * handle errors gracefully, and provide meaningful output even in failure scenarios. They verify
+ * that menu navigation works correctly and that the UI remains responsive across different flows.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/ui-sequences.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: UI sequence execution and interactive workflow reliability
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { generateSnapshots } = require('./ui-snapshot-generator');

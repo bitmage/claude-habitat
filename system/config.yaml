@@ -13,6 +13,9 @@ env:
   - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
   - PATH=${PATH}:${SYSTEM_TOOLS_PATH}
 
+# Container settings for system setup
+container: {}
+
 # System-wide volume mounts applied to all habitats
 # volumes:
   # Claude credentials are now copied during build instead of mounted

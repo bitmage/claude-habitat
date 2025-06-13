@@ -1,9 +1,26 @@
+/**
+ * @module container-lifecycle
+ * @description Container lifecycle management for Claude Habitat
+ * 
+ * Handles creation, startup, and teardown of habitat containers with
+ * unified setup logic. Manages container state, temporary containers,
+ * and provides consistent container lifecycle patterns.
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:container-operations - Docker execution operations
+ * @requires module:standards/path-resolution - Path handling conventions
+ * 
+ * @tests
+ * - E2E tests: Container lifecycle is tested across all E2E scenarios
+ * - Run all tests: `npm test`
+ */
+
 const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, sleep, fileExists, rel } = require('./utils');
 const { dockerRun, dockerExec, dockerIsRunning, dockerImageExists } = require('./container-operations');
-const { expandTemplate } = require('./template-expansion');
 
 /**
  * Create and start a habitat container with unified setup logic
@@ -23,7 +40,7 @@ async function createHabitatContainer(config, options = {}) {
     temporary = false,
     command = null,
     rebuild = false,
-    workDir = config._environment?.WORKDIR,
+    workDir = null, // Will be resolved from WORKDIR env var
     preparedTag = null
   } = options;
 
@@ -50,7 +67,36 @@ async function createHabitatContainer(config, options = {}) {
     await prepareWorkspace(config, imageTag, [], { rebuild });
   }
 
-  const containerUser = config._environment?.USER || 'root';
+  // Get resolved environment variables for USER and WORKDIR
+  let containerUser, resolvedWorkDir;
+  
+  if (workDir) {
+    // Use provided workDir override
+    resolvedWorkDir = workDir;
+    // Try to get USER from environment, fallback to 'root'
+    try {
+      const { createHabitatPathHelpers } = require('./habitat-path-helpers');
+      const pathHelpers = await createHabitatPathHelpers(config);
+      const compiledEnv = pathHelpers.getEnvironment();
+      containerUser = compiledEnv.USER || 'root';
+    } catch (err) {
+      console.warn(`Warning: Could not resolve USER environment variable: ${err.message}`);
+      containerUser = 'root';
+    }
+  } else {
+    // Resolve both USER and WORKDIR from environment
+    try {
+      const { createHabitatPathHelpers } = require('./habitat-path-helpers');
+      const pathHelpers = await createHabitatPathHelpers(config);
+      const compiledEnv = pathHelpers.getEnvironment();
+      containerUser = compiledEnv.USER || 'root';
+      resolvedWorkDir = compiledEnv.WORKDIR || '/workspace';
+    } catch (err) {
+      console.warn(`Warning: Could not resolve environment variables: ${err.message}`);
+      containerUser = 'root';
+      resolvedWorkDir = '/workspace';
+    }
+  }
   const containerName = name;
 
   console.log(`Creating container from prepared image: ${containerName}`);
@@ -80,7 +126,7 @@ async function createHabitatContainer(config, options = {}) {
     // Load and add system config environment variables
     try {
       const { loadConfig } = require('./config');
-      const systemConfigPath = rel('system', 'config.yaml');
+      const systemConfigPath = rel('system/config.yaml');
       if (await fileExists(systemConfigPath)) {
         const systemConfig = await loadConfig(systemConfigPath);
         if (systemConfig.env && Array.isArray(systemConfig.env)) {
@@ -93,7 +139,7 @@ async function createHabitatContainer(config, options = {}) {
       }
       
       // Load and add shared config environment variables
-      const sharedConfigPath = rel('shared', 'config.yaml');
+      const sharedConfigPath = rel('shared/config.yaml');
       if (await fileExists(sharedConfigPath)) {
         const sharedConfig = await loadConfig(sharedConfigPath);
         if (sharedConfig.env && Array.isArray(sharedConfig.env)) {
@@ -119,7 +165,7 @@ async function createHabitatContainer(config, options = {}) {
   }
 
   // Add volume mounts from system config and habitat config
-  const systemConfigPath = rel('system', 'config.yaml');
+  const systemConfigPath = rel('system/config.yaml');
   let systemVolumes = [];
   
   // Load system volumes if system config exists
@@ -135,9 +181,33 @@ async function createHabitatContainer(config, options = {}) {
     }
   }
   
-  // Resolve all templates in system volumes using unified template system
+  // Resolve placeholder values in system volumes using dot notation
   const resolvedSystemVolumes = systemVolumes.map(volume => {
-    let resolved = expandTemplate(volume, config);
+    let resolved = volume;
+    
+    // Find all {path.to.value} placeholders and resolve them
+    const placeholderRegex = /\\{([^}]+)\\}/g;
+    resolved = resolved.replace(placeholderRegex, (match, path) => {
+      // Note: container.user removed - use env.USER instead
+      // Handle other env.* patterns
+      if (path.startsWith('env.')) {
+        const envKey = path.substring(4);
+        if (envKey === 'USER') return containerUser;
+        if (envKey === 'WORKDIR') return resolvedWorkDir;
+        // Try to get from compiled environment
+        try {
+          const { createHabitatPathHelpers } = require('./habitat-path-helpers');
+          const pathHelpers = createHabitatPathHelpers(config);
+          const compiledEnv = pathHelpers.getEnvironment();
+          return compiledEnv[envKey] || match;
+        } catch {
+          return match;
+        }
+      }
+      // Legacy: try config resolution for other patterns
+      const value = path.split('.').reduce((obj, key) => obj?.[key], config);
+      return value || match; // Return original if value not found
+    });
     
     // Expand ~ to actual home directory
     if (resolved.startsWith('~/')) {
@@ -204,16 +274,16 @@ async function createHabitatContainer(config, options = {}) {
 
   // Verify environment
   try {
-    await dockerExec(containerName, `test -d ${workDir}`, containerUser);
+    await dockerExec(containerName, `test -d ${resolvedWorkDir}`, containerUser);
   } catch {
-    throw new Error(`Work directory ${workDir} not found in prepared image`);
+    throw new Error(`Work directory ${resolvedWorkDir} not found in prepared image`);
   }
 
   return {
     name: containerName,
     tag: imageTag,
     config,
-    workDir,
+    workDir: resolvedWorkDir,
     user: containerUser,
     cleanup,
     temporary

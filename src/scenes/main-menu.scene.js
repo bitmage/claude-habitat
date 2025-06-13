@@ -1,6 +1,26 @@
+/**
+ * @module scenes/main-menu.scene
+ * @description Main menu scene for Claude Habitat interactive interface
+ * 
+ * Displays available habitats, system status, and primary navigation options.
+ * Implements the interactive-first architecture with habitat discovery,
+ * initialization checking, and single-key navigation.
+ * 
+ * @requires module:habitat - Habitat session management
+ * @requires module:init - Initialization verification
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e -- test/e2e/ui-verification.test.js`
+ * - UI tests: `npm run test:ui`
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
 const yaml = require('js-yaml');
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, fileExists } = require('../utils');
 const { getLastUsedConfig, checkHabitatRepositories } = require('../habitat');
 const { checkInitializationStatus } = require('../init');

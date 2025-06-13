@@ -8,8 +8,17 @@ const path = require('path');
 const execAsync = promisify(exec);
 
 /**
- * E2E test for running Claude inside a claude-habitat container
- * This tests the full integration: container startup, Claude authentication, git operations, and PR workflow
+ * @fileoverview E2E tests for Claude execution within habitat containers
+ * @description Tests full Claude integration including git operations, PR workflow, and container isolation
+ * 
+ * This is a comprehensive end-to-end test that verifies Claude can run successfully inside a
+ * claude-habitat container and perform complex operations like creating branches, pushing code,
+ * and managing pull requests. It tests the complete developer workflow that Claude Habitat enables.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/claude-in-habitat.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: Claude-habitat container integration and git workflow automation
  */
 
 test('claude runs successfully inside claude-habitat container and can create PRs', async () => {

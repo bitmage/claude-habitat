@@ -1,4 +1,54 @@
+/**
+ * @module github
+ * @description GitHub integration and repository access for Claude Habitat
+ * 
+ * Handles GitHub repository operations, authentication testing, and repository
+ * access verification. Supports both HTTPS and SSH access patterns with
+ * proper error categorization and recovery suggestions.
+ * 
+ * ## GitHub App Authentication Setup
+ * 
+ * Claude Habitat uses GitHub Apps for repository access. To set up:
+ * 
+ * ### 1. Create GitHub App
+ * - Navigate to https://github.com/settings/apps
+ * - Click "New GitHub App"
+ * - **Name**: Choose unique name (e.g., "Claude Code Bot")  
+ * - **Homepage URL**: `https://github.com` (or any valid URL)
+ * - **Description**: "Bot for Claude Code automated development"
+ * - **Webhook**: Uncheck "Active" (not needed)
+ * 
+ * ### 2. Set Permissions
+ * - **Contents**: Read & Write (clone and push code)
+ * - **Pull requests**: Read & Write (create and update PRs)
+ * - **Metadata**: Read (auto-selected)
+ * - **Actions**: Read (optional, for workflow status)
+ * - **Checks**: Read (optional, for check status)
+ * 
+ * ### 3. Generate Private Key
+ * - After creation, go to app settings page
+ * - Scroll to "Private keys" section
+ * - Click "Generate a private key"
+ * - Download and save the `.pem` file to `shared/` directory
+ * 
+ * ### 4. Install App
+ * - Go to app settings → "Install App"
+ * - Install on account/organization with repositories
+ * - Select repositories for Claude access
+ * 
+ * @requires module:types - Domain model definitions
+ * @requires module:standards/path-resolution - Path handling conventions
+ * @requires module:standards/error-handling - Error recovery patterns
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/github-pure.test.js`
+ * - E2E tests: `npm run test:e2e -- test/e2e/github-functions.test.js`
+ * - Run all tests: `npm test`
+ */
+
 const path = require('path');
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { fileExists, findPemFiles, executeCommand, categorizeError, rel } = require('./utils');
 
 // Pure function: extract repo path from URL
@@ -149,7 +199,7 @@ async function testGitHubAppAccess(repoPath, sharedDir) {
 async function testGitHubCliAccess(repoPath, ghCommand = null) {
   try {
     // Use system gh tool if no command specified
-    const gh = ghCommand || rel('system', 'tools', 'bin', 'gh');
+    const gh = ghCommand || rel('system/tools/bin/gh');
     
     // Check if gh is authenticated
     await executeCommand(`${gh} auth status`, { timeout: 5000 });

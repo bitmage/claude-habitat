@@ -1,357 +1,155 @@
 #!/usr/bin/env node
 
-const fs = require('fs').promises;
-const path = require('path');
-const { spawn } = require('child_process');
-const { promisify } = require('util');
-const { exec } = require('child_process');
-const execAsync = promisify(exec);
-const yaml = require('js-yaml');
+/**
+ * Claude Habitat - AI-Powered Isolated Development Environments
+ * 
+ * ## Project Purpose
+ * 
+ * Claude Habitat creates isolated Docker environments where Claude can work on your 
+ * projects safely. Each habitat includes project code, required services, development 
+ * tools, and no access to the host filesystem. Perfect for AI pair programming without risk!
+ * 
+ * ## Performance Characteristics
+ * 
+ * - **Fast Container Startup**: Prepared images with pre-installed tools and repositories
+ * - **Efficient Caching**: Docker layer caching + prepared image caching based on content hashes
+ * - **Minimal Resource Usage**: Lightweight containers with only necessary dependencies
+ * - **Quick Context Switching**: Start any habitat in seconds, not minutes
+ * 
+ * ## Guarantees
+ * 
+ * - **Complete Isolation**: No access to host filesystem beyond workspace
+ * - **Reproducible Environments**: Declarative YAML configurations ensure consistency
+ * - **Predictable Behavior**: Configuration-driven infrastructure with clear contracts
+ * - **Safe Experimentation**: Changes contained within disposable containers
+ * 
+ * ## High-Level Architecture
+ * 
+ * Claude Habitat implements a **layered composition architecture** with **dual Claude contexts**:
+ * 
+ * ### Dual Claude Architecture
+ * - **"Meta" Claude** (this context): Manages the habitat system itself on the host
+ * - **"Habitat" Claude**: Works on projects inside isolated containers
+ * 
+ * ### Three-Layer Composition System
+ * 1. **Infrastructure Layer** (system/): Managed tools and base configurations
+ * 2. **User Layer** (shared/): Personal preferences, keys, and customizations  
+ * 3. **Project Layer** (habitats/): Project-specific environments and setup
+ * 
+ * ### Declarative Infrastructure
+ * All behavior is predictable from YAML configurations:
+ * - Dockerfiles define the runtime environment
+ * - config.yaml files specify repositories, services, and setup
+ * - Environment variables coordinate between layers
+ * 
+ * ## Router Architecture
+ * 
+ * This file serves as the **thin application router** that delegates to specialized subsystems:
+ * 
+ * ### Core Infrastructure Subsystems
+ * @see {@link src/cli-parser.js} - Command-line argument parsing and validation
+ * @see {@link src/command-executor.js} - Direct CLI command execution (--help, --clean, etc.)
+ * @see {@link src/config.js} - Configuration loading with three-layer composition
+ * @see {@link src/types.js} - Domain model and validation (Habitat, Session, Workspace, etc.)
+ * 
+ * ### Container & Image Management  
+ * @see {@link src/habitat.js} - Session orchestration and lifecycle management
+ * @see {@link src/container-operations.js} - Low-level Docker container operations
+ * @see {@link src/image-lifecycle.js} - Image building, caching, and preparation
+ * @see {@link src/image-management.js} - Image cleanup and maintenance operations
+ * 
+ * ### Development Environment
+ * @see {@link src/filesystem.js} - Workspace preparation and file operations
+ * @see {@link src/github.js} - Repository access, authentication, and GitHub integration
+ * @see {@link src/habitat-testing.js} - Unit, E2E, and habitat testing capabilities
+ * @see {@link src/init.js} - System initialization and authentication setup
+ * 
+ * ### User Interface Systems
+ * @see {@link src/scenes/scene-runner.js} - Scene-based interactive flow engine
+ * @see {@link src/scenes/main-menu.scene.js} - Primary navigation and habitat selection
+ * @see {@link src/scenes/maintenance.scene.js} - "Meta" Claude maintenance operations
+ * @see {@link src/scenes/add-habitat.scene.js} - AI-assisted habitat creation workflows
+ * 
+ * ### Cross-Cutting Concerns
+ * @see {@link src/errors.js} - Centralized error handling with recovery suggestions
+ * @see {@link src/utils.js} - Core utilities including path resolution standards
+ * @see {@link src/menu.js} - Menu generation and tilde-based navigation system
+ * 
+ * ## Subsystem Integration Patterns
+ * 
+ * ### Configuration Flow
+ * CLI arguments → config.js → types.js validation → habitat.js execution
+ * 
+ * ### Container Lifecycle  
+ * image-lifecycle.js builds → container-operations.js runs → habitat.js orchestrates
+ * 
+ * ### Interactive Workflows
+ * scene-runner.js manages → individual scenes implement → back to router for completion
+ * 
+ * ### Error Recovery
+ * All subsystems use errors.js patterns → provide actionable next steps → preserve user context
+ * 
+ * ## Testing Architecture
+ * 
+ * @see {@link src/habitat-testing.js} for complete testing documentation
+ * - **Unit Tests**: `npm test` - Test individual subsystem functions
+ * - **E2E Tests**: `npm run test:e2e` - Test complete user workflows  
+ * - **Habitat Tests**: `./claude-habitat test <habitat>` - Test specific configurations
+ * - **UI Tests**: `npm run test:ui` - Generate interaction snapshots
+ * 
+ * For architectural questions, start here then follow @see links to relevant subsystems.
+ */
 
+// ============================================================================
+// SUBSYSTEM IMPORTS - All major architectural components
+// ============================================================================
 
-// Import modules
-const { colors, sleep, fileExists, findPemFiles, calculateCacheHash, parseRepoSpec, parseCommands } = require('./src/utils');
-const { dockerRun, dockerExec, dockerImageExists, dockerIsRunning } = require('./src/docker');
-const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./src/config');
-const { askToContinue, askQuestion } = require('./src/cli');
-const { testRepositoryAccess } = require('./src/github');
-const { runTestMode } = require('./src/testing');
-const { 
-  loadIgnorePatterns, 
-  shouldIgnoreItem, 
-  findFilesToCopy, 
-  copyFilesDirectory, 
-  processFileOperations, 
-  copyFileToContainer, 
-  verifyFilesystem, 
-  runFilesystemVerification 
-} = require('./src/filesystem');
-const { 
-  buildBaseImage, 
-  buildPreparedImage, 
-  runSetupCommands, 
-  cloneRepository 
-} = require('./src/docker');
-const { showMainMenu, getUserChoice, handleMenuChoice, showInvalidChoice, showNoHabitatsMenu } = require('./src/menu');
-const { startSession, runHabitat, getLastUsedConfig, saveLastUsedConfig, checkHabitatRepositories } = require('./src/habitat');
-const { runInitialization, checkInitializationStatus, hasGitHubAppAuth } = require('./src/init');
+// CLI and Command Processing
 const { parseCliArguments, validateCliOptions } = require('./src/cli-parser');
 const { executeCliCommand } = require('./src/command-executor');
 
+// Configuration and Validation
+const { loadHabitatEnvironmentFromConfig } = require('./src/config');
 
-const returnToMainMenu = async () => {
-  console.log('\nReturning to main menu...\n');
-  await main();
-};
+// Core Domain Operations  
+const { runHabitat, getLastUsedConfig, saveLastUsedConfig } = require('./src/habitat');
+const { runTestMode } = require('./src/habitat-testing');
+const { runInitialization } = require('./src/init');
 
+// Interactive Scene System
+const { runScene, runSequence } = require('./src/scenes/scene-runner');
+const { mainMenuScene } = require('./src/scenes/main-menu.scene');
+const { addHabitatScene } = require('./src/scenes/add-habitat.scene');
+const { maintenanceScene } = require('./src/scenes/maintenance.scene');
 
-// runHabitat moved to src/habitat.js
+// Utilities and Error Handling
+const { colors, fileExists } = require('./src/utils');
 
-// runContainer moved to src/habitat.js
+// ============================================================================
+// MAIN ROUTER - Delegates to appropriate subsystems
+// ============================================================================
 
-// getLastUsedConfig and saveLastUsedConfig moved to src/habitat.js
-
-// Add new configuration with AI assistance
-async function addNewConfiguration() {
-  console.log(colors.green('\n=== Create New Configuration ===\n'));
-  
-  const readline = require('readline');
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  
-  const ask = (question) => new Promise(resolve => {
-    rl.question(question, answer => resolve(answer.trim()));
-  });
-  
-  // Gather minimal information
-  const projectUrl = await ask('Project URL (GitHub/GitLab/etc): ');
-  if (!projectUrl) {
-    console.log(colors.red('Project URL is required'));
-    rl.close();
-    return;
-  }
-  
-  const additionalUrls = await ask('Additional plugins/modules URLs (comma-separated, or empty): ');
-  const purpose = await ask('Purpose of this habitat: ');
-  const habitatName = await ask('Habitat name (e.g., my-project): ');
-  const specialInstructions = await ask('Any special instructions for Claude (or empty): ');
-  
-  rl.close();
-  
-  // Create workspace
-  const os = require('os');
-  const workspace = path.join(os.tmpdir(), `claude-habitat-new-${Date.now()}`);
-  await fs.mkdir(workspace, { recursive: true });
-  await fs.mkdir(path.join(workspace, 'dockerfiles'), { recursive: true });
-  await fs.mkdir(path.join(workspace, 'configs'), { recursive: true });
-  
-  // Create context file
-  const context = `# New Claude Habitat Configuration
-
-## User Inputs
-- **Project URL**: ${projectUrl}
-- **Additional URLs**: ${additionalUrls || 'None'}
-- **Purpose**: ${purpose || 'Development environment'}
-- **Habitat Name**: ${habitatName}
-- **Special Instructions**: ${specialInstructions || 'None'}
-
-## Your Task
-
-Please analyze the project(s) and create:
-
-1. A Dockerfile in \`dockerfiles/${habitatName}/Dockerfile\`
-2. A configuration file in \`configs/${habitatName}.yaml\`
-3. A test plan in \`TEST_PLAN.md\`
-
-The configuration should be complete and ready to use.
-`;
-  
-  await fs.writeFile(path.join(workspace, 'PROJECT_CONTEXT.md'), context);
-  
-  // Copy example for reference
-  try {
-    await fs.copyFile(
-      path.join(__dirname, 'configs', 'discourse.yaml'),
-      path.join(workspace, 'example-discourse.yaml')
-    );
-  } catch {
-    // It's ok if example doesn't exist
-  }
-  
-  // Copy "Meta" Claude instructions for add mode
-  await fs.copyFile(
-    path.join(__dirname, 'claude/INSTRUCTIONS.md'),
-    path.join(workspace, 'CLAUDE.md')
-  );
-  
-  console.log(`\nWorkspace created at: ${workspace}`);
-  console.log('Launching Claude to create your configuration...\n');
-  
-  // Launch Claude in the workspace
-  const claudeCmd = spawn('claude', [], {
-    cwd: workspace,
-    stdio: 'inherit'
-  });
-  
-  await new Promise((resolve, reject) => {
-    claudeCmd.on('close', resolve);
-    claudeCmd.on('error', reject);
-  });
-  
-  // After Claude finishes, copy created files back
-  console.log('\nChecking for created files...');
-  
-  try {
-    // Check for created files
-    const dockerfileDir = path.join(workspace, 'dockerfiles', habitatName);
-    const configFile = path.join(workspace, 'configs', `${habitatName}.yaml`);
-    
-    if (await fileExists(path.join(dockerfileDir, 'Dockerfile'))) {
-      // Copy Dockerfile
-      const targetDockerDir = path.join(__dirname, 'dockerfiles', habitatName);
-      await fs.mkdir(targetDockerDir, { recursive: true });
-      await fs.copyFile(
-        path.join(dockerfileDir, 'Dockerfile'),
-        path.join(targetDockerDir, 'Dockerfile')
-      );
-      console.log(colors.green(`✓ Dockerfile created`));
-    }
-    
-    if (await fileExists(configFile)) {
-      // Copy config
-      await fs.copyFile(
-        configFile,
-        path.join(__dirname, 'configs', `${habitatName}.yaml`)
-      );
-      console.log(colors.green(`✓ Configuration created`));
-    }
-    
-    console.log(colors.green('\nConfiguration created successfully!'));
-    console.log(`You can now run: ./claude-habitat --config ${habitatName}.yaml`);
-  } catch (err) {
-    console.error(colors.red(`Error processing created files: ${err.message}`));
-  }
-}
-
-// Tools management mode
-async function runToolsManagement() {
-  console.log(colors.green('\n=== Claude Habitat Tools Management ===\n'));
-  console.log('Manage development tools available in all containers.\n');
-
-  const readline = require('readline');
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  const ask = (question) => new Promise(resolve => {
-    rl.question(question, answer => resolve(answer.trim().toLowerCase()));
-  });
-
-  try {
-    while (true) {
-      console.log('Tools Management Options:\n');
-      console.log(`  ${colors.yellow('[1]')} Clean & reinstall all tools`);
-      console.log(`  ${colors.yellow('[2]')} List tool status`);
-      console.log(`  ${colors.yellow('[3]')} Reinstall specific tool`);
-      console.log(`  ${colors.yellow('[q]')} Back to main menu\n`);
-
-      const choice = await ask('Enter your choice: ');
-
-      if (choice === 'q') {
-        break;
-      } else if (choice === '1') {
-        await cleanAndReinstallAllTools();
-      } else if (choice === '2') {
-        await listToolStatus();
-      } else if (choice === '3') {
-        await reinstallSpecificTool();
-      } else {
-        console.log(colors.red('Invalid choice. Please try again.\n'));
-      }
-    }
-  } finally {
-    rl.close();
-  }
-}
-
-// Clean and reinstall all tools
-async function cleanAndReinstallAllTools() {
-  console.log('\n' + colors.yellow('=== Clean & Reinstall All Tools ===\n'));
-  
-  const toolsDir = path.join(__dirname, 'system/tools');
-  
-  try {
-    console.log('Cleaning existing tools...');
-    await execAsync('cd "' + toolsDir + '" && ./install-tools.sh clean');
-    
-    console.log('Installing all tools...');
-    await execAsync('cd "' + toolsDir + '" && ./install-tools.sh install');
-    
-    console.log(colors.green('✅ All tools reinstalled successfully!\n'));
-  } catch (err) {
-    console.error(colors.red(`❌ Error reinstalling tools: ${err.message}\n`));
-  }
-}
-
-// List tool status
-async function listToolStatus() {
-  console.log('\n' + colors.yellow('=== Tool Status ===\n'));
-  
-  const toolsDir = path.join(__dirname, 'system/tools');
-  
-  try {
-    const { stdout } = await execAsync('cd "' + toolsDir + '" && ./install-tools.sh list');
-    console.log(stdout);
-  } catch (err) {
-    console.error(colors.red(`❌ Error listing tools: ${err.message}\n`));
-  }
-}
-
-// Reinstall specific tool
-async function reinstallSpecificTool() {
-  console.log('\n' + colors.yellow('=== Reinstall Specific Tool ===\n'));
-  
-  const toolsDir = path.join(__dirname, 'system/tools');
-  
-  try {
-    // First show available tools
-    const { stdout } = await execAsync('cd "' + toolsDir + '" && ./install-tools.sh list');
-    console.log('Available tools:\n');
-    console.log(stdout);
-    
-    const readline = require('readline');
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-
-    const toolChoice = await new Promise(resolve => {
-      rl.question('Enter tool name to reinstall (or "q" to cancel): ', answer => {
-        rl.close();
-        resolve(answer.trim());
-      });
-    });
-
-    if (toolChoice === 'q' || toolChoice === '') {
-      console.log('Cancelled.\n');
-      return;
-    }
-
-    console.log(`Installing ${toolChoice}...`);
-    await execAsync(`cd "${toolsDir}" && ./install-tools.sh install ${toolChoice}`);
-    
-    console.log(colors.green(`✅ ${toolChoice} reinstalled successfully!\n`));
-  } catch (err) {
-    console.error(colors.red(`❌ Error reinstalling tool: ${err.message}\n`));
-  }
-}
-
-// Maintenance mode
-async function runMaintenanceMode() {
-  console.log(colors.green('\n=== Claude Habitat Maintenance Mode ===\n'));
-  console.log('This will launch Claude in the claude-habitat directory.');
-  console.log('Claude will show you a menu of maintenance options.\n');
-  console.log(colors.yellow('💡 Tip: Say "menu" at any time to see the options again\n'));
-  
-  // Create a session instruction file for Claude
-  const sessionInstructions = `# Maintenance Mode Session
-
-You are now in Claude Habitat maintenance mode. 
-
-IMPORTANT: First, read and present the options from claude/MAINTENANCE.md to the user.
-
-When the user says "menu", "options", "help", or similar, show the maintenance menu again.
-
-Current directory: ${__dirname}
-Session started: ${new Date().toISOString()}
-`;
-
-  const instructionFile = path.join(__dirname, '.maintenance-session.md');
-  await fs.writeFile(instructionFile, sessionInstructions);
-  
-  // Launch Claude in the claude-habitat directory
-  const claudeCmd = spawn('claude', [], {
-    cwd: __dirname,
-    stdio: 'inherit'
-  });
-  
-  await new Promise((resolve, reject) => {
-    claudeCmd.on('close', resolve);
-    claudeCmd.on('error', reject);
-  });
-  
-  // Clean up session file
-  try {
-    await fs.unlink(instructionFile);
-  } catch {
-    // Ignore if already deleted
-  }
-  
-  console.log('\nMaintenance session completed.');
-}
-
-// CLI handling
+/**
+ * Main application router
+ * 
+ * Routes incoming requests to appropriate subsystems based on CLI arguments
+ * and user intentions. Maintains the hybrid CLI + Interactive architecture.
+ */
 async function main() {
   try {
-    // Parse CLI arguments
+    // Parse and validate CLI arguments
     const args = process.argv.slice(2);
     const options = parseCliArguments(args);
     validateCliOptions(options);
 
-    // Handle CLI commands (help, list-configs, clean)
+    // Handle direct CLI commands (--help, --clean, --list-configs)
     const commandExecuted = await executeCliCommand(options);
     if (commandExecuted) {
-      return;
+      return; // CLI command completed, exit
     }
 
-    // Handle test sequence mode  
+    // Handle test sequence mode (UI testing)
     if (options.testSequence) {
-      const { runSequence } = require('./src/scenes/scene-runner');
-      const { mainMenuScene } = require('./src/scenes/main-menu.scene');
-      
       try {
         const context = await runSequence(mainMenuScene, options.testSequence, {
           preserveColors: options.preserveColors
@@ -364,624 +162,101 @@ async function main() {
       }
     }
 
-  // Handle shortcut commands
-  if (options.start) {
-    const habitatsDir = path.join(__dirname, 'habitats');
-    
-    // If habitat name is provided, use it
-    if (options.habitatName) {
-      const configPath = path.join(habitatsDir, options.habitatName, 'config.yaml');
-      if (await fileExists(configPath)) {
-        options.configPath = configPath;
-        console.log(`Starting: ${options.habitatName}\n`);
-      } else {
-        console.error(colors.red(`Habitat '${options.habitatName}' not found`));
-        process.exit(1);
-      }
-    } else {
-      // Use last config or first available
-      const lastConfig = await getLastUsedConfig();
-      
-      if (lastConfig) {
-        options.configPath = lastConfig;
-        console.log(`Starting: ${path.basename(path.dirname(lastConfig))}\n`);
-      } else {
-        // Use first available habitat
-        try {
-          const dirs = await fs.readdir(habitatsDir);
-          for (const dir of dirs) {
-            const configPath = path.join(habitatsDir, dir, 'config.yaml');
-            if (await fileExists(configPath)) {
-              options.configPath = configPath;
-              console.log(`Starting: ${dir}\n`);
-              break;
-            }
-          }
-          if (!options.configPath) {
-            console.error(colors.red('No habitats available'));
-            process.exit(1);
-          }
-        } catch {
-          console.error(colors.red('No configurations available'));
-          process.exit(1);
-        }
-      }
-    }
-  } else if (options.add) {
-    await addNewConfiguration();
-    
-    console.log('\nConfiguration creation completed!');
-    const readline = require('readline');
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    
-    const nextChoice = await new Promise(resolve => {
-      rl.question('\nWould you like to:\n[r] Run the new habitat now\n[m] Go back to main menu\nChoice: ', answer => {
-        rl.close();
-        resolve(answer.trim().toLowerCase());
-      });
-    });
-    
-    if (nextChoice === 'r') {
-      // Try to find the newly created habitat and run it
-      console.log('Looking for the newly created habitat...');
-      await askToContinue('Press Enter to return to main menu to select your new habitat...');
-    }
-    
-    await returnToMainMenu();
-    return;
-  } else if (options.maintain) {
-    await runMaintenanceMode();
-    await returnToMainMenu();
-    return;
-  } else if (options.test) {
-    await runTestMode(options.testType, options.testTarget, options.rebuild);
-    return;
-  }
-
-  // Normal operation - require config
-  if (!options.configPath) {
-    // Use scene-based interactive mode
-    const { runInteractive } = require('./src/scenes/scene-runner');
-    const { mainMenuScene } = require('./src/scenes/main-menu.scene');
-    
-    try {
-      await runInteractive(mainMenuScene);
+    // Handle shortcut commands
+    if (options.start) {
+      await handleDirectStart(options);
       return;
-    } catch (error) {
-      console.error(colors.red(`\n❌ Error: ${error.message}`));
-      process.exit(1);
     }
-  }
 
-  // Legacy code path - config specified directly
-  if (!options.configPath) {
-    // This shouldn't happen now, but keep for safety
-    const habitatsDir = path.join(__dirname, 'habitats');
-    let habitats = [];
-    
-    try {
-      const dirs = await fs.readdir(habitatsDir);
-      for (const dir of dirs) {
-        const configPath = path.join(habitatsDir, dir, 'config.yaml');
-        if (await fileExists(configPath)) {
-          habitats.push({ name: dir, path: configPath });
-        }
-      }
-      habitats.sort((a, b) => a.name.localeCompare(b.name));
-    } catch (err) {
-      console.error(colors.red('No habitats directory found'));
-      console.log('This appears to be a fresh installation.');
-      console.log('The habitats directory will be created when you add your first habitat.');
-      console.log('');
-      
-      const readline = require('readline');
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-      
-      const choice = await new Promise(resolve => {
-        rl.question('Would you like to:\n[a] Create your first habitat with AI assistance\n[q] Quit\nChoice: ', answer => {
-          rl.close();
-          resolve(answer.trim().toLowerCase());
-        });
-      });
-      
-      if (choice === 'a') {
-        // Create habitats directory first
-        await fs.mkdir(habitatsDir, { recursive: true });
-        await addNewConfiguration();
-        await returnToMainMenu();
-        return;
-      } else {
-        console.log('Goodbye!');
-        process.exit(0);
-      }
-    }
-    
-    // Check repository access for existing habitats
-    const habitatRepoStatus = await checkHabitatRepositories(habitatsDir);
-    
-    if (habitats.length === 0) {
-      console.error(colors.red('No habitats found'));
-      console.log('You can create your first habitat with the [a]dd option.');
-      console.log('');
-      
-      const readline = require('readline');
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-      
-      const choice = await new Promise(resolve => {
-        rl.question('Would you like to:\n[a] Create a new habitat with AI assistance\n[q] Quit\nChoice: ', answer => {
-          rl.close();
-          resolve(answer.trim().toLowerCase());
-        });
-      });
-      
-      if (choice === 'a') {
-        await addNewConfiguration();
-        await returnToMainMenu();
-        return;
-      } else {
-        console.log('Goodbye!');
-        process.exit(0);
-      }
-    }
-    
-    // Show welcome screen
-    console.log(colors.green('\n=== Claude Habitat ===\n'));
-    
-    // Show initialization status if incomplete
-    if (initStatus.completedSteps < initStatus.totalSteps) {
-      if (initStatus.completedSteps === 0) {
-        console.log(colors.red('⚠️  First time setup required'));
-        console.log(`   ${colors.yellow('[i]')} Initialize Claude Habitat\n`);
-      } else {
-        console.log(colors.yellow(`⚠️  Setup incomplete (${initStatus.completedSteps}/${initStatus.totalSteps} steps done)`));
-        console.log(`   ${colors.yellow('[i]')} Complete initialization\n`);
-      }
-    }
-    
-    if (habitats.length > 0) {
-      console.log('Habitats:\n');
-      
-      // Get the most recently used config to mark it
-      const lastConfig = await getLastUsedConfig();
-      const lastUsedHabitat = lastConfig ? path.basename(path.dirname(lastConfig)) : null;
-      
-      // Show all habitats with appropriate hotkeys
-      habitats.forEach((habitat, index) => {
-        let key, shiftKey;
-        if (index < 9) {
-          // Direct number keys for first 9
-          key = (index + 1).toString();
-          // Map to shift+number for rebuild
-          const shiftMap = { '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
-                            '6': '^', '7': '&', '8': '*', '9': '(' };
-          shiftKey = shiftMap[key];
-        } else {
-          // Tilde prefix system for 10+
-          const adjusted = index - 9; // 0-based for items 10+
-          const tildeCount = Math.floor(adjusted / 9) + 1;
-          const digit = (adjusted % 9) + 1;
-          key = '~'.repeat(tildeCount) + digit;
-          shiftKey = null; // No shift support for tilde sequences initially
-        }
-        
-        // Check if this habitat has repository issues
-        const habitatStatus = habitatRepoStatus.get(habitat.name);
-        const statusWarning = habitatStatus?.hasIssues ? ' ⚠️' : '';
-        
-        // Check if this is the most recent habitat
-        const isLastUsed = habitat.name === lastUsedHabitat;
-        const startOption = isLastUsed ? ` ${colors.yellow('[s]')}tart (most recent)` : '';
-        
-        // Add rebuild option for first 9 habitats
-        const rebuildOption = shiftKey ? ` ${colors.cyan(`[${shiftKey}]`)}rebuild` : '';
-        
-        try {
-          const content = require('fs').readFileSync(habitat.path, 'utf8');
-          const parsed = yaml.load(content);
-          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}${startOption}${rebuildOption}`);
-          if (parsed.description) {
-            console.log(`      ${parsed.description}`);
-          }
-          if (habitatStatus?.hasIssues) {
-            console.log('      (may not be able to access remote repositories)');
-          }
-          console.log('');
-        } catch (err) {
-          console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}${statusWarning}${startOption}`);
-          console.log(`      (configuration error: ${err.message})`);
-          console.log('');
-        }
-      });
-    }
-    
-    // Add action options with clear categories
-    console.log('Actions:\n');
-    if (initStatus.completedSteps < initStatus.totalSteps) {
-      console.log(`  ${colors.yellow('[i]')}nitialize - Set up authentication and verify system`);
-    }
-    console.log(`  ${colors.yellow('[a]')}dd     - Create new configuration with AI assistance`);
-    console.log(`  ${colors.yellow('[t]')}est    - Run tests (system, shared, or habitat)`);
-    console.log(`  t${colors.yellow('[o]')}ols   - Manage development tools`);
-    console.log(`  ${colors.yellow('[m]')}aintain - Update/troubleshoot Claude Habitat itself`);
-    console.log(`  ${colors.yellow('[c]')}lean   - Remove all Docker images`);
-    console.log(`  ${colors.yellow('[h]')}elp    - Show usage information`);
-    console.log(`  ${colors.yellow('[q]')}uit    - Exit\n`);
-    
-    console.log(`${colors.dim('💡 Tip: Use')} ${colors.cyan('Shift+number')} ${colors.dim('(like !, @, #) to rebuild habitats without cache')}`);
-    
-    // Get user choice with single keypress or tilde sequences
-    const choice = await new Promise(resolve => {
-      let tildeBuffer = '';
-      
-      process.stdin.setRawMode(true);
-      process.stdin.resume();
-      process.stdin.setEncoding('utf8');
-      
-      const onKeypress = (key) => {
-        // Handle Ctrl+C
-        if (key === '\u0003') {
-          console.log('\n');
-          process.exit(0);
-        }
-        
-        // Detect shift+number keys for rebuild
-        const shiftNumberMap = {
-          '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
-          '^': '6', '&': '7', '*': '8', '(': '9', ')': '0'
-        };
-        
-        if (shiftNumberMap[key]) {
-          const numberKey = shiftNumberMap[key];
-          process.stdin.setRawMode(false);
-          process.stdin.pause();
-          process.stdin.removeListener('data', onKeypress);
-          resolve({ choice: numberKey, rebuild: true });
-          return;
-        }
-        
-        // Handle tilde sequences
-        if (key === '~') {
-          tildeBuffer += '~';
-          return; // Wait for more input
-        }
-        
-        // If we have tildes, append the digit and resolve
-        if (tildeBuffer.length > 0) {
-          const finalChoice = tildeBuffer + key;
-          process.stdin.setRawMode(false);
-          process.stdin.pause();
-          process.stdin.removeListener('data', onKeypress);
-          resolve({ choice: finalChoice, rebuild: false });
-          return;
-        }
-        
-        // Regular single keypress
-        process.stdin.setRawMode(false);
-        process.stdin.pause();
-        process.stdin.removeListener('data', onKeypress);
-        resolve({ choice: key.toLowerCase(), rebuild: false });
-      };
-      
-      process.stdin.on('data', onKeypress);
-    });
-    
-    // Extract choice and rebuild flag (support both old string and new object format)
-    let choiceKey, rebuild = false;
-    if (typeof choice === 'object' && choice.choice !== undefined) {
-      choiceKey = choice.choice;
-      rebuild = choice.rebuild || false;
-    } else {
-      choiceKey = choice;
-      rebuild = false;
-    }
-    
-    // Handle choice
-    if (choiceKey === 'q') {
-      process.exit(0);
-    } else if (choiceKey === 'i') {
-      // Initialize/complete setup
-      await runInitialization();
-      process.exit(0);
-    } else if (choiceKey === 'h') {
-      options.help = true;
-    } else if (choiceKey === 'c') {
-      options.clean = true;
-    } else if (choiceKey === 's') {
-      // Start - use last config or default
-      const lastConfig = await getLastUsedConfig();
-      if (lastConfig) {
-        options.configPath = lastConfig;
-        console.log(`\nStarting: ${path.basename(lastConfig)}\n`);
-      } else if (configs.length > 0) {
-        options.configPath = path.join(configDir, configs[0]);
-        console.log(`\nStarting: ${configs[0]}\n`);
-      } else {
-        console.error(colors.red('\nNo configurations available'));
-        process.exit(1);
-      }
-    } else if (choiceKey === 'a') {
-      // Add new configuration with AI
-      await addNewConfiguration();
-      process.exit(0);
-    } else if (choiceKey === 't') {
-      // Test mode - show test menu
-      await runTestMode(null, null);
-      await returnToMainMenu();
+    if (options.add) {
+      await runScene(addHabitatScene);
       return;
-    } else if (choiceKey === 'o') {
-      // Tools management
-      await runToolsManagement();
-      await returnToMainMenu();
+    }
+
+    if (options.maintain) {
+      await runScene(maintenanceScene);
       return;
-    } else if (choiceKey === 'm') {
-      // Maintenance mode
-      await runMaintenanceMode();
-      process.exit(0);
-    } else {
-      // Check if it's a direct number (1-9)
-      const directIndex = parseInt(choiceKey) - 1;
-      if (!isNaN(directIndex) && directIndex >= 0 && directIndex < 9 && directIndex < habitats.length) {
-        options.configPath = habitats[directIndex].path;
-        options.rebuild = rebuild; // Set rebuild option from interactive choice
-        if (rebuild) {
-          console.log(`\n🔄 Rebuilding: ${habitats[directIndex].name}\n`);
-        } else {
-          console.log(`\nSelected: ${habitats[directIndex].name}\n`);
-        }
-      } else if (choiceKey.startsWith('~')) {
-        // Handle tilde prefix sequences (~1, ~~2, etc.)
-        const tildeCount = choiceKey.match(/^~+/)[0].length;
-        const digit = choiceKey.slice(tildeCount);
-        const digitNum = parseInt(digit);
-        
-        if (!isNaN(digitNum) && digitNum >= 1 && digitNum <= 9) {
-          // Calculate actual index: 9 + (tildeCount-1)*9 + (digitNum-1)
-          const habitatIndex = 9 + (tildeCount - 1) * 9 + (digitNum - 1);
-          
-          if (habitatIndex < habitats.length) {
-            options.configPath = habitats[habitatIndex].path;
-            options.rebuild = rebuild; // Set rebuild option from interactive choice
-            if (rebuild) {
-              console.log(`\n🔄 Rebuilding: ${habitats[habitatIndex].name}\n`);
-            } else {
-              console.log(`\nSelected: ${habitats[habitatIndex].name}\n`);
-            }
-          } else {
-            console.error(colors.red('\n❌ Invalid habitat selection'));
-            console.log('Returning to main menu...\n');
-            await sleep(2000);
-            await returnToMainMenu();
-            return;
-          }
-        } else {
-          console.error(colors.red('\n❌ Invalid tilde sequence - use ~1-9, ~~1-9, etc.'));
-          console.log('Returning to main menu...\n');
-          await sleep(2000);
-          await returnToMainMenu();
-          return;
-        }
-      } else {
-        console.error(colors.red('\n❌ Invalid choice'));
-        console.log('Use number keys 1-9, tilde sequences (~1, ~~2), shift+number (!@#) for rebuild, or letter commands');
-        console.log('Returning to main menu...\n');
-        await sleep(2000);
-        await returnToMainMenu();
-        return;
-      }
     }
-  }
 
-  // Make config path absolute (if we have one)
-  if (options.configPath && !path.isAbsolute(options.configPath)) {
-    // Check if it's a habitat name
-    const habitatConfigPath = path.join(__dirname, 'habitats', options.configPath, 'config.yaml');
-    if (await fileExists(habitatConfigPath)) {
-      options.configPath = habitatConfigPath;
-    } else {
-      // Check if it's just a filename in old configs dir (backward compatibility)
-      const configInDir = path.join(__dirname, 'configs', options.configPath);
-      if (await fileExists(configInDir)) {
-        options.configPath = configInDir;
-      } else {
-        options.configPath = path.resolve(options.configPath);
-      }
+    if (options.test) {
+      await runTestMode(options.testType, options.testTarget, options.rebuild);
+      return;
     }
-  }
 
-  // Run the selected operation
-  if (options.configPath) {
-    try {
-      // Pre-flight repository access check
-      console.log('Pre-flight check...');
-      
-      // Load config with environment variable chain: system → shared → habitat
-      const config = await loadHabitatEnvironmentFromConfig(options.configPath);
-      const problemRepos = [];
-      
-      if (config.repositories && Array.isArray(config.repositories)) {
-        for (const repo of config.repositories) {
-          if (repo.url) {
-            const accessMode = repo.access || 'write';
-            const result = await testRepositoryAccess(repo.url, accessMode);
-            if (!result.accessible) {
-              problemRepos.push({ 
-                url: repo.url, 
-                reason: result.reason, 
-                needsDeployKey: result.needsDeployKey,
-                needsGitHubCli: result.needsGitHubCli,
-                repoPath: result.repoPath,
-                accessMode: result.accessMode,
-                issues: result.issues 
-              });
-            }
-          }
-        }
-      }
-      
-      if (problemRepos.length > 0) {
-        // Separate by issue type and access mode
-        const writeRepos = problemRepos.filter(repo => repo.accessMode === 'write');
-        const readRepos = problemRepos.filter(repo => repo.accessMode === 'read');
-        
-        // Show repository access issues
-        if (problemRepos.length > 0) {
-          console.log(colors.yellow('⚠️ Repository access issues:'));
-          
-          problemRepos.forEach(repo => {
-            console.log(colors.yellow(`\n   ${repo.url}: ${repo.reason}`));
-          });
-        }
-        
-        // Show GitHub App setup if repos need it
-        const needsGitHubApp = problemRepos.some(repo => repo.needsGitHubApp);
-        if (needsGitHubApp) {
-          console.log('\n' + colors.green('GitHub App Configuration Required:'));
-          console.log('1. Run: ./claude-habitat --init');
-          console.log('2. Follow GitHub App setup instructions');
-          console.log('3. Install the app on your repositories');
-          console.log('4. Repository access will be provided by the GitHub App\n');
-        }
-        
-        const readline = require('readline');
-        const rl = readline.createInterface({
-          input: process.stdin,
-          output: process.stdout
-        });
-        
-        const writeRepoCount = writeRepos.length;
-        const readOnlyPrompt = writeRepoCount > 0 ? `\n[s] Set failing write repositories to read-only` : '';
-        
-        const choice = await new Promise(resolve => {
-          rl.question(`Would you like to:\n[c] Continue anyway (may fail during build)\n[f] Fix GitHub App setup\n[m] Go back to main menu\nChoice: `, answer => {
-            rl.close();
-            resolve(answer.trim().toLowerCase());
-          });
-        });
-        
-        if (choice === 's' && writeRepoCount > 0) {
-          // Update config to set failing write repos to read-only
-          console.log('\nUpdating configuration to set failing repositories to read-only...');
-          
-          const configContent = await fs.readFile(options.configPath, 'utf8');
-          let updatedConfig = configContent;
-          
-          // Update each failing write repo to have access: read
-          writeRepos.forEach(repo => {
-            // Find the repository in the config
-            const repoUrlEscaped = repo.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const repoPattern = new RegExp(`(- url:\\s*${repoUrlEscaped}[\\s\\S]*?)(?=\\n\\s*(?:- url:|# |$))`, 'g');
-            
-            updatedConfig = updatedConfig.replace(repoPattern, (match) => {
-              // Check if access field already exists
-              if (match.includes('access:')) {
-                // Update existing access field
-                return match.replace(/access:\s*\w+/, 'access: read');
-              } else {
-                // Add access field after branch or at end
-                if (match.includes('branch:')) {
-                  return match.replace(/(branch:[^\n]*\n)/, '$1    access: read\n');
-                } else {
-                  // Add at end of repo block
-                  return match.trimEnd() + '\n    access: read\n';
-                }
-              }
-            });
-          });
-          
-          // Write updated config back
-          await fs.writeFile(options.configPath, updatedConfig);
-          
-          console.log(colors.green('✅ Configuration updated. Failing repositories set to read-only.'));
-          console.log('Continuing with habitat startup...\n');
-          // Continue with habitat launch
-        } else if (choice === 'f') {
-          await runInitialization();
-          console.log('Returning to main menu after initialization...');
-          await returnToMainMenu();
-          return;
-        } else if (choice === 'm') {
-          console.log('Returning to main menu...');
-          // Return to main menu by restarting
-          const originalArgv = process.argv;
-          process.argv = [process.argv[0], process.argv[1]]; // Reset to just script name
-          await main();
-          return;
-        }
-        // If 'c' or anything else, continue
-        console.log('Continuing with habitat startup...\n');
-      } else {
-        console.log(colors.green('✅ Repository access verified'));
-      }
-      
-      await saveLastUsedConfig(options.configPath);
-      await startSession(options.configPath, options.extraRepos, options.overrideCommand, { rebuild: options.rebuild, tty: options.tty });
-    } catch (err) {
-      console.error(colors.red(`\n❌ Error starting habitat: ${err.message}`));
-      if (err.validationErrors) {
-        err.validationErrors.forEach(e => console.error(colors.red(`  - ${e}`)));
-      }
-      
-      // If this was invoked via CLI (start command), exit with error code
-      if (options.start) {
-        console.log('\nHabitat startup failed.');
-        console.log('This could be due to:');
-        console.log('• Configuration file errors');
-        console.log('• Docker connectivity issues'); 
-        console.log('• Repository access problems');
-        console.log('• Missing dependencies');
-        process.exit(1);
-      }
-      
-      // Interactive mode - show recovery options
-      console.log('\nThis could be due to:');
-      console.log('• Configuration file errors');
-      console.log('• Docker connectivity issues'); 
-      console.log('• Repository access problems');
-      console.log('• Missing dependencies');
-      
-      const readline = require('readline');
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-      
-      const choice = await new Promise(resolve => {
-        rl.question('\nWould you like to:\n[t] Try a different habitat\n[f] Fix authentication/setup\n[m] Go back to main menu\nChoice: ', answer => {
-          rl.close();
-          resolve(answer.trim().toLowerCase());
-        });
-      });
-      
-      if (choice === 't') {
-        console.log('Returning to habitat selection...');
-        await returnToMainMenu();
-        return;
-      } else if (choice === 'f') {
-        await runInitialization();
-        await returnToMainMenu();
-        return;
-      } else {
-        await returnToMainMenu();
-        return;
-      }
+    // Handle direct habitat launch (config path provided)
+    if (options.configPath) {
+      await runHabitat(options.configPath, options.extraRepos, options.overrideCommand);
+      return;
     }
-  }
+
+    // Default: Enter interactive mode via scene system
+    await runScene(mainMenuScene);
+
   } catch (err) {
     console.error(colors.red(`Fatal error: ${err.message}`));
     process.exit(1);
   }
 }
 
-// checkInitializationStatus, hasGitHubAppAuth, checkHabitatRepositories, and runInitialization moved to src/init.js
+/**
+ * Handle direct habitat start commands
+ * Resolves habitat names to config paths and launches
+ */
+async function handleDirectStart(options) {
+  const path = require('path');
+  const fs = require('fs').promises;
+  const habitatsDir = path.join(__dirname, 'habitats');
+  
+  // If habitat name is provided, use it
+  if (options.habitatName) {
+    const configPath = path.join(habitatsDir, options.habitatName, 'config.yaml');
+    if (await fileExists(configPath)) {
+      options.configPath = configPath;
+      console.log(`Starting: ${options.habitatName}\n`);
+    } else {
+      console.error(colors.red(`Habitat '${options.habitatName}' not found`));
+      process.exit(1);
+    }
+  } else {
+    // Use last config or first available
+    const lastConfig = await getLastUsedConfig();
+    
+    if (lastConfig) {
+      options.configPath = lastConfig;
+      const habitatName = path.basename(path.dirname(lastConfig));
+      console.log(`Starting: ${habitatName}\n`);
+    } else {
+      // Use first available habitat
+      try {
+        const dirs = await fs.readdir(habitatsDir);
+        for (const dir of dirs) {
+          const configPath = path.join(habitatsDir, dir, 'config.yaml');
+          if (await fileExists(configPath)) {
+            options.configPath = configPath;
+            console.log(`Starting: ${dir}\n`);
+            break;
+          }
+        }
+        if (!options.configPath) {
+          console.error(colors.red('No habitats available'));
+          process.exit(1);
+        }
+      } catch {
+        console.error(colors.red('No configurations available'));
+        process.exit(1);
+      }
+    }
+  }
+
+  // Launch the habitat
+  if (options.configPath) {
+    await runHabitat(options.configPath, options.extraRepos, options.overrideCommand);
+  }
+}
+
+// ============================================================================
+// MODULE ENTRY POINT
+// ============================================================================
 
 // Run if called directly
 if (require.main === module) {
@@ -991,4 +266,10 @@ if (require.main === module) {
   });
 }
 
-module.exports = { loadConfig, calculateCacheHash, parseRepoSpec, startSession, runHabitat: startSession };
+// Export key functions for programmatic use
+module.exports = { 
+  main,
+  // Re-export core functions for backward compatibility
+  loadConfig: loadHabitatEnvironmentFromConfig,
+  runHabitat
+};

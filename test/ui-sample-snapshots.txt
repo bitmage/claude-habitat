@@ -13,12 +13,15 @@ Checking system status...
 
 === Claude Habitat ===
 
+⚠️  Setup incomplete (2/3 steps done)
+   [i] Complete initialization
+
 Habitats:
 
   [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat [s]tart (most recent)
+  [2] claude-habitat
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -26,6 +29,7 @@ Habitats:
 
 Actions:
 
+  [i]nitialize - Set up authentication and verify system
   [a]dd     - Create new configuration with AI assistance
   [t]est    - Run tests (system, shared, or habitat)
   t[o]ols   - Manage development tools
@@ -48,12 +52,15 @@ Checking system status...
 
 === Claude Habitat ===
 
+⚠️  Setup incomplete (2/3 steps done)
+   [i] Complete initialization
+
 Habitats:
 
   [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat [s]tart (most recent)
+  [2] claude-habitat
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -61,6 +68,7 @@ Habitats:
 
 Actions:
 
+  [i]nitialize - Set up authentication and verify system
   [a]dd     - Create new configuration with AI assistance
   [t]est    - Run tests (system, shared, or habitat)
   t[o]ols   - Manage development tools
@@ -84,12 +92,15 @@ Checking system status...
 
 === Claude Habitat ===
 
+⚠️  Setup incomplete (2/3 steps done)
+   [i] Complete initialization
+
 Habitats:
 
   [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat [s]tart (most recent)
+  [2] claude-habitat
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -97,6 +108,7 @@ Habitats:
 
 Actions:
 
+  [i]nitialize - Set up authentication and verify system
   [a]dd     - Create new configuration with AI assistance
   [t]est    - Run tests (system, shared, or habitat)
   t[o]ols   - Manage development tools
@@ -135,19 +147,22 @@ Enter your choice: q
 Sequence: t1s
 Description: Test > Base > System tests
 Expected: Navigate to test menu, select base habitat (1), then run system infrastructure tests
-Status: completed
-Exit Code: 0
+Status: error
+Exit Code: 1
 ------------------------------------------------------------
 Checking system status...
 
 === Claude Habitat ===
+
+⚠️  Setup incomplete (2/3 steps done)
+   [i] Complete initialization
 
 Habitats:
 
   [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat [s]tart (most recent)
+  [2] claude-habitat
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -155,6 +170,7 @@ Habitats:
 
 Actions:
 
+  [i]nitialize - Set up authentication and verify system
   [a]dd     - Create new configuration with AI assistance
   [t]est    - Run tests (system, shared, or habitat)
   t[o]ols   - Manage development tools
@@ -202,13 +218,7 @@ Enter your choice: s
 
 Running system tests for base...
 
-
-✅ system tests completed successfully
-
-Press Enter to return to main menu...
-q
-
-[Sequence ended, scene still active]
+ERROR: Fatal error: Sequence timed out after 30 seconds
 
 ============================================================
 Sequence: xyz
@@ -221,12 +231,15 @@ Checking system status...
 
 === Claude Habitat ===
 
+⚠️  Setup incomplete (2/3 steps done)
+   [i] Complete initialization
+
 Habitats:
 
   [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat [s]tart (most recent)
+  [2] claude-habitat
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -234,6 +247,7 @@ Habitats:
 
 Actions:
 
+  [i]nitialize - Set up authentication and verify system
   [a]dd     - Create new configuration with AI assistance
   [t]est    - Run tests (system, shared, or habitat)
   t[o]ols   - Manage development tools
@@ -252,12 +266,15 @@ Checking system status...
 
 === Claude Habitat ===
 
+⚠️  Setup incomplete (2/3 steps done)
+   [i] Complete initialization
+
 Habitats:
 
   [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat [s]tart (most recent)
+  [2] claude-habitat
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -265,6 +282,7 @@ Habitats:
 
 Actions:
 
+  [i]nitialize - Set up authentication and verify system
   [a]dd     - Create new configuration with AI assistance
   [t]est    - Run tests (system, shared, or habitat)
   t[o]ols   - Manage development tools
@@ -283,12 +301,15 @@ Checking system status...
 
 === Claude Habitat ===
 
+⚠️  Setup incomplete (2/3 steps done)
+   [i] Complete initialization
+
 Habitats:
 
   [1] base
       Minimal base habitat for testing system and shared components
 
-  [2] claude-habitat [s]tart (most recent)
+  [2] claude-habitat
       Development environment for Claude Habitat itself
 
   [3] discourse
@@ -296,6 +317,7 @@ Habitats:
 
 Actions:
 
+  [i]nitialize - Set up authentication and verify system
   [a]dd     - Create new configuration with AI assistance
   [t]est    - Run tests (system, shared, or habitat)
   t[o]ols   - Manage development tools

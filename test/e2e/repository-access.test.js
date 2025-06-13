@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Integration Test: Repository Access Pre-flight Check
+ * @fileoverview E2E tests for repository access verification and pre-flight checks
+ * @description Tests repository access checking functionality and system tools infrastructure
  * 
- * Tests the repository access checking functionality as experienced by users,
- * including the system tools infrastructure that should be used instead of host tools.
+ * These integration tests verify the repository access checking functionality as experienced
+ * by users, including the system tools infrastructure that should be used instead of host tools.
+ * Tests cover GitHub repository parsing, authentication, and comprehensive access verification.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/repository-access.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: Repository access verification and system tools integration
  */
 
 const assert = require('assert');

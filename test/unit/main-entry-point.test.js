@@ -1,3 +1,17 @@
+/**
+ * @fileoverview Unit tests for main application entry point
+ * @description Tests that the main claude-habitat.js entry point loads without crashing
+ * and responds correctly to command line arguments like --help.
+ * 
+ * Validates the application startup process, help system functionality, and ensures
+ * the main entry point can handle various invocation patterns without errors.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/main-entry-point.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:claude-habitat} - Main application entry point and CLI interface
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { spawn } = require('child_process');

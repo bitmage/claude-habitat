@@ -1,6 +1,24 @@
+/**
+ * @module scenes/test-menu.scene
+ * @description Test menu scene for habitat testing workflows
+ * 
+ * Displays available habitats for testing with options for different
+ * test types. Provides navigation to test execution and result viewing.
+ * Implements the testing philosophy of product-focused validation.
+ * 
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * @requires module:standards/testing - Testing approach and conventions
+ * @requires module:standards/path-resolution - Path handling conventions
+ * 
+ * @tests
+ * - E2E tests: `npm run test:e2e -- test/e2e/ui-verification.test.js`
+ * - UI tests: `npm run test:ui`
+ */
+
 const fs = require('fs').promises;
 const path = require('path');
 const yaml = require('js-yaml');
+// @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, fileExists } = require('../utils');
 
 /**

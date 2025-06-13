@@ -1,6 +1,16 @@
 /**
- * Unit tests for habitat detection and path resolution
- * Ensures we don't regress on the path issues that broke habitat detection
+ * @fileoverview Unit tests for habitat detection and path resolution
+ * @description Tests the habitat detection system and path resolution utilities
+ * to ensure we don't regress on the path issues that broke habitat detection.
+ * 
+ * Validates the rel() function for creating correct paths relative to project root,
+ * file existence checking, and proper habitat path resolution across different
+ * directory structures.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/habitat-detection.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:utils} - Utilities for path resolution and file existence checking
  */
 
 const test = require('node:test');

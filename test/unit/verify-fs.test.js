@@ -1,3 +1,18 @@
+/**
+ * @fileoverview Unit tests for filesystem verification script
+ * @description Tests the verify-fs bash script that checks for required files and
+ * directories within habitat containers, ensuring it exists, is executable, and
+ * has proper structure for filesystem verification operations.
+ * 
+ * Validates script existence, executable permissions, proper shebang, and
+ * support for help functionality to ensure reliable filesystem verification.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/verify-fs.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:verify-fs} - Bash script for filesystem verification in containers
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs').promises;

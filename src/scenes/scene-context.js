@@ -1,3 +1,18 @@
+/**
+ * @module scenes/scene-context
+ * @description Scene execution context for Claude Habitat UI system
+ * 
+ * Provides the context object that scenes use for input/output operations.
+ * Handles both interactive mode (real user input) and test mode (simulated
+ * input sequences) with consistent interface.
+ * 
+ * @requires module:standards/ui-architecture - Scene-based UI patterns
+ * 
+ * @tests
+ * - UI tests: `npm run test:ui`
+ * - Context behavior tested through all scene interactions
+ */
+
 const readline = require('readline');
 const { colors } = require('../utils');
 

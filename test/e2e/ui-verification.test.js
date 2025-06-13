@@ -1,3 +1,17 @@
+/**
+ * @fileoverview E2E tests for UI testing methodology and gap analysis
+ * @description Documents UI testing limitations and demonstrates proper UI testing requirements
+ * 
+ * These tests serve as documentation for the current state of UI testing and highlight
+ * the gaps that need to be addressed. They demonstrate what proper UI testing should cover
+ * including menu interactivity, navigation, error handling, and visual rendering verification.
+ * 
+ * @tests
+ * - Run these tests: `npm run test:e2e -- test/e2e/ui-verification.test.js`
+ * - Run all E2E tests: `npm run test:e2e`
+ * - Test module: UI testing methodology and requirement documentation
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { spawn } = require('child_process');

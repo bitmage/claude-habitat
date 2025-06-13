@@ -1,3 +1,19 @@
+/**
+ * @fileoverview Unit tests for habitat path helper utilities
+ * @description Tests the path resolution system for habitat containers including
+ * infrastructure paths, container path normalization, and working directory
+ * resolution across different habitat configurations.
+ * 
+ * Validates both normal habitat configurations and bypass configurations,
+ * ensuring proper path resolution for workspace directories, habitat paths,
+ * and system/shared/local directory structures.
+ * 
+ * @tests
+ * - Run these tests: `npm test -- test/unit/path-helpers.test.js`
+ * - Run all unit tests: `npm test`
+ * - Test module: {@link module:habitat-path-helpers} - Path resolution utilities for habitat containers
+ */
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { 
@@ -8,7 +24,7 @@ const {
   joinContainerPath,
   getWorkDir,
   getHabitatPath
-} = require('../../src/path-helpers');
+} = require('../../src/habitat-path-helpers');
 
 // Mock habitat configurations for testing
 const normalHabitatConfig = {
