@@ -3,11 +3,11 @@
 ## Overview
 This plan implements domain-specific improvements that add unique value, updated based on RxJS decision:
 - ~~Functional composition utilities~~ **REPLACED: Use RxJS operators instead**
-- Declarative test framework with automatic setup/teardown  
+- Declarative test framework with automatic setup/teardown
 - Configuration validation as data (JSON Schema with terse helpers)
 - RxJS integration utilities for claude-habitat domain
 
-**Recent Progress**: Path resolution and environment variable handling have been significantly improved with `HabitatPathHelpers` and `createHabitatPathHelpers()` (commits c8968cf, 1326220). 
+**Recent Progress**: Path resolution and environment variable handling have been significantly improved with `HabitatPathHelpers` and `createHabitatPathHelpers()` (commits c8968cf, 1326220).
 
 **Architecture Decision**: Using RxJS for reactive patterns eliminates need for custom functional utilities. Focus on domain-specific abstractions.
 
@@ -49,10 +49,10 @@ const requireProps = (requiredProps) => (source$) =>
 /**
  * Emit progress events for pipeline stages
  */
-const tapProgress = (stageName, progressEmitter) => 
-  tap(result => progressEmitter.next({ 
-    stage: stageName, 
-    status: 'completed', 
+const tapProgress = (stageName, progressEmitter) =>
+  tap(result => progressEmitter.next({
+    stage: stageName,
+    status: 'completed',
     result,
     timestamp: Date.now()
   }));
@@ -62,11 +62,11 @@ const tapProgress = (stageName, progressEmitter) =>
  */
 const stageOperator = (name, progressEmitter, options = {}) => (source$) => {
   const startTime = Date.now();
-  
-  progressEmitter.next({ 
-    stage: name, 
-    status: 'started', 
-    timestamp: startTime 
+
+  progressEmitter.next({
+    stage: name,
+    status: 'started',
+    timestamp: startTime
   });
 
   const operators = [
@@ -75,9 +75,9 @@ const stageOperator = (name, progressEmitter, options = {}) => (source$) => {
     tapProgress(name, progressEmitter),
     finalize(() => {
       const duration = Date.now() - startTime;
-      progressEmitter.next({ 
-        stage: name, 
-        status: 'finished', 
+      progressEmitter.next({
+        stage: name,
+        status: 'finished',
         duration,
         timestamp: Date.now()
       });
@@ -92,8 +92,8 @@ const stageOperator = (name, progressEmitter, options = {}) => (source$) => {
  */
 const conditionalMap = (predicate, onTrue, onFalse = map(x => x)) => (source$) =>
   source$.pipe(
-    mergeMap(ctx => predicate(ctx) ? 
-      from([ctx]).pipe(onTrue) : 
+    mergeMap(ctx => predicate(ctx) ?
+      from([ctx]).pipe(onTrue) :
       from([ctx]).pipe(onFalse)
     )
   );
@@ -107,8 +107,8 @@ const dockerOperation = (operation, progressEmitter) => (source$) =>
     catchError(error => {
       // Habitat-specific error handling
       if (error.message.includes('docker')) {
-        progressEmitter.next({ 
-          type: 'docker-error', 
+        progressEmitter.next({
+          type: 'docker-error',
           error: error.message,
           suggestion: 'Check Docker daemon is running and accessible'
         });
@@ -223,10 +223,10 @@ function validateConfigWithProgress(config, progressEmitter) {
     map(validateConfig),
     tap(result => {
       if (!result.valid) {
-        progressEmitter.next({ 
-          type: 'validation-error', 
+        progressEmitter.next({
+          type: 'validation-error',
           errors: result.formattedErrors,
-          suggestions: result.suggestions 
+          suggestions: result.suggestions
         });
         throw new Error(`Config validation failed: ${result.errors.join(', ')}`);
       }

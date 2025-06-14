@@ -29,9 +29,12 @@ RUN npm install -g @anthropic-ai/claude-code
 # Use existing node user (UID 1000) and give it sudo access
 RUN echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# Create docker group with detected host GID and add node user
-RUN groupadd -g ${DOCKER_GROUP_GID} docker && \
-    usermod -aG docker node
+# Add node user to docker group (create group if it doesn't exist)
+# Use || true to continue even if group operations fail
+RUN (getent group docker >/dev/null 2>&1 && echo "Docker group exists") || \
+    (groupadd -g ${DOCKER_GROUP_GID} docker && echo "Created docker group") && \
+    (usermod -aG docker node && echo "Added node to docker group") || \
+    echo "Warning: Could not add node to docker group, will run without Docker access"
 
 # Create workspace directory structure with proper permissions
 RUN mkdir -p /workspace && \
@@ -40,13 +43,11 @@ RUN mkdir -p /workspace && \
     chown -R node:node /home/node/.claude && \
     chmod 755 /home/node/.claude
 
-# Copy habitat initialization script
-COPY habitat-init.sh /usr/local/bin/habitat-init
-RUN chmod +x /usr/local/bin/habitat-init
+# No initialization script needed - handled by lifecycle hooks
 
 USER node
 WORKDIR /workspace
 
-# Clear any inherited entrypoint and use our init script
+# Clear any inherited entrypoint
 ENTRYPOINT []
-CMD ["/usr/local/bin/habitat-init"]
+CMD ["/bin/bash"]

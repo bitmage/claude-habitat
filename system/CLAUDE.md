@@ -187,8 +187,8 @@ fd ".*\.(rb|js|py)$" --exec wc -l | sort -nr > ./habitat/scratch/file-sizes.txt
 1. **Orient yourself**: `pwd`, `ls -la`, `git status`
 2. **Understand the project**: Find README, check package.json/Gemfile
 3. **Run tests**: Find and execute the test suite
-4. **Check helper files**: Explore `./habitat/shared/`
-5. **Create scratch space**: `mkdir -p ./habitat/scratch`
+4. **Check helper files**: Explore `/habitat/shared/`
+5. **Create scratch space**: `mkdir -p /habitat/scratch`
 6. **Plan your work**: Document your approach in scratch notes
 
 ## Need Help?

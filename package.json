@@ -26,7 +26,8 @@
   "author": "Brandon Mason",
   "license": "MIT",
   "dependencies": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "rxjs": "^7.8.2"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -66,7 +66,7 @@
  * shared/ - User Preferences  
  * - Audience: "Habitat" Claude (configured by user)
  * - Content: Personal configs, SSH keys, user tools, personal "Habitat" Claude preferences
- * - Container: Copied to /workspace/claude-habitat/shared/
+ * - Container: Copied to /habitat/shared/
  * - Implementation: User configuration loading in src/config.js
  * 
  * habitats/ - Project Environments
@@ -440,8 +440,8 @@ class ToolSet {
     this.systemTools = toolConfigs.system || [];
     this.sharedTools = toolConfigs.shared || [];
     this.habitatTools = toolConfigs.habitat || [];
-    this.systemToolsPath = '/workspace/claude-habitat/system/tools/bin';
-    this.userToolsPath = '/workspace/claude-habitat/shared/tools/bin';
+    this.systemToolsPath = '/habitat/system/tools/bin';
+    this.userToolsPath = '/habitat/shared/tools/bin';
   }
 
   /**

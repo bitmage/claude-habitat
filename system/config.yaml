@@ -6,10 +6,9 @@ description: Core infrastructure setup for all claude-habitat containers
 env:
   - USER=root
   - WORKDIR=/workspace
-  - HABITAT_PATH=${WORKDIR}/habitat
-  - SYSTEM_PATH=${HABITAT_PATH}/system
-  - SHARED_PATH=${HABITAT_PATH}/shared
-  - LOCAL_PATH=${HABITAT_PATH}/local
+  - SYSTEM_PATH=/habitat/system
+  - SHARED_PATH=/habitat/shared
+  - LOCAL_PATH=/habitat/local
   - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
   - PATH=${PATH}:${SYSTEM_TOOLS_PATH}
 
@@ -28,12 +27,16 @@ tests:
 
 # System-level file operations
 files:
-  # Copy Claude credentials from host to container during build
-  - src: ~/.claude/.credentials.json
-    dest: ~/.claude/.credentials.json
-    mode: 600
+  # Copy Claude directory to root for Claude to find
+  - src: ~/.claude
+    dest: /.claude
     owner: "{env.USER}"
-    description: "Claude credentials for authentication"
+    description: "Claude configuration and credentials"
+  # Copy system CLAUDE.md to root
+  - src: ./system/CLAUDE.md
+    dest: /CLAUDE.md
+    mode: 644
+    description: "Claude instructions at root"
   # Future examples:
   # - src: bashrc-additions
   #   dest: /etc/bash.bashrc.d/claude-habitat
@@ -41,22 +44,30 @@ files:
   #   description: "System bash configuration additions"
 
 # System setup commands
-setup:
-  root:
-    - |
-      # System-wide configuration
-      echo "Claude Habitat system setup complete"
+scripts:
+  - run_as: root
+    commands:
+      - |
+        # Create /habitat directory structure
+        echo "Creating /habitat directory structure..."
+        mkdir -p /habitat
+        chown ${USER}:${USER} /habitat
+        chmod 755 /habitat
+  - run_as: root
+    commands:
+      - |
+        # System-wide configuration
+        echo "Claude Habitat system setup complete"
 
-      # Ensure profile.d directory exists for future use
-      mkdir -p /etc/profile.d
+        # Ensure profile.d directory exists for future use
+        mkdir -p /etc/profile.d
 
-      # Set timezone if not already set
-      if [ ! -f /etc/timezone ]; then
-        echo "UTC" > /etc/timezone
-      fi
+        # Set timezone if not already set
+        if [ ! -f /etc/timezone ]; then
+          echo "UTC" > /etc/timezone
+        fi
 
-  user:
-    run_as: "{env.USER}"
+  - run_as: "{env.USER}"
     commands:
       - |
         # Set up GitHub App authentication using tools
@@ -76,5 +87,6 @@ verify-fs:
     - "${SYSTEM_PATH}/tools/install-tools.sh"
     - "${SYSTEM_PATH}/tools/regenerate-github-token.sh"
     - "${SYSTEM_PATH}/tools/tools.yaml"
-    # Claude credentials (copied from host during build)
-    - ~/.claude/.credentials.json
+    # Claude files at root
+    - /.claude
+    - /CLAUDE.md

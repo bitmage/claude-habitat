@@ -7,23 +7,18 @@ set -e
 echo "🔄 Regenerating GitHub App token..."
 
 # Find the most recent PEM file by timestamp in filename
-# Use CLAUDE_HABITAT_WORKDIR environment variable to find PEM files
-if [ -n "$CLAUDE_HABITAT_WORKDIR" ] && [ -d "$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" ]; then
-    pem_file=$(find "$CLAUDE_HABITAT_WORKDIR/claude-habitat/shared" -name "*.pem" -type f | sort -r | head -1)
+# Use SHARED_PATH environment variable or default to /habitat/shared
+SHARED_PATH=${SHARED_PATH:-/habitat/shared}
+
+if [ -d "$SHARED_PATH" ]; then
+    pem_file=$(find "$SHARED_PATH" -name "*.pem" -type f | sort -r | head -1)
 else
-    # Fallback: try multiple possible locations
-    for shared_path in "/src/claude-habitat/shared" "/claude-habitat/shared" "$(pwd)/claude-habitat/shared"; do
-        if [ -d "$shared_path" ]; then
-            pem_file=$(find "$shared_path" -name "*.pem" -type f | sort -r | head -1)
-            if [ -n "$pem_file" ]; then
-                break
-            fi
-        fi
-    done
+    echo "❌ Shared directory not found at $SHARED_PATH"
+    exit 1
 fi
 
 if [ ! -f "$pem_file" ]; then
-    echo "❌ No PEM file found in /claude-habitat/shared"
+    echo "❌ No PEM file found in $SHARED_PATH"
     exit 1
 fi
 

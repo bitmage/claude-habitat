@@ -464,20 +464,24 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       let testPath;
       if (testType === 'habitat') {
         // For bypass habitats (like claude-habitat), tests are in habitats/{name}/tests/
-        // For normal habitats, tests are in habitat/local/tests/
+        // For normal habitats, tests are in /habitat/local/tests/
         const isBypassHabitat = habitatConfig?.claude?.bypass_habitat_construction || false;
+        const localPath = compiledEnv.LOCAL_PATH || '/habitat/local';
         testPath = isBypassHabitat 
           ? `${workDir}/habitats/${habitatConfig.name}/${testScript}`
-          : `${workDir}/habitat/local/${testScript}`;
+          : `${localPath}/${testScript}`;
       } else {
         // System/shared tests - check for bypass habitat to use correct path
         const isBypassHabitat = habitatConfig?.claude?.bypass_habitat_construction || false;
         if (isBypassHabitat) {
-          // For bypass habitats, tests are not copied to habitat/ structure
+          // For bypass habitats, tests are not copied to /habitat structure
           testPath = `${workDir}/${testType}/${testScript}`;
         } else {
-          // For normal habitats, tests are in habitat/ structure
-          testPath = `${workDir}/habitat/${testType}/${testScript}`;
+          // For normal habitats, tests are in /habitat structure
+          const basePath = testType === 'system' 
+            ? (compiledEnv.SYSTEM_PATH || '/habitat/system')
+            : (compiledEnv.SHARED_PATH || '/habitat/shared');
+          testPath = `${basePath}/${testScript}`;
         }
       }
 
@@ -492,6 +496,13 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       `;
     }).join('\n');
 
+    // Get compiled environment variables from path helpers
+    const compiledEnv = pathHelpers.getEnvironment();
+    const systemPath = compiledEnv.SYSTEM_PATH || '/habitat/system';
+    const sharedPath = compiledEnv.SHARED_PATH || '/habitat/shared';
+    const systemToolsPath = compiledEnv.SYSTEM_TOOLS_PATH || `${systemPath}/tools/bin`;
+    const envPath = compiledEnv.PATH || `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${systemToolsPath}`;
+
     // Execute tests inside the properly configured container
     const testScript = `#!/bin/bash
 set -e
@@ -499,11 +510,10 @@ set -e
 # Set up environment variables (matching the habitat environment)
 export USER="${containerUser}"
 export WORKDIR="${workDir}"
-export SHARED_PATH="/workspace/habitat/shared"
-export SHARED_TOOLS_PATH="/workspace/habitat/system/tools/bin"
-
-# Fix PATH by preserving system paths and adding habitat tools
-export PATH="/workspace/habitat/system/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export SYSTEM_PATH="${systemPath}"
+export SHARED_PATH="${sharedPath}"
+export SYSTEM_TOOLS_PATH="${systemToolsPath}"
+export PATH="${envPath}"
 
 ${testCommands}
 echo "All tests completed"

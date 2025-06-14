@@ -174,6 +174,7 @@ PSEUDOCODE FOR COMPARISON ALGORITHM
   tag = <phase>.hash = <hash>
 ```
 
+```
 // Examples:
 // Changed repos section → repo hash differs → rebuild from repos phase onward
 // Changed env section → env hash differs → rebuild from env phase onward

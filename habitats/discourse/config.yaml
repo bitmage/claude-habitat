@@ -14,10 +14,9 @@ image:
 env:
   - USER=discourse
   - WORKDIR=/discourse
-  - HABITAT_PATH=${WORKDIR}/habitat
-  - SYSTEM_PATH=${HABITAT_PATH}/system
-  - SHARED_PATH=${HABITAT_PATH}/shared
-  - LOCAL_PATH=${HABITAT_PATH}/local
+  - SYSTEM_PATH=/habitat/system
+  - SHARED_PATH=/habitat/shared
+  - LOCAL_PATH=/habitat/local
   - RAILS_ENV=test
   - RUBY_GLOBAL_METHOD_CACHE_SIZE=131072
   - LD_PRELOAD=/usr/lib/libjemalloc.so
@@ -27,7 +26,7 @@ env:
   # GitHub App authentication
   - GITHUB_APP_ID=1357221
   - GITHUB_APP_NAME=Behold the power of Claude
-  - GITHUB_APP_PRIVATE_KEY_FILE=../shared/behold-the-power-of-claude.2025-06-04.private-key.pem
+  - GITHUB_APP_PRIVATE_KEY_FILE=/habitat/shared/behold-the-power-of-claude.2025-06-04.private-key.pem
 
 # Git repositories to clone
 repositories:
@@ -51,9 +50,18 @@ repositories:
     access: write # (default) - Active development with PRs
 
 # Setup commands
-setup:
-  root:
-    - |
+scripts:
+  - run_as: root
+    commands:
+      - |
+        # Create /habitat directory structure
+        echo "Creating /habitat directory structure..."
+        mkdir -p /habitat
+        chown discourse:discourse /habitat
+        chmod 755 /habitat
+  - run_as: root
+    commands:
+      - |
       # Wait for PostgreSQL
       echo "Waiting for PostgreSQL to be ready..."
       timeout 30 bash -c "while ! pg_isready -U postgres -q; do sleep 1; done"
@@ -71,8 +79,7 @@ setup:
         chmod +x /etc/profile.d/github-app.sh
       fi
 
-  user:
-    run_as: discourse
+  - run_as: discourse
     commands:
       - |
         cd /discourse
@@ -95,20 +102,18 @@ verify-fs:
   required_files:
     # Main discourse source files at project root
     - "{env.WORKDIR}/.git/config"
-    - "{env.WORKDIR}/CLAUDE.md"
     - "{env.WORKDIR}/Gemfile"
     - "{env.WORKDIR}/package.json"
     - "{env.WORKDIR}/bin/rails"
     - "{env.WORKDIR}/app/controllers/application_controller.rb"
     - "{env.WORKDIR}/plugins/county-fence"
     - "{env.WORKDIR}/plugins/discourse-calendar"
-    # Infrastructure files in claude-habitat subdirectory
-    - "{env.HABITAT_PATH}/system/CLAUDE.md"
-    - "{env.HABITAT_PATH}/system/tools/tools.yaml"
-    - "{env.HABITAT_PATH}/shared/CLAUDE.md"
-    - "{env.HABITAT_PATH}/shared/config.yaml"
-    - "{env.HABITAT_PATH}/local/CLAUDE.md"
-    - "{env.HABITAT_PATH}/local/config.yaml"
+    # Infrastructure files in /habitat directories
+    - "{env.SYSTEM_PATH}/config.yaml"
+    - "{env.SYSTEM_PATH}/tools/tools.yaml"
+    - "{env.SHARED_PATH}/config.yaml"
+    - "{env.LOCAL_PATH}/config.yaml"
+    # Note: CLAUDE.md files are excluded by .habignore but will be at /CLAUDE.md
 
 # Claude configuration
 claude:

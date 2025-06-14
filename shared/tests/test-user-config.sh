@@ -71,13 +71,14 @@ else
 fi
 
 # Test shared directory structure
-tap_has_dir "/claude-habitat/shared" "Shared directory is accessible"
+SHARED_PATH=${SHARED_PATH:-/habitat/shared}
+tap_has_dir "$SHARED_PATH" "Shared directory is accessible"
 
 # Test CLAUDE.md instructions are available
-if [ -f "/claude-habitat/shared/CLAUDE.md" ] || [ -f "CLAUDE.md" ]; then
+if [ -f "/CLAUDE.md" ] || [ -f "CLAUDE.md" ]; then
     tap_ok "Claude instructions are available"
 else
-    tap_not_ok "Claude instructions are available" "CLAUDE.md not found in work dir or shared"
+    tap_not_ok "Claude instructions are available" "CLAUDE.md not found at root or work dir"
 fi
 
 tap_diag "User configuration test completed"

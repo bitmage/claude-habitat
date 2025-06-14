@@ -10,6 +10,7 @@ tests:
 env:
   - USER=root
   - WORKDIR=/workspace
+  - SHARED_PATH=/habitat/shared
   - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - PATH=${PATH}:${SHARED_TOOLS_PATH}
   - GITHUB_APP_ID=1357221
@@ -37,13 +38,12 @@ files:
   #   description: "User command aliases"
 
 # Setup commands that run after file operations
-setup:
-  user:
-    run_as: "{env.USER}"
+scripts:
+  - run_as: "{env.USER}"
     commands:
       - |
         # Configure git for container user using centralized script
-        "/workspace/habitat/system/tools/bin/install-gitconfig"
+        "/habitat/system/tools/bin/install-gitconfig"
 
 # Filesystem verification - verify shared/user files are properly configured
 verify-fs:
@@ -52,6 +52,6 @@ verify-fs:
     - /etc/gitconfig
     - /root/.gitconfig
     # Infrastructure files
-    - "${SHARED_PATH}/CLAUDE.md"
     - "${SHARED_PATH}/config.yaml"
     - "${SHARED_PATH}/gitconfig"
+    # Note: CLAUDE.md files are excluded by .habignore

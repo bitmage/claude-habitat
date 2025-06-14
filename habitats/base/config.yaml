@@ -13,6 +13,9 @@ repositories: []
 env:
   - USER=root
   - WORKDIR=/workspace
+  - SYSTEM_PATH=/habitat/system
+  - SHARED_PATH=/habitat/shared
+  - LOCAL_PATH=/habitat/local
 
 # No additional setup needed
 setup: {}

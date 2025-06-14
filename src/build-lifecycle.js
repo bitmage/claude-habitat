@@ -1,0 +1,567 @@
+/**
+ * @module build-lifecycle
+ * @description 12-phase build lifecycle for habitat containers with progressive snapshots
+ * 
+ * Implements a standardized build pipeline that breaks complex container preparation
+ * into discrete phases. Each phase creates a snapshot for intelligent caching and
+ * enables selective rebuilds when only specific configuration sections change.
+ * 
+ * @requires module:event-pipeline - Pipeline framework
+ * @requires module:snapshot-manager - Snapshot creation and management
+ * @requires module:phase-hash - Phase-based hash calculation
+ * @requires module:container-operations - Docker operations
+ * @requires module:image-lifecycle - Existing build functions
+ * @see {@link claude-habitat.js} - System composition and architectural overview
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/build-lifecycle.test.js`
+ * - E2E tests: `npm run test:e2e -- test/e2e/progressive-builds.test.js`
+ * - Run all tests: `npm test`
+ */
+
+const fs = require('fs').promises;
+const path = require('path');
+const { EventPipeline } = require('./event-pipeline');
+const { createSnapshot, findValidSnapshot } = require('./snapshot-manager');
+const { calculateAllPhaseHashes, createPhaseLabels } = require('./phase-hash');
+const { execDockerCommand, dockerRun, dockerExec, startTempContainer, execDockerBuild } = require('./container-operations');
+const { buildBaseImage, runSetupCommands, cloneRepository, copyDirectoryToContainer, copyConfigFiles } = require('./image-lifecycle');
+const { fileExists, rel, createWorkDirPath } = require('./utils');
+const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
+
+/**
+ * Standard build phases for all habitat builds
+ * 
+ * These phases run in dependency order and create snapshots at each step.
+ * Phases 10-11 (verify, test) don't create snapshots as they're validation-only.
+ */
+const BUILD_PHASES = [
+  { id: '1', name: 'base', description: 'Set base image' },
+  { id: '2', name: 'users', description: 'Create users and set permissions' },
+  { id: '3', name: 'env', description: 'Set environment variables' },
+  { id: '4', name: 'workdir', description: 'Create project work directory' },
+  { id: '5', name: 'habitat', description: 'Create habitat directory structure' },
+  { id: '6', name: 'files', description: 'Copy files and mount volumes' },
+  { id: '7', name: 'scripts', description: 'Run user-defined scripts' },
+  { id: '8', name: 'repos', description: 'Clone repositories' },
+  { id: '9', name: 'tools', description: 'Install habitat tools' },
+  { id: '10', name: 'verify', description: 'Verify filesystem and permissions' },
+  { id: '11', name: 'test', description: 'Run habitat tests' },
+  { id: '12', name: 'final', description: 'Set final configuration and command' }
+];
+
+/**
+ * Create a progressive build pipeline for a habitat
+ * 
+ * @param {string} habitatConfigPath - Path to habitat config.yaml
+ * @param {Object} options - Build options
+ * @param {boolean} options.rebuild - Force rebuild from beginning
+ * @param {string|number} options.rebuildFrom - Phase to rebuild from
+ * @param {Array} options.extraRepos - Additional repositories to clone
+ * @returns {Promise<EventPipeline>} - Configured build pipeline
+ */
+async function createBuildPipeline(habitatConfigPath, options = {}) {
+  const { rebuild = false, rebuildFrom = null, extraRepos = [] } = options;
+  
+  // Load the coalesced configuration
+  const config = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
+  const habitatName = config.name;
+  
+  // Calculate current phase hashes for standard phases
+  const phaseNames = BUILD_PHASES.map(p => p.name);
+  
+  // Check if Dockerfile exists for phase 1 logic
+  const habitatDir = path.dirname(habitatConfigPath);
+  const dockerfilePath = path.join(habitatDir, 'Dockerfile');
+  const hasDockerfile = await fileExists(dockerfilePath);
+  
+  // Calculate hashes for all phases (no separate dockerfile phase anymore)
+  const currentHashes = await calculateAllPhaseHashes(habitatConfigPath, phaseNames);
+  
+  // Find valid snapshot to start from (unless forcing full rebuild)
+  let startFromPhase = 0;
+  let baseImageTag = null;
+  
+  if (!rebuild) {
+    const validSnapshot = await findValidSnapshot(habitatName, currentHashes, BUILD_PHASES);
+    if (validSnapshot) {
+      startFromPhase = validSnapshot.startFromPhase;
+      baseImageTag = validSnapshot.snapshotTag;
+      console.log(`✅ Using cached snapshot: ${validSnapshot.snapshotTag} (skipping ${startFromPhase} phases)`);
+    }
+  }
+  
+  // Handle rebuild from specific phase
+  if (rebuildFrom !== null) {
+    const rebuildPhaseIndex = findPhaseIndex(rebuildFrom);
+    if (rebuildPhaseIndex !== -1) {
+      startFromPhase = rebuildPhaseIndex;
+      console.log(`🔄 Rebuilding from phase ${rebuildFrom}`);
+    }
+  }
+  
+  // Create the pipeline
+  const pipeline = new EventPipeline(`habitat-${habitatName}`);
+  
+  // Add phases to pipeline
+  let phaseIndex = 0;
+  
+  // Standard phases
+  for (const phase of BUILD_PHASES) {
+    if (phaseIndex >= startFromPhase) {
+      const noSnapshot = phase.name === 'verify' || phase.name === 'test';
+      
+      pipeline.stage(`${phase.id}-${phase.name}`, async (ctx) => {
+        // Pass hasDockerfile info to phase 1 (base)
+        if (phase.name === 'base') {
+          return await executePhase(phase.name, { ...ctx, hasDockerfile, habitatDir });
+        }
+        return await executePhase(phase.name, ctx);
+      }, { noSnapshot });
+      
+      // Add snapshot creation for phases that need it
+      if (!noSnapshot) {
+        pipeline.stage(`snapshot-${phase.name}`, async (ctx) => {
+          const snapshotTag = `habitat-${habitatName}:${phase.id}-${phase.name}`;
+          const phaseHashes = currentHashes; // Use pre-calculated hashes
+          const labels = createPhaseLabels(phaseHashes, 'pass');
+          
+          await createSnapshot(ctx.containerId, snapshotTag, { labels });
+          
+          ctx.progressSubject?.next({
+            type: 'snapshot-created',
+            tag: snapshotTag,
+            phase: phase.name,
+            timestamp: Date.now()
+          });
+          
+          return ctx;
+        }, { noSnapshot: true });
+      }
+    }
+    phaseIndex++;
+  }
+  
+  // Store context information for the pipeline
+  pipeline._context = {
+    habitatName,
+    currentHashes,
+    startFromPhase,
+    baseImageTag
+  };
+  
+  return pipeline;
+}
+
+
+/**
+ * Phase handler implementations
+ */
+const PHASE_HANDLERS = {
+  base: async (ctx) => {
+    const config = ctx.config;
+    
+    if (ctx.hasDockerfile) {
+      // Build from Dockerfile in habitat directory
+      const dockerfilePath = path.join(ctx.habitatDir, 'Dockerfile');
+      const tempTag = `temp-dockerfile-${Date.now()}`;
+      
+      await execDockerBuild(['build', '-f', dockerfilePath, '-t', tempTag, ctx.habitatDir]);
+      const containerId = await startTempContainer(tempTag);
+      
+      return { ...ctx, containerId, baseImageTag: tempTag, fromDockerfile: true };
+    } else if (config.base_image) {
+      const containerId = await startTempContainer(config.base_image);
+      return { ...ctx, containerId, baseImageTag: config.base_image };
+    } else {
+      const baseTag = await buildBaseImage(config, { rebuild: ctx.rebuild });
+      const containerId = await startTempContainer(baseTag);
+      return { ...ctx, containerId, baseImageTag: baseTag };
+    }
+  },
+
+  users: async (ctx) => {
+    const env = ctx.config._environment || {};
+    const user = env.USER || 'root';
+    
+    if (user !== 'root') {
+      await dockerExec(ctx.containerId, `id ${user} || useradd -m -s /bin/bash ${user}`, 'root');
+      await dockerExec(ctx.containerId, `usermod -a -G sudo,docker ${user} || true`, 'root');
+    }
+    return ctx;
+  },
+
+  env: async (ctx) => {
+    const env = ctx.config._environment || {};
+    const workdir = env.WORKDIR || '/workspace';
+    const user = env.USER || 'root';
+    
+    // Run before:env file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'before:env', user, workdir);
+    
+    // Run before:env scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:env', user, workdir);
+    
+    const envEntries = Object.entries(env)
+      .map(([key, value]) => `export ${key}="${value}"`)
+      .join('\n');
+    
+    const envScript = `#!/bin/bash\n${envEntries}\n`;
+    await dockerExec(ctx.containerId, `cat > /etc/environment.sh << 'EOF'\n${envScript}\nEOF`, 'root');
+    await dockerExec(ctx.containerId, 'chmod +x /etc/environment.sh', 'root');
+    
+    // Run after:env file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'after:env', user, workdir);
+    
+    // Run after:env scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:env', user, workdir);
+    return ctx;
+  },
+
+  workdir: async (ctx) => {
+    const env = ctx.config._environment || {};
+    const workdir = env.WORKDIR || '/workspace';
+    const user = env.USER || 'root';
+    
+    // Run before:workdir file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'before:workdir', user, workdir);
+    
+    // Run before:workdir scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:workdir', user, workdir);
+    
+    await dockerExec(ctx.containerId, `mkdir -p ${workdir}`, 'root');
+    if (user !== 'root') {
+      await dockerExec(ctx.containerId, `chown ${user}:${user} ${workdir}`, 'root');
+    }
+    
+    // Run after:workdir file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'after:workdir', user, workdir);
+    
+    // Run after:workdir scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:workdir', user, workdir);
+    return ctx;
+  },
+
+  habitat: async (ctx) => {
+    const env = ctx.config._environment || {};
+    const habitatPath = env.HABITAT_PATH || '/workspace/habitat';
+    const workdir = env.WORKDIR || '/workspace';
+    const user = env.USER || 'root';
+    
+    // Run before:habitat file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'before:habitat', user, workdir);
+    
+    // Run before:habitat scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:habitat', user, workdir);
+    
+    const dirs = [
+      habitatPath,
+      path.posix.join(habitatPath, 'system'),
+      path.posix.join(habitatPath, 'shared'),
+      path.posix.join(habitatPath, 'local')
+    ];
+    
+    for (const dir of dirs) {
+      await dockerExec(ctx.containerId, `mkdir -p ${dir}`, 'root');
+      if (user !== 'root') {
+        await dockerExec(ctx.containerId, `chown ${user}:${user} ${dir}`, 'root');
+      }
+    }
+    
+    // Run after:habitat file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'after:habitat', user, workdir);
+    
+    // Run after:habitat scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:habitat', user, workdir);
+    return ctx;
+  },
+
+  files: async (ctx) => {
+    const config = ctx.config;
+    const env = config._environment || {};
+    const workdir = env.WORKDIR || '/workspace';
+    const user = env.USER || 'root';
+    const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
+    
+    if (!isBypassHabitat) {
+      const workDirPath = createWorkDirPath(workdir);
+      
+      // Copy system, shared, and local files
+      for (const [dirName, srcPath] of [
+        ['system', rel('system')],
+        ['shared', rel('shared')],
+        ['local', path.dirname(config._configPath)]
+      ]) {
+        if (await fileExists(srcPath)) {
+          const containerPath = workDirPath('habitat', dirName);
+          await dockerExec(ctx.containerId, `mkdir -p ${containerPath}`, 'root');
+          await copyDirectoryToContainer(ctx.containerId, srcPath, containerPath);
+        }
+      }
+    }
+    
+    // Run file hooks for files phase (files with no before/after specified)
+    await runFilesForPhase(ctx.containerId, ctx.config, 'files', user, workdir);
+    return ctx;
+  },
+
+  scripts: async (ctx) => {
+    const env = ctx.config._environment || {};
+    const user = env.USER || 'root';
+    const workdir = env.WORKDIR || '/workspace';
+    
+    // Run file hooks for scripts phase (files with no before/after specified)
+    await runFilesForPhase(ctx.containerId, ctx.config, 'scripts', user, workdir);
+    
+    // Run scripts for scripts phase (scripts with no before/after specified)
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'scripts', user, workdir);
+    return ctx;
+  },
+
+  repos: async (ctx) => {
+    const config = ctx.config;
+    const env = config._environment || {};
+    const workdir = env.WORKDIR || '/workspace';
+    const user = env.USER || 'root';
+    
+    // Run before:repos file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'before:repos', user, workdir);
+    
+    // Run before:repos scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:repos', user, workdir);
+    
+    // Clone repositories from config
+    const repos = config.repos || config.repositories || [];
+    for (const repo of repos) {
+      await cloneRepository(ctx.containerId, repo, workdir, user);
+    }
+    
+    // Clone extra repositories if provided
+    if (ctx.extraRepos && ctx.extraRepos.length > 0) {
+      for (const repoSpec of ctx.extraRepos) {
+        const { parseRepoSpec } = require('./utils');
+        const repoInfo = parseRepoSpec(repoSpec);
+        await cloneRepository(ctx.containerId, repoInfo, workdir, user);
+      }
+    }
+    
+    // Run after:repos file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'after:repos', user, workdir);
+    
+    // Run after:repos scripts (this is where npm install will go)
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:repos', user, workdir);
+    
+    return ctx;
+  },
+
+  tools: async (ctx) => {
+    const env = ctx.config._environment || {};
+    const user = env.USER || 'root';
+    const workdir = env.WORKDIR || '/workspace';
+    
+    // Run before:tools file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'before:tools', user, workdir);
+    
+    // Run before:tools scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:tools', user, workdir);
+    
+    // Tools are installed via file structure copied in files phase
+    
+    // Run after:tools file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'after:tools', user, workdir);
+    
+    // Run after:tools scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:tools', user, workdir);
+    
+    return ctx;
+  },
+
+  verify: async (ctx) => {
+    const config = ctx.config;
+    if (config['verify-fs'] && config['verify-fs'].required_files) {
+      const env = config._environment || {};
+      for (const file of config['verify-fs'].required_files) {
+        const expandedFile = file.replace(/\$\{([^}]+)\}/g, (match, varName) => env[varName] || '');
+        const result = await dockerExec(ctx.containerId, `test -e ${expandedFile} && echo "exists" || echo "missing"`, env.USER || 'root');
+        if (result.trim() === 'missing') {
+          throw new Error(`Required file not found: ${expandedFile}`);
+        }
+      }
+    }
+    return ctx;
+  },
+
+  test: async (ctx) => {
+    const config = ctx.config;
+    if (config.tests && Array.isArray(config.tests)) {
+      const env = config._environment || {};
+      for (const testScript of config.tests) {
+        await dockerExec(ctx.containerId, `bash ${testScript}`, env.USER || 'root');
+      }
+    }
+    return ctx;
+  },
+
+  final: async (ctx) => {
+    // Final configuration is handled during commit
+    return ctx;
+  }
+};
+
+/**
+ * Execute a specific build phase
+ * 
+ * @private
+ * @param {string} phaseName - Name of the phase to execute
+ * @param {Object} ctx - Pipeline context
+ * @returns {Promise<Object>} - Updated context
+ */
+async function executePhase(phaseName, ctx) {
+  const handler = PHASE_HANDLERS[phaseName];
+  if (!handler) {
+    throw new Error(`Unknown phase: ${phaseName}`);
+  }
+  return await handler(ctx);
+}
+
+/**
+ * Run files for a specific lifecycle hook
+ * 
+ * @private
+ * @param {string} containerId - Container ID
+ * @param {Object} config - Coalesced configuration (system + shared + local)
+ * @param {string} hook - Hook name ('files', 'before:phase', 'after:phase')
+ * @param {string} defaultUser - Default user to run as
+ * @param {string} workdir - Working directory
+ */
+async function runFilesForPhase(containerId, config, hook, defaultUser, workdir) {
+  if (!config.files || !Array.isArray(config.files)) {
+    return; // No files to process
+  }
+  
+  // Filter files for this hook
+  const hookFiles = config.files.filter(file => {
+    if (hook === 'files') {
+      // Default files phase - files with no before/after specified
+      return !file.before && !file.after;
+    } else {
+      // Specific hook - files with matching before/after
+      return file.before === hook.replace('before:', '') || 
+             file.after === hook.replace('after:', '');
+    }
+  });
+  
+  if (hookFiles.length === 0) {
+    return; // No files for this hook
+  }
+  
+  console.log(`Copying ${hook} files...`);
+  
+  // Use copyConfigFiles to handle the file copying
+  const { copyConfigFiles } = require('./image-lifecycle');
+  
+  // Create a temporary config with only the hookFiles
+  const tempConfig = {
+    ...config,
+    files: hookFiles
+  };
+  
+  await copyConfigFiles(containerId, tempConfig, defaultUser, workdir);
+}
+
+/**
+ * Run scripts for a specific lifecycle hook
+ * 
+ * @private
+ * @param {string} containerId - Container ID
+ * @param {Object} config - Coalesced configuration (system + shared + local)
+ * @param {string} hook - Hook name ('scripts', 'before:phase', 'after:phase')
+ * @param {string} defaultUser - Default user to run as
+ * @param {string} workdir - Working directory
+ */
+async function runScriptsForPhase(containerId, config, hook, defaultUser, workdir) {
+  // Support both old 'setup' format and new 'scripts' format for backwards compatibility
+  const scripts = config.scripts || [];
+  const oldSetup = config.setup;
+  
+  // Convert old setup format to new scripts format for processing
+  const allScripts = [...scripts];
+  
+  if (oldSetup && hook === 'scripts') {
+    // Convert old setup.root format
+    if (oldSetup.root && Array.isArray(oldSetup.root)) {
+      for (const cmd of oldSetup.root) {
+        allScripts.push({
+          run_as: 'root',
+          commands: [cmd]
+        });
+      }
+    }
+    
+    // Convert old setup.user format  
+    if (oldSetup.user && oldSetup.user.commands && Array.isArray(oldSetup.user.commands)) {
+      allScripts.push({
+        run_as: oldSetup.user.run_as || defaultUser,
+        commands: oldSetup.user.commands
+      });
+    }
+  }
+  
+  // Filter scripts for this hook
+  const hookScripts = allScripts.filter(script => {
+    if (hook === 'scripts') {
+      // Default scripts phase - scripts with no before/after specified
+      return !script.before && !script.after;
+    } else {
+      // Specific hook - scripts with matching before/after
+      return script.before === hook.replace('before:', '') || 
+             script.after === hook.replace('after:', '');
+    }
+  });
+  
+  if (hookScripts.length === 0) {
+    return; // No scripts for this hook
+  }
+  
+  console.log(`Running ${hook} scripts...`);
+  
+  // Execute scripts in order
+  for (const script of hookScripts) {
+    const runAsUser = script.run_as || defaultUser;
+    if (script.commands && Array.isArray(script.commands)) {
+      for (const cmd of script.commands) {
+        if (cmd && cmd.trim()) {
+          console.log(`  [${runAsUser}] ${cmd.split('\n')[0]}...`);
+          await dockerExec(containerId, cmd, runAsUser);
+        }
+      }
+    }
+  }
+}
+
+
+
+/**
+ * Find phase index by name or ID
+ * 
+ * @private
+ * @param {string|number} phase - Phase name or ID
+ * @returns {number} - Phase index or -1 if not found
+ */
+function findPhaseIndex(phase) {
+  const phaseStr = String(phase);
+  
+  for (let i = 0; i < BUILD_PHASES.length; i++) {
+    if (BUILD_PHASES[i].id === phaseStr || BUILD_PHASES[i].name === phaseStr) {
+      return i;
+    }
+  }
+  
+  return -1;
+}
+
+module.exports = {
+  BUILD_PHASES,
+  createBuildPipeline,
+  executePhase
+};

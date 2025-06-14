@@ -24,7 +24,7 @@ const { spawn } = require('child_process');
 const { colors, fileExists, isDirectory, sleep, rel, createWorkDirPath } = require('./utils');
 const { loadConfig } = require('./config');
 // Path helpers not currently used in this module
-const { dockerRun, dockerExec, dockerImageExists } = require('./container-operations');
+const { dockerRun, dockerExec, dockerImageExists, startTempContainer } = require('./container-operations');
 const { copyFileToContainer, findFilesToCopy } = require('./filesystem');
 
 /**
@@ -122,11 +122,15 @@ async function copyConfigFiles(container, config, resolvedUser = 'root', resolve
       continue;
     }
     
-    // Expand tilde in source path
+    // Expand tilde in source path and resolve relative paths
     let srcPath = fileSpec.src;
     if (srcPath.startsWith('~/')) {
       const os = require('os');
       srcPath = path.join(os.homedir(), srcPath.slice(2));
+    } else if (srcPath.startsWith('./')) {
+      // Resolve relative paths from project root
+      const { rel } = require('./utils');
+      srcPath = rel(srcPath.slice(2));
     }
     
     // Check if source exists
@@ -347,15 +351,10 @@ async function prepareWorkspace(config, tag, extraRepos, options = {}) {
   const baseTag = await buildBaseImage(config, { rebuild });
   
   // Start a temporary container for preparation
-  const tempContainer = `claude-habitat-prep-${Date.now()}`;
   console.log('Starting temporary container for preparation...');
-  
-  // Start container with init process
-  await dockerRun(['run', '-d', '--name', tempContainer, baseTag, '/bin/sh', '-c', 'tail -f /dev/null']);
+  const tempContainer = await startTempContainer(baseTag, 'prep');
   
   try {
-    // Wait for container to be ready
-    await sleep(2000);
     
     // Skip infrastructure copying for bypass habitats
     const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
@@ -482,5 +481,6 @@ module.exports = {
   prepareWorkspace,
   runSetupCommands,
   copyConfigFiles,
-  cloneRepository
+  cloneRepository,
+  copyDirectoryToContainer
 };

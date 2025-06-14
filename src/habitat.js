@@ -65,56 +65,126 @@ const execAsync = promisify(exec);
 const { colors, calculateCacheHash, fileExists, sleep, rel } = require('./utils');
 const { loadConfig } = require('./config');
 const { buildBaseImage, prepareWorkspace } = require('./image-lifecycle');
-const { dockerImageExists, dockerRun, dockerExec, dockerIsRunning } = require('./container-operations');
+const { dockerImageExists, dockerRun, dockerExec, dockerIsRunning, startTempContainer } = require('./container-operations');
 const { testRepositoryAccess } = require('./github');
+const { createSnapshot } = require('./snapshot-manager');
+
+/**
+ * Clean up a build container (stop and remove)
+ * @private
+ */
+async function cleanupBuildContainer(containerId) {
+  await dockerRun(['stop', containerId]);
+  await dockerRun(['rm', containerId]);
+}
 
 // Start a new session with the specified habitat
 async function startSession(configPath, extraRepos = [], overrideCommand = null, options = {}) {
-  const { rebuild = false } = options;
-  const config = await loadConfig(configPath);
-  const hash = calculateCacheHash(config, extraRepos);
-  const preparedTag = `claude-habitat-${config.name}:${hash}`;
-
-  console.log(`Cache hash: ${hash}`);
-  console.log(`Prepared image tag: ${preparedTag}`);
-
-  // Check if prepared image exists or if rebuild is requested
-  const imageExists = await dockerImageExists(preparedTag);
-  if (!imageExists || rebuild) {
-    if (rebuild) {
-      console.log(colors.yellow('🔄 Rebuild requested - building fresh environment...'));
-    } else {
-      console.log('No cached image found, building prepared environment...');
+  const { rebuild = false, rebuildFrom = null } = options;
+  
+  // Use the new progressive build pipeline
+  const { createBuildPipeline } = require('./build-lifecycle');
+  const { ProgressReporter } = require('./progress-ui');
+  
+  console.log(`Starting habitat session from: ${configPath}`);
+  
+  try {
+    // Create the build pipeline with snapshot support
+    const pipeline = await createBuildPipeline(configPath, { 
+      rebuild, 
+      rebuildFrom, 
+      extraRepos 
+    });
+    
+    // Attach progress reporter for real-time feedback
+    const progressReporter = new ProgressReporter();
+    progressReporter.attach(pipeline);
+    
+    // Load config for context
+    const { loadHabitatEnvironmentFromConfig } = require('./config');
+    const config = await loadHabitatEnvironmentFromConfig(configPath);
+    
+    // Prepare initial context
+    let initialContext = {
+      config,
+      configPath,
+      extraRepos,
+      rebuild,
+      rebuildFrom
+    };
+    
+    // If we have a cached snapshot to start from, create container from it
+    if (pipeline._context && pipeline._context.baseImageTag && pipeline._context.startFromPhase > 0) {
+      const containerId = await startTempContainer(pipeline._context.baseImageTag);
+      initialContext.containerId = containerId;
+      initialContext.baseImageTag = pipeline._context.baseImageTag;
     }
-    console.log('This will take several minutes but subsequent runs will be instant.');
     
-    // Build or get base image (with rebuild option)
-    const baseTag = await buildBaseImage(config, { rebuild });
+    // Run the pipeline
+    const context = await pipeline.run(initialContext);
     
-    // Build prepared image with all setup (with rebuild option)
-    await prepareWorkspace(config, preparedTag, extraRepos, { rebuild });
-  } else {
-    console.log('Using cached prepared image');
+    // The final container should be in context.containerId
+    const finalTag = `habitat-${config.name}:12-final`;
+    
+    // Commit the final container as the prepared image
+    await createSnapshot(context.containerId, finalTag, { result: 'pass' });
+    
+    console.log(`Prepared image created: ${finalTag}`);
+    
+    // Stop the build container
+    await cleanupBuildContainer(context.containerId);
+    
+    // Run the habitat container using the final image
+    const { createHabitatContainer } = require('./container-lifecycle');
+    return await runContainerWithSharedLogic(finalTag, config, overrideCommand, options.tty);
+    
+  } catch (error) {
+    console.error(`Failed to start habitat session: ${error.message}`);
+    throw error;
   }
-
-  // Run the container using shared logic
-  const { createHabitatContainer } = require('./container-lifecycle');
-  return await runContainerWithSharedLogic(preparedTag, config, overrideCommand, options.tty);
 }
 
 // Build habitat image (base + prepared)
 async function buildHabitatImage(configPath, extraRepos = []) {
-  const config = await loadConfig(configPath);
-  const hash = calculateCacheHash(config, extraRepos);
-  const preparedTag = `claude-habitat-${config.name}:${hash}`;
-
-  // Build base image
-  const baseTag = await buildBaseImage(config);
+  // Use the new progressive build pipeline
+  const { createBuildPipeline } = require('./build-lifecycle');
+  const { ProgressReporter } = require('./progress-ui');
   
-  // Build prepared image
-  await prepareWorkspace(config, preparedTag, extraRepos);
-  
-  return { baseTag, preparedTag };
+  try {
+    // Create the build pipeline
+    const pipeline = await createBuildPipeline(configPath, { extraRepos });
+    
+    // Attach progress reporter
+    const progressReporter = new ProgressReporter();
+    progressReporter.attach(pipeline);
+    
+    // Load config for context
+    const { loadHabitatEnvironmentFromConfig } = require('./config');
+    const config = await loadHabitatEnvironmentFromConfig(configPath);
+    
+    // Run the pipeline
+    const context = await pipeline.run({
+      config,
+      configPath,
+      extraRepos
+    });
+    
+    // Create final snapshot
+    const finalTag = `habitat-${config.name}:final`;
+    await createSnapshot(context.containerId, finalTag, { result: 'pass' });
+    
+    // Clean up build container
+    await cleanupBuildContainer(context.containerId);
+    
+    return { 
+      baseTag: context.baseImageTag, 
+      preparedTag: finalTag 
+    };
+    
+  } catch (error) {
+    console.error(`Failed to build habitat image: ${error.message}`);
+    throw error;
+  }
 }
 
 // Get last used configuration
@@ -235,15 +305,7 @@ async function runContainerWithSharedLogic(tag, config, overrideCommand = null, 
   const claudeCommand = overrideCommand || config.claude?.command || 'claude';
   let startupCompleted = false;
 
-  let container = null;
   try {
-    // Create container using shared logic
-    container = await createHabitatContainer(config, {
-      name: containerName,
-      temporary: false,
-      preparedTag: tag
-    });
-
     console.log('');
     console.log(colors.green('Container ready!'));
     console.log(`Launching: ${claudeCommand}`);
@@ -252,7 +314,7 @@ async function runContainerWithSharedLogic(tag, config, overrideCommand = null, 
     // Mark startup as completed
     startupCompleted = true;
 
-    // Launch Claude Code with TTY allocation
+    // Launch command directly with docker run --rm
     let enableTTY;
     if (ttyOverride !== null) {
       enableTTY = ttyOverride;
@@ -261,14 +323,21 @@ async function runContainerWithSharedLogic(tag, config, overrideCommand = null, 
     }
     const dockerFlags = enableTTY ? ['-it'] : ['-i'];
     
-    // Environment is already set via container creation with -e flags
+    // Build environment args from compiled environment
+    const envArgs = [];
+    for (const [key, value] of Object.entries(compiledEnv)) {
+      envArgs.push('-e', `${key}=${value}`);
+    }
+    
     const fullCommand = claudeCommand;
     
     const dockerArgs = [
-      'exec', ...dockerFlags,
+      'run', '--rm', ...dockerFlags,
+      ...envArgs,
       '-u', containerUser,
       '-w', workDir,
-      containerName,
+      '-v', '/var/run/docker.sock:/var/run/docker.sock',
+      tag,
       '/bin/bash', '-c', fullCommand
     ];
     
@@ -313,9 +382,7 @@ async function runContainerWithSharedLogic(tag, config, overrideCommand = null, 
       console.log(colors.yellow(`ℹ️  Runtime error: ${error.message}`));
     }
   } finally {
-    if (container) {
-      await container.cleanup();
-    }
+    // Container cleanup is automatic with --rm flag
   }
 }
 

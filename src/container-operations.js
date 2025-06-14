@@ -66,7 +66,7 @@ async function execDockerCommand(args) {
     });
     
     docker.on('close', (code) => {
-      if (code !== 0 && stderr && !stderr.includes('WARNING')) {
+      if (code !== 0 && stderr && !stderr.includes('WARNING') && !stderr.includes('npm notice')) {
         reject(new Error(stderr));
       } else {
         resolve(stdout);
@@ -129,6 +129,64 @@ async function dockerIsRunning(container, shellClient = execShellCommand) {
   }
 }
 
+/**
+ * Execute Docker build command with cleaner error handling
+ * 
+ * @param {Array} buildArgs - Docker build arguments
+ * @returns {Promise<string>} - Build output
+ */
+async function execDockerBuild(buildArgs) {
+  return new Promise((resolve, reject) => {
+    const docker = spawn('docker', buildArgs);
+    let stdout = '';
+    let stderr = '';
+    
+    docker.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    docker.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    docker.on('close', (code) => {
+      if (code !== 0) {
+        // Extract just the essential error info from Docker build output
+        const lines = stderr.split('\n');
+        const errorLine = lines.find(line => line.includes('ERROR:')) || 
+                         lines.find(line => line.includes('failed to solve:')) ||
+                         lines.find(line => line.includes('exit code:'));
+        
+        const cleanError = errorLine || 'Docker build failed';
+        reject(new Error(cleanError));
+      } else {
+        resolve(stdout);
+      }
+    });
+    
+    docker.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Start a temporary container from an image
+ * 
+ * @param {string} imageTag - Image to start container from
+ * @param {string} [prefix='build'] - Container name prefix (e.g., 'build', 'prep')
+ * @returns {Promise<string>} - Container ID
+ */
+async function startTempContainer(imageTag, prefix = 'build') {
+  const containerId = `claude-habitat-${prefix}-${Date.now()}`;
+  await dockerRun(['run', '-d', '--name', containerId, imageTag, '/bin/sh', '-c', 'tail -f /dev/null']);
+  
+  // Wait for container to be ready
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  return containerId;
+}
+
 module.exports = {
   buildDockerRunArgs,
   buildDockerExecArgs,
@@ -136,6 +194,8 @@ module.exports = {
   dockerExec,
   dockerImageExists,
   dockerIsRunning,
+  startTempContainer,
   execDockerCommand,
+  execDockerBuild,
   execShellCommand
 };
