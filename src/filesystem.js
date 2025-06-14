@@ -162,7 +162,7 @@ async function processFileOperations(container, config, configDir, containerUser
 }
 
 async function copyFileToContainer(container, srcPath, destPath, containerUser = null) {
-  console.log(`  Copying ${path.basename(srcPath)} to ${destPath}`);
+  // Removed verbose file copying log
   
   try {
     // Create destination directory as root to ensure permissions
@@ -284,7 +284,8 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
       name: `verify-fs-${Date.now()}`,
       temporary: true,
       rebuild,
-      preparedTag
+      preparedTag,
+      command: 'tail -f /dev/null'  // Keep container alive for tests
     });
     
     // For claude-habitat (bypass mode), ensure file initialization has completed

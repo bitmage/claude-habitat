@@ -189,9 +189,7 @@ const manageContainer = async (action, containerName, options = {}) => {
 const setFilePermissions = async (container, filePath, options = {}) => {
   const { mode = '644', user, description } = options;
   
-  if (description) {
-    console.log(`  ${description}`);
-  }
+  // Removed verbose description logging
   
   const commands = [];
   

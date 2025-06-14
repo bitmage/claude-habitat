@@ -37,7 +37,7 @@ async function createSnapshot(containerId, snapshotTag, options = {}) {
     throw new Error('snapshotTag is required');
   }
 
-  const { labels = {}, result = 'pass' } = options;
+  const { labels = {}, result = 'pass', dockerChange = null } = options;
   
   // Build docker commit command with labels using --change LABEL
   const changeArgs = [];
@@ -49,6 +49,11 @@ async function createSnapshot(containerId, snapshotTag, options = {}) {
   
   for (const [key, value] of Object.entries(allLabels)) {
     changeArgs.push('--change', `LABEL ${key}="${value}"`);
+  }
+  
+  // Add dockerChange if provided (e.g., ENTRYPOINT)
+  if (dockerChange) {
+    changeArgs.push('--change', dockerChange);
   }
 
   const commitArgs = ['commit', ...changeArgs, containerId, snapshotTag];

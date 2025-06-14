@@ -47,6 +47,8 @@ check_config() {
     
     while IFS= read -r file; do
         if [[ -n "$file" && "$file" != "null" ]]; then
+            # Replace ~ with ${HOME} before expansion
+            file=${file/#\~/$HOME}
             expanded=$(eval echo "\"$file\"")
             if [[ -e "$expanded" ]]; then
                 tap_ok "File exists: $expanded ($name)"
@@ -69,7 +71,7 @@ case "$SCOPE" in
         ;;
 esac
 
-echo "1..$test_num"
+echo "1..$((test_num - 1))"
 
 # Exit with appropriate code
 if [[ $total_failures -gt 0 ]]; then

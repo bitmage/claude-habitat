@@ -148,6 +148,16 @@ async function copyConfigFiles(container, config, resolvedUser = 'root', resolve
     // Replace {env.USER} with resolved user
     destPath = destPath.replace(/\{env\.USER\}/g, resolvedUser);
     
+    // Replace ${HOME} and other environment variables by executing in container
+    if (destPath.includes('${')) {
+      try {
+        const expandedPath = await dockerExec(container, `echo "${destPath}"`, resolvedUser);
+        destPath = expandedPath.trim();
+      } catch (err) {
+        console.warn(`Warning: Could not expand environment variables in ${destPath}: ${err.message}`);
+      }
+    }
+    
     // Expand tilde in destination path (container context)
     if (destPath.startsWith('~/')) {
       // Get container user's home directory by executing getent passwd in container
@@ -319,166 +329,12 @@ async function cloneRepository(container, repoInfo, workDir, containerUser = nul
 /**
  * Prepare workspace image with all repositories and setup complete
  */
-async function prepareWorkspace(config, tag, extraRepos, options = {}) {
-  const { rebuild = false } = options;
-  
-  // Get resolved environment variables that will be used throughout
-  let resolvedUser = 'root';
-  let resolvedWorkDir = '/workspace';
-  try {
-    const { createHabitatPathHelpers } = require('./habitat-path-helpers');
-    const pathHelpers = await createHabitatPathHelpers(config);
-    const compiledEnv = pathHelpers.getEnvironment();
-    resolvedUser = compiledEnv.USER || 'root';
-    resolvedWorkDir = compiledEnv.WORKDIR || '/workspace';
-  } catch (err) {
-    console.warn(`Warning: Could not resolve environment variables: ${err.message}`);
-  }
-  
-  // Handle rebuild: remove existing prepared image if rebuilding
-  const preparedTag = `${config.image.tag}:${tag}`;
-  if (rebuild) {
-    console.log(colors.yellow('🔄 Rebuild requested - removing existing prepared image...'));
-    try {
-      await dockerRun(['rmi', preparedTag]);
-      console.log(`Removed existing prepared image: ${preparedTag}`);
-    } catch (err) {
-      // Image might not exist, continue
-      console.log(`Prepared image ${preparedTag} not found (this is normal for first build)`);
-    }
-  }
-  
-  const baseTag = await buildBaseImage(config, { rebuild });
-  
-  // Start a temporary container for preparation
-  console.log('Starting temporary container for preparation...');
-  const tempContainer = await startTempContainer(baseTag, 'prep');
-  
-  try {
-    
-    // Skip infrastructure copying for bypass habitats
-    const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
-    
-    // Create workDirPath helper for this container
-    const workDirPath = createWorkDirPath(resolvedWorkDir);
-    
-    if (!isBypassHabitat) {
-      // Copy system files first
-      const systemPath = rel('system');
-      if (await fileExists(systemPath)) {
-        console.log('Copying system files to container...');
-        const containerSystemPath = workDirPath('habitat', 'system');
-        await dockerExec(tempContainer, `mkdir -p ${containerSystemPath}`, 'root');
-        await copyDirectoryToContainer(tempContainer, systemPath, containerSystemPath);
-      }
-      
-      // Copy shared files
-      const sharedPath = rel('shared');
-      if (await fileExists(sharedPath)) {
-        console.log('Copying shared files to container...');
-        const containerSharedPath = workDirPath('habitat', 'shared');
-        await dockerExec(tempContainer, `mkdir -p ${containerSharedPath}`, 'root');
-        await copyDirectoryToContainer(tempContainer, sharedPath, containerSharedPath);
-      }
-      
-      // Copy local habitat files
-      const habitatPath = path.dirname(config._configPath);
-      if (await fileExists(habitatPath)) {
-        console.log('Copying habitat files to container...');
-        const containerLocalPath = workDirPath('habitat', 'local');
-        await dockerExec(tempContainer, `mkdir -p ${containerLocalPath}`, 'root');
-        await copyDirectoryToContainer(tempContainer, habitatPath, containerLocalPath);
-      }
-    }
-    
-    // Run system setup commands first if not in bypass mode
-    if (!isBypassHabitat) {
-      const systemConfigPath = rel('system/config.yaml');
-      if (await fileExists(systemConfigPath)) {
-        console.log('Loading system configuration...');
-        const { loadConfig } = require('./config');
-        
-        // Load system config with environment variable processing
-        const systemConfig = await loadConfig(systemConfigPath);
-        
-        // Ensure the system config has the correct work_dir and user from resolved environment
-        if (!systemConfig.container) {
-          systemConfig.container = {};
-        }
-        // Note: Container fields removed - using environment variables directly
-        
-        // Copy system-level files first (before setup commands)
-        await copyConfigFiles(tempContainer, systemConfig, resolvedUser, resolvedWorkDir);
-        
-        console.log('Running system setup commands...');
-        await runSetupCommands(tempContainer, systemConfig, resolvedUser, resolvedWorkDir);
-      }
-    }
-    
-    // Process shared configuration files for normal habitats
-    if (!isBypassHabitat) {
-      const sharedConfigPath = rel('shared/config.yaml');
-      if (await fileExists(sharedConfigPath)) {
-        console.log('Loading shared configuration...');
-        const sharedConfig = await loadConfig(sharedConfigPath);
-        
-        // Note: Container user field removed - using environment variables directly
-        
-        // Copy shared-level files
-        await copyConfigFiles(tempContainer, sharedConfig, resolvedUser, resolvedWorkDir);
-        
-        console.log('Running shared setup commands...');
-        await runSetupCommands(tempContainer, sharedConfig, resolvedUser, resolvedWorkDir);
-      }
-    }
-    
-    // Clone repositories after system setup (which includes GitHub authentication)
-    console.log('Cloning repositories...');
-    const allRepos = [...(config.repositories || [])];
-    
-    // Add extra repos if specified
-    if (extraRepos && extraRepos.length > 0) {
-      for (const repoSpec of extraRepos) {
-        const { parseRepoSpec } = require('./utils');
-        const repoInfo = parseRepoSpec(repoSpec);
-        allRepos.push(repoInfo);
-      }
-    }
-    
-    for (const repo of allRepos) {
-      await cloneRepository(tempContainer, repo, resolvedWorkDir, resolvedUser);
-    }
-    
-    // Copy habitat-level files first (before setup commands)
-    await copyConfigFiles(tempContainer, config, resolvedUser, resolvedWorkDir);
-    
-    // Run habitat setup commands
-    await runSetupCommands(tempContainer, config, resolvedUser, resolvedWorkDir);
-    
-    // Fix permissions for work directory
-    console.log('Setting up work directory permissions...');
-    await dockerExec(tempContainer, `chown -R $(id -u):$(id -g) ${resolvedWorkDir} || true`, 'root');
-    
-    // Fix git safe directory ownership issues
-    console.log('Configuring git safe directories...');
-    await dockerExec(tempContainer, `git config --global --add safe.directory '*'`, resolvedUser);
-    
-    // Commit the container to create the prepared image
-    console.log('Creating prepared image...');
-    await dockerRun(['commit', tempContainer, tag]);
-    
-    console.log(colors.green('✓ Prepared image created successfully'));
-  } finally {
-    // Clean up temporary container
-    console.log('Cleaning up temporary container...');
-    await dockerRun(['stop', tempContainer]);
-    await dockerRun(['rm', tempContainer]);
-  }
-}
+
+// prepareWorkspace function removed - replaced by progressive build pipeline in build-lifecycle.js
+
 
 module.exports = {
   buildBaseImage,
-  prepareWorkspace,
   runSetupCommands,
   copyConfigFiles,
   cloneRepository,

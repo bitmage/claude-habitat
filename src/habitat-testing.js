@@ -69,7 +69,7 @@ async function runTestMode(testType, testTarget, rebuild = false) {
         return;
       }
       console.log(`Running system tests in ${testTarget} habitat...`);
-      await runSystemTests(habitatConfig, false, rebuild);
+      await runSystemTests(habitatConfig, false, rebuild, habitatConfigPath);
     } else if (testType === 'shared') {
       // Check if habitat bypasses system/shared infrastructure
       if (habitatConfig.claude?.bypass_habitat_construction) {
@@ -78,7 +78,7 @@ async function runTestMode(testType, testTarget, rebuild = false) {
         return;
       }
       console.log(`Running shared tests in ${testTarget} habitat...`);
-      await runSharedTests(habitatConfig, false, rebuild);
+      await runSharedTests(habitatConfig, false, rebuild, habitatConfigPath);
     } else if (testType === 'verify-fs') {
       // Support scope parameter: verify-fs:scope or just verify-fs (defaults to 'all')
       const parts = testType.split(':');
@@ -91,11 +91,16 @@ async function runTestMode(testType, testTarget, rebuild = false) {
       const hash = calculateCacheHash(habitatConfig, []);
       const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
       
+      // Show cached image message if image exists and not rebuilding
+      if (!rebuild && await dockerImageExists(preparedTag)) {
+        console.log(`✅ Using cached snapshot: ${preparedTag} (12-final)`);
+      }
+      
       await runEnhancedFilesystemVerification(preparedTag, scope, habitatConfig, rebuild);
     } else if (testType === 'habitat') {
       console.log(`Running ${testTarget}-specific tests...`);
       if (habitatConfig.tests && habitatConfig.tests.length > 0) {
-        await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, false, rebuild);
+        await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, false, rebuild, habitatConfigPath);
       } else {
         console.log(`No ${testTarget}-specific tests configured`);
       }
@@ -268,7 +273,7 @@ async function showHabitatTestMenu(habitatName) {
 
     if (habitatConfig.tests && habitatConfig.tests.length > 0) {
       console.log(`Running ${habitatName}-specific tests...\n`);
-      testResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, true);
+      testResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, true, false, habitatConfigPath);
     } else {
       console.log(`No ${habitatName}-specific tests configured`);
       testResults = [{ type: 'info', message: `No ${habitatName}-specific tests configured` }];
@@ -324,36 +329,38 @@ async function runAllTests() {
   }
 }
 
-async function runSystemTests(habitatConfig = null, captureResults = false, rebuild = false) {
+async function runSystemTests(habitatConfig = null, captureResults = false, rebuild = false, configPath = null) {
   console.log(colors.yellow('Running system infrastructure tests...\n'));
 
   // If no habitat provided, use the base habitat
   if (!habitatConfig) {
     const baseConfigPath = rel('habitats/base/config.yaml');
     habitatConfig = await loadConfig(baseConfigPath);
+    configPath = configPath || baseConfigPath;
   }
 
   const systemConfig = await loadConfig(rel('system/config.yaml'));
   if (systemConfig.tests && systemConfig.tests.length > 0) {
-    return await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig, captureResults, rebuild);
+    return await runTestsInHabitatContainer(systemConfig.tests, 'system', habitatConfig, captureResults, rebuild, configPath);
   } else {
     console.log('No system tests configured');
     return captureResults ? [{ type: 'info', message: 'No system tests configured' }] : undefined;
   }
 }
 
-async function runSharedTests(habitatConfig = null, captureResults = false, rebuild = false) {
+async function runSharedTests(habitatConfig = null, captureResults = false, rebuild = false, configPath = null) {
   console.log(colors.yellow('Running shared configuration tests...\n'));
 
   // If no habitat provided, use the base habitat
   if (!habitatConfig) {
     const baseConfigPath = rel('habitats/base/config.yaml');
     habitatConfig = await loadConfig(baseConfigPath);
+    configPath = configPath || baseConfigPath;
   }
 
   const sharedConfig = await loadConfig(rel('shared/config.yaml'));
   if (sharedConfig.tests && sharedConfig.tests.length > 0) {
-    return await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig, captureResults, rebuild);
+    return await runTestsInHabitatContainer(sharedConfig.tests, 'shared', habitatConfig, captureResults, rebuild, configPath);
   } else {
     console.log('No shared tests configured');
     return captureResults ? [{ type: 'info', message: 'No shared tests configured' }] : undefined;
@@ -374,18 +381,18 @@ async function runHabitatTests(habitatName, captureResults = false, rebuild = fa
 
   // Run system tests
   console.log('1. System tests:');
-  const systemResults = await runSystemTests(habitatConfig, captureResults, rebuild);
+  const systemResults = await runSystemTests(habitatConfig, captureResults, rebuild, habitatConfigPath);
   if (captureResults && systemResults) results.push(...systemResults);
 
   // Run shared tests
   console.log('\n2. Shared tests:');
-  const sharedResults = await runSharedTests(habitatConfig, captureResults, rebuild);
+  const sharedResults = await runSharedTests(habitatConfig, captureResults, rebuild, habitatConfigPath);
   if (captureResults && sharedResults) results.push(...sharedResults);
 
   // Run habitat-specific tests
   if (habitatConfig.tests && habitatConfig.tests.length > 0) {
     console.log(`\n3. ${habitatName}-specific tests:`);
-    const habitatResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, captureResults, rebuild);
+    const habitatResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, captureResults, rebuild, habitatConfigPath);
     if (captureResults && habitatResults) results.push(...habitatResults);
   } else {
     console.log(`\n3. No ${habitatName}-specific tests configured`);
@@ -395,7 +402,7 @@ async function runHabitatTests(habitatName, captureResults = false, rebuild = fa
   return captureResults ? results : undefined;
 }
 
-async function runTestsInHabitatContainer(tests, testType, habitatConfig = null, captureResults = false, rebuild = false) {
+async function runTestsInHabitatContainer(tests, testType, habitatConfig = null, captureResults = false, rebuild = false, configPath = null) {
   if (!habitatConfig) {
     console.error('No habitat configuration provided for testing');
     return captureResults ? [{ type: 'error', message: 'No habitat configuration provided' }] : undefined;
@@ -415,10 +422,68 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       } else {
         console.log(colors.yellow('Prepared image not found. Building habitat for testing...'));
       }
-      const { buildBaseImage, prepareWorkspace } = require('./image-lifecycle');
-      await buildBaseImage(habitatConfig, { rebuild });
-      await prepareWorkspace(habitatConfig, preparedTag, [], { rebuild });
-      imageTag = preparedTag;
+    } else {
+      // Show cached image message consistent with build pipeline
+      console.log(`✅ Using cached snapshot: ${preparedTag} (12-final)`);
+    }
+
+    if (!await dockerImageExists(preparedTag) || rebuild) {
+      
+      // Use new progressive build pipeline instead of old build functions
+      const { createBuildPipeline } = require('./build-lifecycle');
+      const { ProgressReporter } = require('./progress-ui');
+      
+      // Create build pipeline for the habitat
+      const pipeline = await createBuildPipeline(configPath || habitatConfig._configPath, { rebuild });
+      
+      // Attach progress reporter
+      const progressReporter = new ProgressReporter();
+      progressReporter.attach(pipeline);
+      
+      // Prepare initial context
+      let initialContext = {
+        config: habitatConfig,
+        configPath: configPath || habitatConfig._configPath,
+        extraRepos: [],
+        rebuild
+      };
+      
+      // If we have a cached snapshot to start from, create container from it
+      if (pipeline._context && pipeline._context.baseImageTag && pipeline._context.startFromPhase > 0) {
+        const { startTempContainer } = require('./container-operations');
+        const containerId = await startTempContainer(pipeline._context.baseImageTag);
+        initialContext.containerId = containerId;
+        initialContext.baseImageTag = pipeline._context.baseImageTag;
+      }
+      
+      // Run the pipeline to create the prepared image
+      const context = await pipeline.run(initialContext);
+      
+      // Check if we actually built something or used fully cached image
+      if (context.containerId) {
+        // We have a build container, create snapshot with expected tag name
+        const { createSnapshot } = require('./snapshot-manager');
+        await createSnapshot(context.containerId, preparedTag, { result: 'pass' });
+        
+        // Clean up build container
+        await dockerRun(['stop', context.containerId]);
+        await dockerRun(['rm', context.containerId]);
+        
+        imageTag = preparedTag;
+      } else {
+        // Fully cached build - the final image already exists
+        // Check if the expected tag exists or use the standard final tag
+        const finalTag = `habitat-${habitatConfig.name}:12-final`;
+        console.log(`Checking for cached final image: ${finalTag}`);
+        if (await dockerImageExists(finalTag)) {
+          // Tag the final image with our expected name
+          console.log(`Tagging ${finalTag} as ${preparedTag}`);
+          await dockerRun(['tag', finalTag, preparedTag]);
+          imageTag = preparedTag;
+        } else {
+          throw new Error(`No final image found for ${habitatConfig.name}`);
+        }
+      }
     }
 
     console.log(`Using habitat image: ${imageTag}`);

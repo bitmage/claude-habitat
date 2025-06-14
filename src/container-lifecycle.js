@@ -63,8 +63,16 @@ async function createHabitatContainer(config, options = {}) {
     } else {
       console.log(`Prepared image not found. Building habitat...`);
     }
-    const { prepareWorkspace } = require('./image-lifecycle');
-    await prepareWorkspace(config, imageTag, [], { rebuild });
+    
+    // Use new progressive build pipeline 
+    const { buildHabitatImage } = require('./habitat');
+    const configPath = config._configPath || `habitats/${config.name}/config.yaml`;
+    const result = await buildHabitatImage(configPath, [], { rebuild });
+    
+    // Tag the prepared image with our expected hash-based name
+    if (result.preparedTag !== imageTag) {
+      await dockerRun(['tag', result.preparedTag, imageTag]);
+    }
   }
 
   // Get resolved environment variables for USER and WORKDIR
@@ -234,7 +242,15 @@ async function createHabitatContainer(config, options = {}) {
   // Add image and init command
   runArgs.push(imageTag);
   const initCommand = command || config.container?.init_command || '/sbin/init';
-  runArgs.push(initCommand);
+  
+  // Handle commands with arguments
+  if (initCommand.includes(' ')) {
+    // Split command and arguments
+    const parts = initCommand.split(' ');
+    runArgs.push(...parts);
+  } else {
+    runArgs.push(initCommand);
+  }
 
   await dockerRun(runArgs);
 

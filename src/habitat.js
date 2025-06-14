@@ -64,7 +64,7 @@ const execAsync = promisify(exec);
 // @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
 const { colors, calculateCacheHash, fileExists, sleep, rel } = require('./utils');
 const { loadConfig } = require('./config');
-const { buildBaseImage, prepareWorkspace } = require('./image-lifecycle');
+// Old build functions replaced by new progressive build pipeline
 const { dockerImageExists, dockerRun, dockerExec, dockerIsRunning, startTempContainer } = require('./container-operations');
 const { testRepositoryAccess } = require('./github');
 const { createSnapshot } = require('./snapshot-manager');
@@ -127,7 +127,11 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
     const finalTag = `habitat-${config.name}:12-final`;
     
     // Commit the final container as the prepared image
-    await createSnapshot(context.containerId, finalTag, { result: 'pass' });
+    const snapshotOptions = { result: 'pass' };
+    if (context.entrypointChange) {
+      snapshotOptions.dockerChange = context.entrypointChange;
+    }
+    await createSnapshot(context.containerId, finalTag, snapshotOptions);
     
     console.log(`Prepared image created: ${finalTag}`);
     
@@ -145,14 +149,16 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
 }
 
 // Build habitat image (base + prepared)
-async function buildHabitatImage(configPath, extraRepos = []) {
+async function buildHabitatImage(configPath, extraRepos = [], options = {}) {
+  const { rebuild = false } = options;
+  
   // Use the new progressive build pipeline
   const { createBuildPipeline } = require('./build-lifecycle');
   const { ProgressReporter } = require('./progress-ui');
   
   try {
     // Create the build pipeline
-    const pipeline = await createBuildPipeline(configPath, { extraRepos });
+    const pipeline = await createBuildPipeline(configPath, { extraRepos, rebuild });
     
     // Attach progress reporter
     const progressReporter = new ProgressReporter();
@@ -162,22 +168,50 @@ async function buildHabitatImage(configPath, extraRepos = []) {
     const { loadHabitatEnvironmentFromConfig } = require('./config');
     const config = await loadHabitatEnvironmentFromConfig(configPath);
     
-    // Run the pipeline
-    const context = await pipeline.run({
+    // Prepare initial context
+    let initialContext = {
       config,
       configPath,
       extraRepos
-    });
+    };
+    
+    // If we have a cached snapshot to start from, create container from it
+    if (pipeline._context && pipeline._context.baseImageTag && pipeline._context.startFromPhase > 0) {
+      const containerId = await startTempContainer(pipeline._context.baseImageTag);
+      initialContext.containerId = containerId;
+      initialContext.baseImageTag = pipeline._context.baseImageTag;
+    }
+    
+    // Run the pipeline
+    const context = await pipeline.run(initialContext);
     
     // Create final snapshot
     const finalTag = `habitat-${config.name}:final`;
-    await createSnapshot(context.containerId, finalTag, { result: 'pass' });
     
-    // Clean up build container
-    await cleanupBuildContainer(context.containerId);
+    // Check if we need to create a snapshot or if final image already exists
+    if (context.containerId) {
+      // We have a build container, create the final snapshot
+      await createSnapshot(context.containerId, finalTag, { result: 'pass' });
+      
+      // Clean up build container
+      await cleanupBuildContainer(context.containerId);
+    } else {
+      // Fully cached - check if final image exists
+      const expectedFinalTag = `habitat-${config.name}:12-final`;
+      if (await dockerImageExists(expectedFinalTag)) {
+        // The final image already exists from previous build
+        console.log(`Using existing final image: ${expectedFinalTag}`);
+        // Tag it with the expected name if different
+        if (expectedFinalTag !== finalTag) {
+          await dockerRun(['tag', expectedFinalTag, finalTag]);
+        }
+      } else {
+        throw new Error(`No final image found for ${config.name}`);
+      }
+    }
     
     return { 
-      baseTag: context.baseImageTag, 
+      baseTag: context.baseImageTag || pipeline._context?.baseImageTag, 
       preparedTag: finalTag 
     };
     

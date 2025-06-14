@@ -44,7 +44,11 @@ function buildDockerRunArgs(command, options = {}) {
 function buildDockerExecArgs(container, command, user = null) {
   const args = ['exec'];
   if (user) args.push('-u', user);
-  args.push(container, '/bin/bash', '-c', command);
+  
+  // Wrap command to source environment variables first
+  const wrappedCommand = `source /etc/profile.d/habitat-env.sh 2>/dev/null || true; ${command}`;
+  
+  args.push(container, '/bin/bash', '-c', wrappedCommand);
   return args;
 }
 
