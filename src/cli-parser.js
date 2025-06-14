@@ -36,6 +36,8 @@ function parseCliArguments(argv) {
     overrideCommand: null,
     habitatName: null,
     rebuild: false,
+    rebuildFrom: null,
+    showPhases: false,
     cleanImages: false,
     cleanImagesTarget: 'all',
     tty: null  // null = use config default, true = force TTY, false = disable TTY
@@ -48,6 +50,10 @@ function parseCliArguments(argv) {
     // Handle --option=value syntax
     if (arg.startsWith('--test-sequence=')) {
       options.testSequence = arg.substring('--test-sequence='.length);
+    } else if (arg.startsWith('--rebuild=')) {
+      const phase = arg.substring('--rebuild='.length);
+      options.rebuild = true;
+      options.rebuildFrom = phase || null;
       continue;
     }
     if (arg.startsWith('--preserve-colors')) {
@@ -72,6 +78,13 @@ function parseCliArguments(argv) {
         break;
       case '--rebuild':
         options.rebuild = true;
+        // Next argument might be phase name/number (if not starting with -)
+        if (i + 1 < argv.length && !argv[i + 1].startsWith('-')) {
+          options.rebuildFrom = argv[++i];
+        }
+        break;
+      case '--show-phases':
+        options.showPhases = true;
         break;
       case '--clean-images':
         options.cleanImages = true;

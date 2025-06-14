@@ -46,6 +46,12 @@ async function executeCliCommand(options) {
     process.exit(0);
   }
 
+  // Handle show phases
+  if (options.showPhases) {
+    await showPhases();
+    process.exit(0);
+  }
+
   // Handle clean
   if (options.clean) {
     await cleanDockerImages();
@@ -74,7 +80,9 @@ OPTIONS:
     --cmd COMMAND          Override the claude command for this session
     --tty                  Force TTY allocation (interactive mode)
     --no-tty               Disable TTY allocation (for scripts/automation)
-    --rebuild              Force rebuild of Docker images (ignore cache)
+    --rebuild [PHASE]      Force rebuild of Docker images (ignore cache)
+                           Optional phase name/number to rebuild from
+    --show-phases          Show available build phases and their descriptions
     --clean                Remove all Claude Habitat Docker images
     --clean-images [TARGET] Clean Docker images (all|orphans|HABITAT_NAME, default: all)
     --list-configs         List available configuration files
@@ -112,6 +120,10 @@ EXAMPLES:
 
     # Start with rebuild (ignores cache)
     ${path.basename(process.argv[1])} start discourse --rebuild
+    
+    # Rebuild from specific phase onward
+    ${path.basename(process.argv[1])} start discourse --rebuild=repos
+    ${path.basename(process.argv[1])} start discourse --rebuild 8
 
     # Clean all images
     ${path.basename(process.argv[1])} --clean-images
@@ -220,4 +232,24 @@ async function handleCleanImages(target = 'all') {
   }
 }
 
-module.exports = { executeCliCommand, showHelp, listConfigs, cleanDockerImages, handleCleanImages };
+/**
+ * Show available build phases
+ */
+async function showPhases() {
+  const { BUILD_PHASES } = require('./phases');
+  
+  console.log('Claude Habitat Build Phases:\n');
+  
+  for (const phase of BUILD_PHASES) {
+    console.log(`${phase.id}: ${colors.cyan(phase.name)} - ${phase.description}`);
+  }
+  
+  console.log(`\nUsage:`);
+  console.log(`  ./claude-habitat start HABITAT --rebuild=<phase>`);
+  console.log(`  ./claude-habitat start HABITAT --rebuild <phase>`);
+  console.log(`\nExamples:`);
+  console.log(`  ./claude-habitat start discourse --rebuild=repos`);
+  console.log(`  ./claude-habitat start discourse --rebuild 8`);
+}
+
+module.exports = { executeCliCommand, showHelp, listConfigs, cleanDockerImages, handleCleanImages, showPhases };

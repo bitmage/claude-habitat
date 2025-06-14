@@ -5,10 +5,8 @@ description: Discourse plugin development environment
 tests:
   - tests/test-discourse-setup.sh
 
-# Docker image configuration
-image:
-  dockerfile: Dockerfile
-  tag: claude-habitat-discourse:latest
+# Use Discourse development base image (with ARG support)
+base_image: discourse/discourse_dev:release
 
 # Environment variables (discourse uses /discourse instead of default /workspace)
 env:
@@ -51,9 +49,31 @@ repositories:
 
 # Setup commands
 scripts:
+  # Setup commands migrated from Dockerfile
   - run_as: root
     commands:
       - |
+        # Install Claude Code globally
+        npm install -g @anthropic-ai/claude-code
+        
+        # Install basic tools needed for downloading and extracting static binaries
+        apt update && apt install -y curl wget unzip
+        apt clean && rm -rf /var/lib/apt/lists/*
+        
+        # Set up Claude Habitat tools directory structure
+        mkdir -p /claude-habitat/shared/tools/bin
+        
+        # Add tools to PATH for all users
+        echo 'export PATH="/claude-habitat/shared/tools/bin:$PATH"' >> /etc/profile
+        echo 'export PATH="/claude-habitat/shared/tools/bin:$PATH"' >> /etc/bash.bashrc
+        
+        # Pre-configure git to trust /src directory
+        git config --global --add safe.directory /src
+        
+        # Set up Claude Code Bot as default git user
+        git config --global user.name "Claude Code Bot"
+        git config --global user.email "claude-code@anthropic.com"
+        
         # Create /habitat directory structure
         echo "Creating /habitat directory structure..."
         mkdir -p /habitat

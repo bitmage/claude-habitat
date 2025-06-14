@@ -186,7 +186,10 @@ async function main() {
 
     // Handle direct habitat launch (config path provided)
     if (options.configPath) {
-      await runHabitat(options.configPath, options.extraRepos, options.overrideCommand);
+      await runHabitat(options.configPath, options.extraRepos, options.overrideCommand, { 
+        rebuild: options.rebuild,
+        rebuildFrom: options.rebuildFrom 
+      });
       return;
     }
 
@@ -251,7 +254,10 @@ async function handleDirectStart(options) {
 
   // Launch the habitat
   if (options.configPath) {
-    await runHabitat(options.configPath, options.extraRepos, options.overrideCommand);
+    await runHabitat(options.configPath, options.extraRepos, options.overrideCommand, { 
+      rebuild: options.rebuild,
+      rebuildFrom: options.rebuildFrom 
+    });
   }
 }
 

@@ -1,24 +1,40 @@
 name: base
 description: Minimal base habitat for testing system and shared components
 
-# Docker image configuration
-image:
-  dockerfile: habitats/base/Dockerfile
-  tag: claude-habitat-base:latest
+# Use base Ubuntu image instead of Dockerfile
+base_image: ubuntu:22.04
 
 # No repositories needed for base habitat
 repositories: []
 
 # Environment configuration (inherits from system, sets explicit WORKDIR for base habitat)
 env:
+  - DEBIAN_FRONTEND=noninteractive
   - USER=root
   - WORKDIR=/workspace
   - SYSTEM_PATH=/habitat/system
   - SHARED_PATH=/habitat/shared
   - LOCAL_PATH=/habitat/local
 
-# No additional setup needed
-setup: {}
+# Setup commands migrated from Dockerfile
+scripts:
+  - run_as: root
+    commands:
+      - |
+        # Install essential system dependencies
+        apt-get update && apt-get install -y \
+          bash \
+          curl \
+          git \
+          openssl \
+          sudo \
+          && rm -rf /var/lib/apt/lists/*
+        
+        # Create workspace directory
+        mkdir -p /workspace && chmod 755 /workspace
+        
+        # Create a simple init script
+        echo '#!/bin/bash\nwhile true; do sleep 3600; done' > /sbin/init && chmod +x /sbin/init
 
 # Container configuration
 container:
