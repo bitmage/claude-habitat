@@ -40,6 +40,7 @@ function parseCliArguments(argv) {
     showPhases: false,
     cleanImages: false,
     cleanImagesTarget: 'all',
+    noCleanup: false,
     tty: null  // null = use config default, true = force TTY, false = disable TTY
   };
 
@@ -106,6 +107,10 @@ function parseCliArguments(argv) {
       case '--no-tty':
         // Disable TTY allocation
         options.tty = false;
+        break;
+      case '--no-cleanup':
+        // Disable automatic container cleanup on exit
+        options.noCleanup = true;
         break;
       case '--test-sequence':
         // Test sequence for UI testing

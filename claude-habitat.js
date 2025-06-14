@@ -126,6 +126,9 @@ const { maintenanceScene } = require('./src/scenes/maintenance.scene');
 // Utilities and Error Handling
 const { colors, fileExists } = require('./src/utils');
 
+// Container Cleanup
+const { setupAutomaticCleanup } = require('./src/container-cleanup');
+
 // ============================================================================
 // MAIN ROUTER - Delegates to appropriate subsystems
 // ============================================================================
@@ -142,6 +145,9 @@ async function main() {
     const args = process.argv.slice(2);
     const options = parseCliArguments(args);
     validateCliOptions(options);
+    
+    // Setup automatic container cleanup (unless disabled)
+    setupAutomaticCleanup({ disabled: options.noCleanup });
 
     // Handle direct CLI commands (--help, --clean, --list-configs)
     const commandExecuted = await executeCliCommand(options);

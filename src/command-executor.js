@@ -80,6 +80,7 @@ OPTIONS:
     --cmd COMMAND          Override the claude command for this session
     --tty                  Force TTY allocation (interactive mode)
     --no-tty               Disable TTY allocation (for scripts/automation)
+    --no-cleanup           Disable automatic container cleanup on exit
     --rebuild [PHASE]      Force rebuild of Docker images (ignore cache)
                            Optional phase name/number to rebuild from
     --show-phases          Show available build phases and their descriptions
@@ -136,6 +137,9 @@ EXAMPLES:
 
     # Start with custom command
     ${path.basename(process.argv[1])} start claude-habitat --cmd "claude -p 'do some stuff'"
+    
+    # Disable automatic container cleanup
+    ${path.basename(process.argv[1])} start discourse --no-cleanup
 
     # Use a configuration file
     ${path.basename(process.argv[1])} --config discourse.yaml

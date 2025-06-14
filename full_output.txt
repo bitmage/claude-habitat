@@ -1,0 +1,12 @@
+[32m
+=== Claude Habitat Test Runner ===
+[0m
+[31mFatal error: bad indentation of a sequence entry (82:9)
+
+ 79 |       - whoami
+ 80 | 
+ 81 |         # System tools should be pre-in ...
+ 82 |         echo "Checking for system tools..."
+--------------^
+ 83 |         ls -la ${WORKDIR}/system/tools/ ...
+ 84 | [0m

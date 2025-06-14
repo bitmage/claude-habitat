@@ -6,7 +6,7 @@ Claude Habitat creates isolated Docker environments for development. Each enviro
 
 ## Where to Find Information
 
-Claude Habitat uses **contextual documentation** - information is located where you need it:
+Claude Habitat uses **contextual documentation** - information is located where you need it.  Please MAINTAIN this standard for any new code being written.
 
 ### 🎯 Architecture
 - **System overview**: [claude-habitat.js](claude-habitat.js) - Overall project purpose and high-level architecture
