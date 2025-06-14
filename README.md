@@ -30,6 +30,8 @@ When "Habitat" Claude runs in a container:
 
 **Domain model**: [src/types.js](src/types.js) - Core concepts, terminology, and design patterns
 
+**Build pipeline**: [src/phases.js](src/phases.js) - 12-phase progressive build system with intelligent caching
+
 ## 📋 Testing
 
 ### Quick Testing Commands

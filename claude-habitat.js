@@ -55,6 +55,7 @@
  * ### Container & Image Management  
  * @see {@link src/habitat.js} - Session orchestration and lifecycle management
  * @see {@link src/container-operations.js} - Low-level Docker container operations
+ * @see {@link src/phases.js} - 12-phase progressive build system with intelligent caching
  * @see {@link src/image-lifecycle.js} - Image building, caching, and preparation
  * @see {@link src/image-management.js} - Image cleanup and maintenance operations
  * 

@@ -15,6 +15,7 @@ Claude Habitat uses **contextual documentation** - information is located where 
 ### 🔧 Habitat Configuration
 *Habitats for productive Claude Coding can be created through declarative config.yaml files.*
 - **Configuration system**: [src/config.js](src/config.js) - Loading order, environment variables
+- **Build pipeline**: [src/phases.js](src/phases.js) - 12-phase progressive build system and cache invalidation
 - **GitHub authentication**: [src/github.js](src/github.js) - GitHub App setup and repository access
 - **Error handling**: [src/errors.js](src/errors.js) - Troubleshooting patterns and recovery
 

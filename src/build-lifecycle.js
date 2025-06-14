@@ -9,6 +9,7 @@
  * @requires module:event-pipeline - Pipeline framework
  * @requires module:snapshot-manager - Snapshot creation and management
  * @requires module:phase-hash - Phase-based hash calculation
+ * @requires module:phases - Build phase definitions and configuration sections
  * @requires module:container-operations - Docker operations
  * @requires module:image-lifecycle - Existing build functions
  * @see {@link claude-habitat.js} - System composition and architectural overview
@@ -24,31 +25,12 @@ const path = require('path');
 const { EventPipeline } = require('./event-pipeline');
 const { createSnapshot, findValidSnapshot } = require('./snapshot-manager');
 const { calculateAllPhaseHashes, createPhaseLabels } = require('./phase-hash');
+const { BUILD_PHASES, findPhaseIndex } = require('./phases');
 const { execDockerCommand, dockerRun, dockerExec, startTempContainer, execDockerBuild } = require('./container-operations');
 const { buildBaseImage, runSetupCommands, cloneRepository, copyDirectoryToContainer, copyConfigFiles } = require('./image-lifecycle');
 const { fileExists, rel, createWorkDirPath } = require('./utils');
 const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
 
-/**
- * Standard build phases for all habitat builds
- * 
- * These phases run in dependency order and create snapshots at each step.
- * Phases 10-11 (verify, test) don't create snapshots as they're validation-only.
- */
-const BUILD_PHASES = [
-  { id: '1', name: 'base', description: 'Set base image' },
-  { id: '2', name: 'users', description: 'Create users and set permissions' },
-  { id: '3', name: 'env', description: 'Set environment variables' },
-  { id: '4', name: 'workdir', description: 'Create project work directory' },
-  { id: '5', name: 'habitat', description: 'Create habitat directory structure' },
-  { id: '6', name: 'files', description: 'Copy files and mount volumes' },
-  { id: '7', name: 'scripts', description: 'Run user-defined scripts' },
-  { id: '8', name: 'repos', description: 'Clone repositories' },
-  { id: '9', name: 'tools', description: 'Install habitat tools' },
-  { id: '10', name: 'verify', description: 'Verify filesystem and permissions' },
-  { id: '11', name: 'test', description: 'Run habitat tests' },
-  { id: '12', name: 'final', description: 'Set final configuration and command' }
-];
 
 /**
  * Create a progressive build pipeline for a habitat
@@ -87,7 +69,14 @@ async function createBuildPipeline(habitatConfigPath, options = {}) {
     if (validSnapshot) {
       startFromPhase = validSnapshot.startFromPhase;
       baseImageTag = validSnapshot.snapshotTag;
-      console.log(`✅ Using cached snapshot: ${validSnapshot.snapshotTag} (skipping ${startFromPhase} phases)`);
+      
+      if (startFromPhase >= BUILD_PHASES.length) {
+        // All phases are cached - final image is available
+        const finalPhase = BUILD_PHASES[BUILD_PHASES.length - 1];
+        console.log(`✅ Using cached snapshot: ${validSnapshot.snapshotTag} (${finalPhase.id}-${finalPhase.name})`);
+      } else {
+        console.log(`✅ Using cached snapshot: ${validSnapshot.snapshotTag} (skipping ${startFromPhase} phases)`);
+      }
     }
   }
   
@@ -196,6 +185,13 @@ const PHASE_HANDLERS = {
     const workdir = env.WORKDIR || '/workspace';
     const user = env.USER || 'root';
     
+    // Environment variable implementation:
+    // Variables from config are written to /etc/profile.d/habitat-env.sh
+    // This ensures they're available in multiple contexts:
+    // - Login shells (via /etc/profile.d/)
+    // - Build scripts (via dockerExec wrapper)
+    // - Main container process (via /entrypoint.sh wrapper)
+    
     // Run before:env file hooks
     await runFilesForPhase(ctx.containerId, ctx.config, 'before:env', user, workdir);
     
@@ -206,9 +202,10 @@ const PHASE_HANDLERS = {
       .map(([key, value]) => `export ${key}="${value}"`)
       .join('\n');
     
-    const envScript = `#!/bin/bash\n${envEntries}\n`;
-    await dockerExec(ctx.containerId, `cat > /etc/environment.sh << 'EOF'\n${envScript}\nEOF`, 'root');
-    await dockerExec(ctx.containerId, 'chmod +x /etc/environment.sh', 'root');
+    const envScript = `#!/bin/bash\n# Habitat environment variables\n${envEntries}\n# Set working directory to WORKDIR by default\ncd "$WORKDIR" 2>/dev/null || true\n`;
+    await dockerExec(ctx.containerId, `mkdir -p /etc/profile.d`, 'root');
+    await dockerExec(ctx.containerId, `cat > /etc/profile.d/habitat-env.sh << 'EOF'\n${envScript}\nEOF`, 'root');
+    await dockerExec(ctx.containerId, 'chmod +x /etc/profile.d/habitat-env.sh', 'root');
     
     // Run after:env file hooks
     await runFilesForPhase(ctx.containerId, ctx.config, 'after:env', user, workdir);
@@ -310,6 +307,15 @@ const PHASE_HANDLERS = {
     const user = env.USER || 'root';
     const workdir = env.WORKDIR || '/workspace';
     
+    // Create entrypoint wrapper script that ensures environment is loaded
+    const entrypointScript = `#!/bin/bash
+# Habitat entrypoint wrapper - ensures environment variables are available
+source /etc/profile.d/habitat-env.sh 2>/dev/null || true
+exec "$@"
+`;
+    await dockerExec(ctx.containerId, `cat > /entrypoint.sh << 'EOF'\n${entrypointScript}\nEOF`, 'root');
+    await dockerExec(ctx.containerId, 'chmod +x /entrypoint.sh', 'root');
+    
     // Run file hooks for scripts phase (files with no before/after specified)
     await runFilesForPhase(ctx.containerId, ctx.config, 'scripts', user, workdir);
     
@@ -403,7 +409,9 @@ const PHASE_HANDLERS = {
   },
 
   final: async (ctx) => {
-    // Final configuration is handled during commit
+    // Set ENTRYPOINT to ensure environment variables are available for main process
+    // This will be applied when the final snapshot is created
+    ctx.entrypointChange = 'ENTRYPOINT ["/entrypoint.sh"]';
     return ctx;
   }
 };
@@ -548,20 +556,8 @@ async function runScriptsForPhase(containerId, config, hook, defaultUser, workdi
  * @param {string|number} phase - Phase name or ID
  * @returns {number} - Phase index or -1 if not found
  */
-function findPhaseIndex(phase) {
-  const phaseStr = String(phase);
-  
-  for (let i = 0; i < BUILD_PHASES.length; i++) {
-    if (BUILD_PHASES[i].id === phaseStr || BUILD_PHASES[i].name === phaseStr) {
-      return i;
-    }
-  }
-  
-  return -1;
-}
 
 module.exports = {
-  BUILD_PHASES,
   createBuildPipeline,
   executePhase
 };

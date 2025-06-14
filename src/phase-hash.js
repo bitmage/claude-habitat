@@ -8,6 +8,7 @@
  * 
  * @requires crypto - Node.js crypto module for hashing
  * @requires module:config - Configuration loading and processing
+ * @requires module:phases - Build phase definitions and configuration sections
  * @see {@link claude-habitat.js} - System composition and architectural overview
  * 
  * @tests
@@ -17,28 +18,8 @@
 
 const crypto = require('crypto');
 const { loadHabitatEnvironmentFromConfig } = require('./config');
+const { getPhaseConfigSections } = require('./phases');
 
-/**
- * Configuration sections relevant to each build phase
- * 
- * Each phase hash is calculated from the relevant subset of the complete
- * coalesced configuration. This enables fine-grained cache invalidation
- * where only the phases affected by config changes need to be rebuilt.
- */
-const PHASE_CONFIG_MAPPING = {
-  'base': ['base_image', 'image', 'name'], // Includes base_image and image config (which may contain dockerfile path)
-  'users': ['env.USER', 'env.WORKDIR'], // Environment variables that affect user setup
-  'env': ['env'], // All environment variables
-  'workdir': ['env.WORKDIR', 'env.HABITAT_PATH', 'env.SYSTEM_PATH', 'env.SHARED_PATH', 'env.LOCAL_PATH'],
-  'habitat': ['env.HABITAT_PATH', 'env.SYSTEM_PATH', 'env.SHARED_PATH', 'env.LOCAL_PATH'],
-  'files': ['files', 'volumes'],
-  'scripts': ['scripts', 'setup'], // Support both new 'scripts' and legacy 'setup' for backwards compatibility
-  'repos': ['repos', 'repositories'], // Support both old and new names
-  'tools': ['tools'], // Tools are defined by file structure, not config
-  'verify': ['verify-fs'],
-  'test': ['tests'],
-  'final': ['entry', 'container', 'claude'] // Final container configuration
-};
 
 /**
  * Calculate phase-specific hash from coalesced configuration
@@ -60,7 +41,7 @@ async function calculatePhaseHash(habitatConfigPath, phaseName) {
   const coalescedConfig = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
   
   // Get the configuration sections relevant to this phase
-  const relevantSections = PHASE_CONFIG_MAPPING[phaseName];
+  const relevantSections = getPhaseConfigSections(phaseName);
   if (!relevantSections) {
     throw new Error(`Unknown phase: ${phaseName}`);
   }
@@ -100,7 +81,7 @@ async function calculateAllPhaseHashes(habitatConfigPath, phaseNames) {
   const hashes = {};
   
   for (const phaseName of phaseNames) {
-    const relevantSections = PHASE_CONFIG_MAPPING[phaseName];
+    const relevantSections = getPhaseConfigSections(phaseName);
     if (!relevantSections) {
       throw new Error(`Unknown phase: ${phaseName}`);
     }
@@ -233,6 +214,5 @@ module.exports = {
   calculatePhaseHash,
   calculateAllPhaseHashes,
   validatePhaseHashes,
-  createPhaseLabels,
-  PHASE_CONFIG_MAPPING
+  createPhaseLabels
 };
