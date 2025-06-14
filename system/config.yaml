@@ -30,7 +30,7 @@ files:
   # Copy Claude directory to root for Claude to find
   - src: ~/.claude
     dest: /.claude
-    owner: "{env.USER}"
+    owner: ${USER}
     description: "Claude configuration and credentials"
   # Copy system CLAUDE.md to root
   - src: ./system/CLAUDE.md
@@ -67,12 +67,12 @@ scripts:
           echo "UTC" > /etc/timezone
         fi
 
-  - run_as: "{env.USER}"
+  - run_as: ${USER}
     commands:
       - |
         # Set up GitHub App authentication using tools
         echo "Setting up GitHub authentication..."
-        "{env.SYSTEM_PATH}/tools/bin/setup-github-auth"
+        ${SYSTEM_PATH}/tools/bin/setup-github-auth
 
 # Filesystem verification structure
 verify-fs:

@@ -19,6 +19,7 @@ repositories:
 
 env:
   - USER=node
+  - HOME=/home/${USER}
   - WORKDIR=/workspace
   - HABITAT_PATH=${WORKDIR}
   - SYSTEM_PATH=${WORKDIR}/system
@@ -37,25 +38,25 @@ env:
 files:
   # Copy system and shared directories for writable access
   - src: ./system
-    dest: ${WORKDIR}/system
+    dest: ${SYSTEM_PATH}
     after: repos
-    owner: "${USER}"
+    owner: ${USER}
     description: "System tools and configuration (writable copy)"
   - src: ./shared
-    dest: ${WORKDIR}/shared
+    dest: ${SHARED_PATH}
     after: repos
-    owner: "${USER}"
+    owner: ${USER}
     description: "Shared configuration and resources (writable copy)"
   # Create .claude directory structure for Claude to use
   - src: /dev/null
-    dest: /home/${USER}/.claude/.keep
+    dest: ${HOME}/.claude/.keep
     mode: 644
     description: "Ensure .claude directory exists for Claude workspace"
   # Copy Claude credentials from host to container during build (bypass habitat only)
   - src: ~/.claude/.credentials.json
-    dest: /.claude/.credentials.json
+    dest: ~/.claude/.credentials.json
     mode: 600
-    owner: "${USER}"
+    owner: ${USER}
     description: "Claude credentials for authentication"
 
 volumes:
@@ -63,87 +64,23 @@ volumes:
   - /var/run/docker.sock:/var/run/docker.sock
 
 scripts:
-  - run_as: root
-    commands:
-      - |
-        # Create /habitat directory structure
-        echo "Creating /habitat directory structure..."
-        mkdir -p /habitat
-        chown node:node /habitat
-        chmod 755 /habitat
 
   - run_as: node
     commands:
       - |
         set -e  # Exit on any error
-        cd ${WORKDIR}
 
-        # Fix ownership of workspace (should be owned by node, not root)
-        echo "Fixing workspace ownership..."
-        sudo chown -R node:node ${WORKDIR}
-
-        # System tools should be pre-installed on host and copied via files: section
-        echo "Checking for system tools..."
-        ls -la ${WORKDIR}/system/tools/bin/ || echo "No tools found - ensure tools are installed on host"
-
-        # Set up git configuration using install-gitconfig script
-        echo "Setting up git configuration..."
-        if ${WORKDIR}/system/tools/bin/install-gitconfig; then
-          echo "✅ Git configuration applied for user"
-        else
-          echo "⚠️  Git configuration setup failed"
-        fi
-
-        # Set up GitHub authentication using the setup-github-auth tool
-        echo "Setting up GitHub authentication..."
-        if ${WORKDIR}/system/tools/bin/setup-github-auth; then
-          echo "✅ GitHub authentication configured successfully"
-
-          # Configure git to use the credential helper with environment variables
-          export GITHUB_APP_ID=1357221
-          export GITHUB_APP_PEM_FILE=${WORKDIR}/shared/behold-the-power-of-claude.2025-06-04.private-key.pem
-          git config --global credential.helper ${WORKDIR}/system/tools/bin/git-credential-github-app
-
-          echo "✅ Git credential helper configured for GitHub App authentication"
-        else
-          echo "⚠️  GitHub authentication setup failed - continuing without GitHub access"
-        fi
-
-        echo "Claude Habitat setup complete - Docker access will be configured at container startup"
-
-  - run_as: root
-    after: repos
-    commands:
-      - |
-        # Setup git configuration from shared (now that files are copied)
-        echo "Debug: Checking for gitconfig at ${WORKDIR}/shared/gitconfig"
-        ls -la ${WORKDIR}/shared/gitconfig || echo "File does not exist"
-        if [ -f ${WORKDIR}/shared/gitconfig ]; then
-          echo "Found gitconfig, copying to /etc/gitconfig and /root/.gitconfig"
-          cp ${WORKDIR}/shared/gitconfig /etc/gitconfig && echo "Copied to /etc/gitconfig"
-          cp ${WORKDIR}/shared/gitconfig /root/.gitconfig && echo "Copied to /root/.gitconfig"
-          echo "✅ Git configuration applied system-wide"
-          ls -la /etc/gitconfig /root/.gitconfig
-        else
-          echo "⚠️  No gitconfig found at ${WORKDIR}/shared/gitconfig"
-          ls -la ${WORKDIR}/shared/
-        fi
+        ${SYSTEM_PATH}/tools/bin/install-gitconfig
+        ${SYSTEM_PATH}/tools/bin/setup-github-auth
 
   - run_as: node
     after: repos
     commands:
       - |
         set -e  # Exit on any error
-        cd ${WORKDIR}
 
-        echo "Installing Claude Habitat dependencies..."
+        echo "Running npm install..."
         npm install
-        echo "Running tests to verify setup..."
-        npm test
-
-        # Fix ownership again after any root operations that may have changed it
-        echo "Ensuring correct ownership after setup..."
-        sudo chown -R node:node ${WORKDIR}
 
 container:
   startup_delay: 5
@@ -186,12 +123,9 @@ verify-fs:
     - "${SHARED_PATH}/config.yaml"
     - "${SHARED_PATH}/gitconfig"
     - "${SHARED_PATH}/behold-the-power-of-claude.2025-06-04.private-key.pem"
-    # Git configuration files (all 3 locations) - TEMPORARILY DISABLED FOR FILE HOOKS TESTING
-    # - /etc/gitconfig
-    # - /root/.gitconfig
-    # - /home/node/.gitconfig
-    # Claude credentials (copied from host) - TEMPORARILY DISABLED FOR FILE HOOKS TESTING
-    # - /home/node/.claude/.credentials.json
+    # user files
+    - ~/.gitconfig
+    - ~/.claude/.credentials.json
 
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)
 claude:

@@ -39,11 +39,11 @@ files:
 
 # Setup commands that run after file operations
 scripts:
-  - run_as: "{env.USER}"
+  - run_as: ${USER}
     commands:
       - |
         # Configure git for container user using centralized script
-        "/habitat/system/tools/bin/install-gitconfig"
+        ${SYSTEM_PATH}/tools/bin/install-gitconfig
 
 # Filesystem verification - verify shared/user files are properly configured
 verify-fs:

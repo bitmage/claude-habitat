@@ -101,18 +101,18 @@ container:
 verify-fs:
   required_files:
     # Main discourse source files at project root
-    - "{env.WORKDIR}/.git/config"
-    - "{env.WORKDIR}/Gemfile"
-    - "{env.WORKDIR}/package.json"
-    - "{env.WORKDIR}/bin/rails"
-    - "{env.WORKDIR}/app/controllers/application_controller.rb"
-    - "{env.WORKDIR}/plugins/county-fence"
-    - "{env.WORKDIR}/plugins/discourse-calendar"
+    - ${WORKDIR}/.git/config
+    - ${WORKDIR}/Gemfile
+    - ${WORKDIR}/package.json
+    - ${WORKDIR}/bin/rails
+    - ${WORKDIR}/app/controllers/application_controller.rb
+    - ${WORKDIR}/plugins/county-fence
+    - ${WORKDIR}/plugins/discourse-calendar
     # Infrastructure files in /habitat directories
-    - "{env.SYSTEM_PATH}/config.yaml"
-    - "{env.SYSTEM_PATH}/tools/tools.yaml"
-    - "{env.SHARED_PATH}/config.yaml"
-    - "{env.LOCAL_PATH}/config.yaml"
+    - ${SYSTEM_PATH}/config.yaml
+    - ${SYSTEM_PATH}/tools/tools.yaml
+    - ${SHARED_PATH}/config.yaml
+    - ${LOCAL_PATH}/config.yaml
     # Note: CLAUDE.md files are excluded by .habignore but will be at /CLAUDE.md
 
 # Claude configuration
