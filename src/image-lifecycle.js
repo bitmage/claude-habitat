@@ -296,7 +296,7 @@ async function cloneRepository(container, repoInfo, workDir, containerUser = nul
   console.log(`Executing clone command: ${cloneCmd}`);
   try {
     // Execute with explicit bash to avoid working directory issues
-    const result = await dockerExec(container, `bash -c "${cloneCmd}"`, 'root');
+    const result = await dockerExec(container, `/usr/bin/bash -c "${cloneCmd}"`, 'root');
     if (result) {
       console.log(`Clone output: ${result.substring(0, 200)}`);
     }
