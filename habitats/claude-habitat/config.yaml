@@ -101,13 +101,6 @@ scripts:
           (groupadd -g ${DOCKER_GROUP_GID} docker && echo "Created docker group")
         (usermod -aG docker node && echo "Added node to docker group") || \
           echo "Warning: Could not add node to docker group, will run without Docker access"
-        
-        # Create workspace directory structure with proper permissions
-        mkdir -p /workspace
-        chown -R node:node /workspace
-        mkdir -p /home/node/.claude
-        chown -R node:node /home/node/.claude
-        chmod 755 /home/node/.claude
 
   - run_as: node
     commands:

@@ -86,6 +86,23 @@ async function createBuildPipeline(habitatConfigPath, options = {}) {
     if (rebuildPhaseIndex !== -1) {
       startFromPhase = rebuildPhaseIndex;
       console.log(`🔄 Rebuilding from phase ${rebuildFrom}`);
+      
+      // Find snapshot from the phase BEFORE the rebuild phase to start from
+      if (rebuildPhaseIndex > 0) {
+        const previousPhase = BUILD_PHASES[rebuildPhaseIndex - 1];
+        const snapshotTag = `habitat-${habitatName}:${previousPhase.id}-${previousPhase.name}`;
+        
+        // Check if the previous phase snapshot exists
+        const { dockerImageExists } = require('./container-operations');
+        if (await dockerImageExists(snapshotTag)) {
+          baseImageTag = snapshotTag;
+          console.log(`✅ Using snapshot: ${snapshotTag} (starting from ${previousPhase.name})`);
+        } else {
+          console.log(`⚠️  Previous snapshot ${snapshotTag} not found, rebuilding from beginning`);
+          startFromPhase = 0;
+          baseImageTag = null;
+        }
+      }
     }
   }
   
@@ -203,9 +220,10 @@ const PHASE_HANDLERS = {
       .join('\n');
     
     const envScript = `#!/bin/bash\n# Habitat environment variables\n${envEntries}\n# Set working directory to WORKDIR by default\ncd "$WORKDIR" 2>/dev/null || true\n`;
-    await dockerExec(ctx.containerId, `mkdir -p /etc/profile.d`, 'root');
-    await dockerExec(ctx.containerId, `cat > /etc/profile.d/habitat-env.sh << 'EOF'\n${envScript}\nEOF`, 'root');
-    await dockerExec(ctx.containerId, 'chmod +x /etc/profile.d/habitat-env.sh', 'root');
+    await dockerExec(ctx.containerId, `/usr/bin/mkdir -p /etc/profile.d`, 'root');
+    await dockerExec(ctx.containerId, `/usr/bin/cat > /etc/profile.d/habitat-env.sh << 'EOF'\n${envScript}\nEOF`, 'root');
+    // Make the script executable
+    await dockerExec(ctx.containerId, '/usr/bin/chmod +x /etc/profile.d/habitat-env.sh', 'root');
     
     // Run after:env file hooks
     await runFilesForPhase(ctx.containerId, ctx.config, 'after:env', user, workdir);
@@ -226,9 +244,9 @@ const PHASE_HANDLERS = {
     // Run before:workdir scripts
     await runScriptsForPhase(ctx.containerId, ctx.config, 'before:workdir', user, workdir);
     
-    await dockerExec(ctx.containerId, `mkdir -p ${workdir}`, 'root');
+    await dockerExec(ctx.containerId, `/usr/bin/mkdir -p ${workdir}`, 'root');
     if (user !== 'root') {
-      await dockerExec(ctx.containerId, `chown ${user}:${user} ${workdir}`, 'root');
+      await dockerExec(ctx.containerId, `/usr/bin/chown ${user}:${user} ${workdir}`, 'root');
     }
     
     // Run after:workdir file hooks
@@ -259,9 +277,9 @@ const PHASE_HANDLERS = {
     ];
     
     for (const dir of dirs) {
-      await dockerExec(ctx.containerId, `mkdir -p ${dir}`, 'root');
+      await dockerExec(ctx.containerId, `/usr/bin/mkdir -p ${dir}`, 'root');
       if (user !== 'root') {
-        await dockerExec(ctx.containerId, `chown ${user}:${user} ${dir}`, 'root');
+        await dockerExec(ctx.containerId, `/usr/bin/chown ${user}:${user} ${dir}`, 'root');
       }
     }
     
@@ -291,7 +309,7 @@ const PHASE_HANDLERS = {
       ]) {
         if (await fileExists(srcPath)) {
           const containerPath = workDirPath('habitat', dirName);
-          await dockerExec(ctx.containerId, `mkdir -p ${containerPath}`, 'root');
+          await dockerExec(ctx.containerId, `/usr/bin/mkdir -p ${containerPath}`, 'root');
           await copyDirectoryToContainer(ctx.containerId, srcPath, containerPath);
         }
       }
@@ -313,8 +331,8 @@ const PHASE_HANDLERS = {
 source /etc/profile.d/habitat-env.sh 2>/dev/null || true
 exec "$@"
 `;
-    await dockerExec(ctx.containerId, `cat > /entrypoint.sh << 'EOF'\n${entrypointScript}\nEOF`, 'root');
-    await dockerExec(ctx.containerId, 'chmod +x /entrypoint.sh', 'root');
+    await dockerExec(ctx.containerId, `/usr/bin/cat > /entrypoint.sh << 'EOF'\n${entrypointScript}\nEOF`, 'root');
+    await dockerExec(ctx.containerId, '/usr/bin/chmod +x /entrypoint.sh', 'root');
     
     // Run file hooks for scripts phase (files with no before/after specified)
     await runFilesForPhase(ctx.containerId, ctx.config, 'scripts', user, workdir);

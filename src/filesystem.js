@@ -167,7 +167,7 @@ async function copyFileToContainer(container, srcPath, destPath, containerUser =
   try {
     // Create destination directory as root to ensure permissions
     const destDir = path.dirname(destPath);
-    await dockerExec(container, `mkdir -p ${destDir}`, 'root');
+    await dockerExec(container, `/usr/bin/mkdir -p ${destDir}`, 'root');
     
     // Resolve symlinks before copying to avoid Docker cp issues
     const realSrcPath = await fs.realpath(srcPath);
@@ -293,7 +293,7 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
       console.log('Running habitat file initialization...');
       try {
         // Simple initialization commands
-        const initCommands = 'if [ -f /workspace/shared/gitconfig ]; then sudo cp /workspace/shared/gitconfig /etc/gitconfig && sudo cp /workspace/shared/gitconfig /root/.gitconfig && cp /workspace/shared/gitconfig /home/node/.gitconfig; fi && if [ -f /home/node/.claude/.credentials.json ]; then sudo mkdir -p /root/.claude && sudo cp /home/node/.claude/.credentials.json /root/.claude/.credentials.json && sudo chmod 600 /root/.claude/.credentials.json; fi';
+        const initCommands = 'if [ -f /workspace/shared/gitconfig ]; then sudo /usr/bin/cp /workspace/shared/gitconfig /etc/gitconfig && sudo /usr/bin/cp /workspace/shared/gitconfig /root/.gitconfig && /usr/bin/cp /workspace/shared/gitconfig /home/node/.gitconfig; fi && if [ -f /home/node/.claude/.credentials.json ]; then sudo /usr/bin/mkdir -p /root/.claude && sudo /usr/bin/cp /home/node/.claude/.credentials.json /root/.claude/.credentials.json && sudo /usr/bin/chmod 600 /root/.claude/.credentials.json; fi';
         
         await dockerExec(container.name, initCommands, config.container?.user || 'node');
       } catch (err) {

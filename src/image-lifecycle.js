@@ -180,7 +180,7 @@ async function copyConfigFiles(container, config, resolvedUser = 'root', resolve
       console.log(`Copying directory ${srcPath} → ${destPath}`);
       
       // Create destination directory
-      await dockerExec(container, `mkdir -p ${destPath}`, 'root');
+      await dockerExec(container, `/usr/bin/mkdir -p ${destPath}`, 'root');
       
       // Copy directory recursively (respects .habignore)
       await copyDirectoryToContainer(container, srcPath, destPath);
@@ -206,7 +206,7 @@ async function copyConfigFiles(container, config, resolvedUser = 'root', resolve
       
       // Create destination directory
       const destDir = path.dirname(destPath);
-      await dockerExec(container, `mkdir -p ${destDir}`, 'root');
+      await dockerExec(container, `/usr/bin/mkdir -p ${destDir}`, 'root');
       
       // Copy the file
       await copyFileToContainer(container, srcPath, destPath);
@@ -280,12 +280,12 @@ async function cloneRepository(container, repoInfo, workDir, containerUser = nul
   console.log(`Cloning ${repoInfo.url} to ${repoInfo.path}...`);
   
   const parentDir = path.dirname(repoInfo.path);
-  await dockerExec(container, `mkdir -p ${parentDir}`, 'root');
+  await dockerExec(container, `/usr/bin/mkdir -p ${parentDir}`, 'root');
   
   // Check if directory already exists and remove it if so
   const repoName = path.basename(repoInfo.path);
   // Remove and recreate to avoid Docker WORKDIR issues
-  await dockerExec(container, `rm -rf ${repoInfo.path} && mkdir -p ${repoInfo.path}`, 'root');
+  await dockerExec(container, `/usr/bin/rm -rf ${repoInfo.path} && /usr/bin/mkdir -p ${repoInfo.path}`, 'root');
   
   // Clone the repository (use . to clone into existing directory)
   let cloneCmd = `cd ${repoInfo.path} && git clone ${repoInfo.url} .`;
