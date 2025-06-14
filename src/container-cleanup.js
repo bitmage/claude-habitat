@@ -123,10 +123,54 @@ function setupAutomaticCleanup(options = {}) {
     }
   };
   
+  // Create synchronous handler for exit event (async doesn't work)
+  const syncCleanupHandler = () => {
+    // For normal exit, we need to use synchronous docker commands
+    try {
+      const { execSync } = require('child_process');
+      
+      // Quick check if we're the last process
+      try {
+        const processes = execSync(`pgrep -f "claude-habitat"`, { encoding: 'utf8' });
+        const processCount = processes.trim().split('\n').filter(line => line.trim()).length;
+        if (processCount > 1) {
+          return; // Other processes running
+        }
+      } catch (error) {
+        // pgrep returns non-zero if no processes found, we're the last one
+      }
+      
+      // Get container IDs
+      try {
+        const containerIds = execSync(`docker ps -a -q --filter "name=claude-habitat"`, { encoding: 'utf8' });
+        const ids = containerIds.trim().split('\n').filter(id => id.trim());
+        
+        if (ids.length > 0) {
+          console.log('🧹 Cleaning up claude-habitat containers...');
+          
+          // Stop containers (ignore failures)
+          try {
+            execSync(`docker stop ${ids.join(' ')}`, { timeout: 30000 });
+          } catch (error) {
+            // Continue with removal
+          }
+          
+          // Remove containers
+          execSync(`docker rm ${ids.join(' ')}`);
+        }
+      } catch (error) {
+        // Ignore cleanup errors during shutdown
+      }
+    } catch (error) {
+      // Ignore all errors during synchronous cleanup
+    }
+  };
+  
   // Register for various exit conditions
-  process.on('SIGINT', cleanupHandler);   // Ctrl-C
-  process.on('SIGTERM', cleanupHandler);  // Termination signal
-  process.on('exit', cleanupHandler);     // Normal exit
+  process.on('SIGINT', cleanupHandler);       // Ctrl-C (async)
+  process.on('SIGTERM', cleanupHandler);      // Termination signal (async)
+  process.on('beforeExit', cleanupHandler);   // Normal exit (async - better than 'exit')
+  process.on('exit', syncCleanupHandler);     // Final fallback (sync only)
 }
 
 module.exports = {
