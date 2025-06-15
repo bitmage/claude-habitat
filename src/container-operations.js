@@ -175,15 +175,26 @@ async function execDockerBuild(buildArgs) {
 }
 
 /**
- * Start a temporary container from an image
+ * Start a temporary container from an image with optional volume mounts
  * 
  * @param {string} imageTag - Image to start container from
  * @param {string} [prefix='build'] - Container name prefix (e.g., 'build', 'prep')
+ * @param {Array<string>} [volumeMounts=[]] - Resolved volume mount strings
  * @returns {Promise<string>} - Container ID
  */
-async function startTempContainer(imageTag, prefix = 'build') {
+async function startTempContainer(imageTag, prefix = 'build', volumeMounts = []) {
   const containerId = `claude-habitat-${prefix}-${Date.now()}`;
-  await dockerRun(['run', '-d', '--name', containerId, imageTag, '/bin/sh', '-c', 'tail -f /dev/null']);
+  
+  const args = ['run', '-d', '--name', containerId];
+  
+  // Add volume mounts if provided
+  volumeMounts.forEach(volume => {
+    args.push('-v', volume);
+  });
+  
+  args.push(imageTag, '/bin/sh', '-c', 'tail -f /dev/null');
+  
+  await dockerRun(args);
   
   // Wait for container to be ready
   await new Promise(resolve => setTimeout(resolve, 2000));

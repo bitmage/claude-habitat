@@ -361,6 +361,11 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
       envArgs.push('-e', `${key}=${value}`);
     }
     
+    // Load and resolve volumes from configuration
+    const { loadAndResolveVolumes, buildVolumeArgs } = require('./volume-resolver');
+    const resolvedVolumes = await loadAndResolveVolumes(config, compiledEnv);
+    const volumeArgs = buildVolumeArgs(resolvedVolumes);
+    
     const fullCommand = claudeCommand;
     
     const dockerArgs = [
@@ -368,7 +373,7 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
       ...envArgs,
       '-u', containerUser,
       '-w', workDir,
-      '-v', '/var/run/docker.sock:/var/run/docker.sock',
+      ...volumeArgs,
       tag,
       '/bin/bash', '-c', fullCommand
     ];

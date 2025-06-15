@@ -205,22 +205,27 @@ const CORE_PHASE_HANDLERS = {
   base: async (ctx) => {
     const config = ctx.config;
     
+    // Load and resolve volumes for build container
+    const { loadAndResolveVolumes } = require('./volume-resolver');
+    const environment = config._environment || {};
+    const resolvedVolumes = await loadAndResolveVolumes(config, environment);
+    
     if (ctx.hasDockerfile) {
       // Build from Dockerfile in habitat directory
       const dockerfilePath = path.join(ctx.habitatDir, 'Dockerfile');
       const tempTag = `temp-dockerfile-${Date.now()}`;
       
       await execDockerBuild(['build', '-f', dockerfilePath, '-t', tempTag, ctx.habitatDir]);
-      const containerId = await startTempContainer(tempTag);
+      const containerId = await startTempContainer(tempTag, 'build', resolvedVolumes);
       
-      return { ...ctx, containerId, baseImageTag: tempTag, fromDockerfile: true };
+      return { ...ctx, containerId, baseImageTag: tempTag, fromDockerfile: true, resolvedVolumes };
     } else if (config.base_image) {
-      const containerId = await startTempContainer(config.base_image);
-      return { ...ctx, containerId, baseImageTag: config.base_image };
+      const containerId = await startTempContainer(config.base_image, 'build', resolvedVolumes);
+      return { ...ctx, containerId, baseImageTag: config.base_image, resolvedVolumes };
     } else {
       const baseTag = await buildBaseImage(config, { rebuild: ctx.rebuild });
-      const containerId = await startTempContainer(baseTag);
-      return { ...ctx, containerId, baseImageTag: baseTag };
+      const containerId = await startTempContainer(baseTag, 'build', resolvedVolumes);
+      return { ...ctx, containerId, baseImageTag: baseTag, resolvedVolumes };
     }
   },
 

@@ -556,13 +556,18 @@ echo "All tests completed"
       envArgs.push('-e', `${key}=${value}`);
     }
 
+    // Load and resolve volumes from configuration
+    const { loadAndResolveVolumes, buildVolumeArgs } = require('./volume-resolver');
+    const resolvedVolumes = await loadAndResolveVolumes(habitatConfig, compiledEnv);
+    const volumeArgs = buildVolumeArgs(resolvedVolumes);
+    
     // Docker run arguments for ephemeral test execution
     const dockerArgs = [
       'run', '--rm',
       ...envArgs,
       '-u', containerUser,
       '-w', workDir,
-      '-v', '/var/run/docker.sock:/var/run/docker.sock',
+      ...volumeArgs,
       imageTag,
       '/bin/bash', '-c', testScript
     ];
