@@ -15,7 +15,7 @@
  *    if it could instead be done here
  * 
  * @requires module:config - Configuration loading and validation
- * @see {@link claude-habitat.js} - System composition and architectural overview
+ * @see {@link claude-habitat.js} for system composition and architectural overview
  * 
  * @tests
  * - All unit tests: `npm test`
@@ -35,45 +35,47 @@
  * - Purpose: Manages Claude Habitat itself - maintenance, creating new habitats, troubleshooting
  * - Access: Has access to your entire Claude Habitat installation
  * - Documentation: Uses files in claude/ directory
- * - Implementation: src/scenes/maintenance.scene.js
  * - Examples: ./claude-habitat add, ./claude-habitat maintain, ./claude-habitat --clean
+ * @see {@link src/scenes/maintenance.scene.js} for maintenance operations implementation
  * 
  * "Habitat" Claude (hclaude)
  * - Where: Runs inside the isolated Docker container  
  * - Purpose: Works on your actual development projects
  * - Access: Only sees the project code and development environment
  * - Documentation: Uses assembled CLAUDE.md from system/shared/habitat sources
- * - Implementation: Container operations in src/habitat.js, src/container-operations.js
  * - Examples: Writing code, creating PRs, debugging applications within development environment
+ * @see {@link src/habitat.js} for habitat session management
+ * @see {@link src/container-operations.js} for container operations
  */
 
 /*
  * Directory Structure & Ownership
- * Implementation: File operations in src/filesystem.js, path resolution in src/utils.js
+ * @see {@link src/filesystem.js} for file operations
+ * @see {@link src/utils.js} for path resolution utilities
  * 
  * claude/ - "Meta" Claude Documentation
  * - Audience: "Meta" Claude (local execution only)
  * - Content: Maintenance guides, troubleshooting, habitat creation instructions  
  * - Container: Never copied to container
- * - Implementation: src/scenes/maintenance.scene.js
+ * @see {@link src/scenes/maintenance.scene.js} for maintenance operations
  * 
  * system/ - Infrastructure
  * - Audience: "Habitat" Claude (and managed by Claude Habitat)
  * - Content: Base instructions, development tools, system configuration
  * - Container: Copied to /workspace/claude-habitat/system/
- * - Implementation: Tool management in src/scenes/tools.scene.js
+ * @see {@link src/scenes/tools.scene.js} for tool management
  * 
  * shared/ - User Preferences  
  * - Audience: "Habitat" Claude (configured by user)
  * - Content: Personal configs, SSH keys, user tools, personal "Habitat" Claude preferences
  * - Container: Copied to /habitat/shared/
- * - Implementation: User configuration loading in src/config.js
+ * @see {@link src/config.js} for user configuration loading
  * 
  * habitats/ - Project Environments
  * - Audience: "Habitat" Claude (configured per project)
  * - Content: Project-specific Dockerfiles, configs, and "Habitat" Claude instructions
  * - Container: Relevant files copied to /workspace/claude-habitat/
- * - Implementation: Habitat management in src/habitat.js
+ * @see {@link src/habitat.js} for habitat management
  */
 
 /*
@@ -82,86 +84,77 @@
  * Isolation
  * - "Meta" Claude: Can see and modify your entire Claude Habitat installation
  * - "Habitat" Claude: Completely isolated in Docker, can only see project and development environment
- * - Implementation: Container isolation in src/container-operations.js
+ * @see {@link src/container-operations.js} for container isolation implementation
  * 
  * Build Phases
- * The 12-phase progressive build system that constructs habitat containers:
- * 1. base - Set base image (from Dockerfile or base_image)
- * 2. users - Create users and set permissions
- * 3. env - Set environment variables
- * 4. workdir - Create project work directory
- * 5. habitat - Create habitat directory structure
- * 6. files - Copy files and mount volumes
- * 7. repos - Clone repositories
- * 8. tools - Install habitat tools
- * 9. scripts - Run user-defined scripts
- * 10. verify - Verify filesystem and permissions
- * 11. test - Run habitat tests
- * 12. final - Set final configuration and command
- * - Implementation: Phase definitions in src/phases.js, execution in src/build-lifecycle.js
+ * The 12-phase progressive build system that constructs habitat containers.
+ * @see {@link src/phases.js} for phase definitions and configuration sections
+ * @see {@link src/build-lifecycle.js} for phase execution and pipeline implementation
  * 
  * Instructions Assembly
  * "Habitat" Claude receives a composed CLAUDE.md that combines:
  * 1. system/CLAUDE.md - Base environment and tools
  * 2. shared/claude.md - Your personal preferences
  * 3. habitats/PROJECT/claude.md - Project-specific instructions
- * - Implementation: Configuration assembly in src/config.js
+ * @see {@link src/config.js} for configuration assembly implementation
  * 
  * Tools
  * - System tools (system/tools/) - Available to "Habitat" Claude in containers
  * - Meta tools - "Meta" Claude uses system tools when available for portability  
  * - User tools (shared/tools/) - Personal tools for "Habitat" Claude
- * - Implementation: Tool management in ToolSet class below, src/scenes/tools.scene.js
+ * @see {@link src/scenes/tools.scene.js} for tool management implementation
  */
 
 /*
  * Architecture Patterns
- * Implementation: See claude-habitat.js for complete architectural overview
+ * @see {@link claude-habitat.js} for complete architectural overview
  * 
  * Composition (Three-Layer System)
  * The layered approach to building "Habitat" Claude's environment:
  * 1. Infrastructure Layer (system/) - Managed by Claude Habitat itself
  * 2. Preferences Layer (shared/) - Managed by User (you)  
  * 3. Project Layer (habitats/[project]/) - Managed per-project basis
- * - Implementation: Layer composition in src/config.js
+ * @see {@link src/config.js} for layer composition implementation
  * 
  * Instructions Assembly  
  * The process of combining layers into a single CLAUDE.md for "Habitat" Claude
- * - Implementation: Configuration processing in src/config.js
+ * @see {@link src/config.js} for configuration processing implementation
  * 
  * Image Lifecycle
  * Base Image: The result of building the Dockerfile
  * Prepared Image: Base Image + repositories + tools + configuration
  * Cache Hash: Unique identifier for prepared images based on configuration content
- * - Implementation: Image operations in src/image-lifecycle.js, src/image-management.js
+ * @see {@link src/image-lifecycle.js} for image operations
+ * @see {@link src/image-management.js} for image management
  * 
  * Execution Contexts
  * Host Context: Where "Meta" Claude operates (local machine)
  * Container Context: Where "Habitat" Claude operates (isolated Docker container)
- * - Implementation: Context management in src/habitat.js, src/container-operations.js
+ * @see {@link src/habitat.js} for context management
+ * @see {@link src/container-operations.js} for container operations
  * 
  * Repository Access Patterns
  * Development Repositories: Write access (can commit and push changes)
  * Dependency Repositories: Read access (clone and pull only)
- * - Implementation: Repository operations in src/github.js
+ * @see {@link src/github.js} for repository operations
  * 
  * Authentication Scopes  
  * Host Authentication: Used by "Meta" Claude for infrastructure operations
  * Container Authentication: Used by "Habitat" Claude for development work
- * - Implementation: Authentication setup in src/github.js
+ * @see {@link src/github.js} for authentication setup
  * 
  * File Organization Patterns
  * Infrastructure Files (System): Uppercase CLAUDE.md for managed infrastructure
  * User Files (Shared & Habitat): Lowercase claude.md for user-managed content
- * - Implementation: File operations in src/filesystem.js
+ * @see {@link src/filesystem.js} for file operations
  * 
  * Operational Patterns
  * Habitat Creation: Process of defining a new development environment
  * Session Lifecycle: Standard flow for development work
  * Maintenance Operations: "Meta" Claude infrastructure management
- * - Implementation: Habitat creation in src/scenes/add-habitat.scene.js
- * - Session management in src/habitat.js
- * - Maintenance in src/scenes/maintenance.scene.js
+ * @see {@link src/scenes/add-habitat.scene.js} for habitat creation
+ * @see {@link src/habitat.js} for session management
+ * @see {@link src/scenes/maintenance.scene.js} for maintenance operations
  */
 
 // ============================================================================
