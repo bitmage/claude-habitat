@@ -270,40 +270,113 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
   }
 }
 
-// Enhanced verification that uses the bash script
+// Enhanced verification that uses ephemeral containers
 async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', config = null, rebuild = false) {
   const { colors } = require('./utils');
-  const { createHabitatContainer } = require('./container-lifecycle');
+  const { spawn } = require('child_process');
   
-  console.log(`Starting filesystem verification container...`);
+  console.log(`Starting filesystem verification in ephemeral container...`);
   
-  let container = null;
   try {
-    // Create container using shared logic
-    container = await createHabitatContainer(config, {
-      name: `verify-fs-${Date.now()}`,
-      temporary: true,
-      rebuild,
-      preparedTag,
-      command: 'tail -f /dev/null'  // Keep container alive for tests (entrypoint will handle PATH)
-    });
+    // Get environment variables
+    let containerUser = 'root';
+    let workDir = '/workspace';
+    let compiledEnv = {};
     
-    // For claude-habitat (bypass mode), ensure file initialization has completed
-    if (config?.claude?.bypass_habitat_construction) {
-      console.log('Running habitat file initialization...');
+    if (config) {
       try {
-        // Simple initialization commands
-        const initCommands = 'if [ -f /workspace/shared/gitconfig ]; then sudo cp /workspace/shared/gitconfig /etc/gitconfig && sudo cp /workspace/shared/gitconfig /root/.gitconfig && cp /workspace/shared/gitconfig /home/node/.gitconfig; fi && if [ -f /home/node/.claude/.credentials.json ]; then sudo mkdir -p /root/.claude && sudo cp /home/node/.claude/.credentials.json /root/.claude/.credentials.json && sudo chmod 600 /root/.claude/.credentials.json; fi';
-        
-        await dockerExec(container.name, initCommands, config.container?.user || 'node');
+        const { createHabitatPathHelpers } = require('./habitat-path-helpers');
+        const pathHelpers = await createHabitatPathHelpers(config);
+        compiledEnv = pathHelpers.getEnvironment();
+        containerUser = compiledEnv.USER || config.container?.user || 'root';
+        workDir = compiledEnv.WORKDIR || config.container?.work_dir || '/workspace';
       } catch (err) {
-        console.warn(`Warning: Habitat initialization had issues: ${err.message}`);
+        console.warn(`Warning: Could not resolve environment variables: ${err.message}`);
+        // Use config fallbacks
+        containerUser = config.container?.user || 'root';
+        workDir = config.container?.work_dir || '/workspace';
       }
     }
     
+    // Determine script path and scope based on bypass mode
+    const isBypassHabitat = config?.claude?.bypass_habitat_construction || false;
+    const scriptPath = isBypassHabitat ? './system/tools/bin/verify-fs' : './habitat/system/tools/bin/verify-fs';
+    const effectiveScope = isBypassHabitat ? 'habitat' : scope;
     
-    // Run verification using bash script
-    const verifyResult = await runVerifyFsScript(container.name, scope, config);
+    // Build verification script that includes initialization and verification
+    let verificationScript = `#!/bin/bash\nset -e\n\ncd ${workDir}\n\n`;
+    
+    // Add initialization commands for bypass habitats
+    if (isBypassHabitat) {
+      verificationScript += `
+# Initialize habitat files for bypass mode
+echo "Running habitat file initialization..."
+if [ -f /workspace/shared/gitconfig ]; then
+  sudo cp /workspace/shared/gitconfig /etc/gitconfig 2>/dev/null || true
+  sudo cp /workspace/shared/gitconfig /root/.gitconfig 2>/dev/null || true
+  cp /workspace/shared/gitconfig /home/node/.gitconfig 2>/dev/null || true
+fi
+if [ -f /home/node/.claude/.credentials.json ]; then
+  sudo mkdir -p /root/.claude
+  sudo cp /home/node/.claude/.credentials.json /root/.claude/.credentials.json 2>/dev/null || true
+  sudo chmod 600 /root/.claude/.credentials.json 2>/dev/null || true
+fi
+\n`;
+    }
+    
+    // Add the verification command
+    verificationScript += `
+# Run filesystem verification
+echo "Running filesystem verification (scope: ${effectiveScope})..."
+${scriptPath} ${effectiveScope}
+`;
+    
+    // Build environment args from compiled environment
+    const envArgs = [];
+    for (const [key, value] of Object.entries(compiledEnv)) {
+      envArgs.push('-e', `${key}=${value}`);
+    }
+    
+    // Docker run arguments for ephemeral verification
+    const dockerArgs = [
+      'run', '--rm',
+      ...envArgs,
+      '-u', containerUser,
+      '-w', workDir,
+      '-v', '/var/run/docker.sock:/var/run/docker.sock',
+      preparedTag,
+      '/bin/bash', '-c', verificationScript
+    ];
+    
+    // Execute verification in ephemeral container
+    const output = await new Promise((resolve, reject) => {
+      const dockerProcess = spawn('docker', dockerArgs);
+      let stdout = '';
+      let stderr = '';
+      
+      dockerProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      
+      dockerProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      
+      dockerProcess.on('close', (code) => {
+        if (code === 0) {
+          resolve(stdout);
+        } else {
+          reject(new Error(`Filesystem verification failed with exit code ${code}. stderr: ${stderr}`));
+        }
+      });
+      
+      dockerProcess.on('error', (error) => {
+        reject(new Error(`Process error: ${error.message}`));
+      });
+    });
+    
+    // Parse TAP output from verification script
+    const verifyResult = parseVerificationOutput(output, effectiveScope, isBypassHabitat, scope);
     
     if (verifyResult.passed) {
       console.log(colors.green(`✅ ${verifyResult.message}`));
@@ -320,12 +393,51 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
   } catch (err) {
     console.error(colors.red(`Error during filesystem verification: ${err.message}`));
     throw err;
-  } finally {
-    // Cleanup temporary container
-    if (container) {
-      await container.cleanup();
-    }
   }
+  // No cleanup needed - container is automatically removed with --rm
+}
+
+// Parse verification output from TAP format
+function parseVerificationOutput(output, effectiveScope, isBypassHabitat, originalScope) {
+  const { colors } = require('./utils');
+  
+  // For bypass habitats, inform user about scope limitation
+  if (isBypassHabitat && originalScope === 'all') {
+    console.log(colors.yellow('ℹ️  Bypass habitat detected - running habitat scope only'));
+  }
+  
+  // Parse TAP output
+  const lines = output.split('\n').filter(line => line.trim());
+  let passed = 0;
+  let failed = 0;
+  let total = 0;
+  
+  lines.forEach(line => {
+    if (line.startsWith('ok ')) {
+      passed++;
+    } else if (line.startsWith('not ok ')) {
+      failed++;
+    } else if (line.match(/^1\.\.(\d+)$/)) {
+      total = parseInt(line.split('..')[1]);
+    }
+  });
+  
+  // If total wasn't found from TAP format, calculate from passed + failed
+  if (total === 0) {
+    total = passed + failed;
+  }
+  
+  const success = failed === 0 && total > 0;
+  const message = success 
+    ? `Filesystem verification passed (${passed}/${total} checks)`
+    : `Filesystem verification failed (${failed}/${total} checks failed)`;
+  
+  return {
+    passed: success,
+    message,
+    output: success ? null : output,
+    results: { passed, failed, total }
+  };
 }
 
 module.exports = {
