@@ -139,8 +139,7 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
     await cleanupBuildContainer(context.containerId);
     
     // Run the habitat container using the final image
-    const { createHabitatContainer } = require('./container-lifecycle');
-    return await runContainerWithSharedLogic(finalTag, config, overrideCommand, options.tty);
+    return await runEphemeralContainer(finalTag, config, overrideCommand, options.tty);
     
   } catch (error) {
     console.error(`Failed to start habitat session: ${error.message}`);
@@ -325,9 +324,8 @@ function interpretExitCode(exitCode) {
   return exitCodes[exitCode] || `Unknown exit code ${exitCode}`;
 }
 
-// Run container with shared creation logic
-async function runContainerWithSharedLogic(tag, config, overrideCommand = null, ttyOverride = null) {
-  const { createHabitatContainer } = require('./container-lifecycle');
+// Run container with ephemeral execution pattern
+async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOverride = null) {
   const containerName = `${config.name}_${Date.now()}_${process.pid}`;
   // Get resolved environment variables
   const { createHabitatPathHelpers } = require('./habitat-path-helpers');

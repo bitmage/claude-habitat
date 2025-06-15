@@ -4,14 +4,14 @@
  * 
  * Provides test orchestration for habitat environments including system tests
  * (infrastructure), shared tests (user configuration), and habitat tests 
- * (environment-specific validation). Manages test execution within containers
- * and provides interactive test menus and result reporting.
+ * (environment-specific validation). Uses ephemeral containers (docker run --rm)
+ * for fast, clean test execution and provides interactive test menus and result reporting.
  * 
  * ## Key Functions
  * - **runTestMode**: Main entry point for habitat test execution
- * - **runSystemTests**: Execute system infrastructure tests in habitat container
- * - **runSharedTests**: Execute shared configuration tests in habitat container  
- * - **runHabitatTests**: Execute habitat-specific tests in habitat container
+ * - **runSystemTests**: Execute system infrastructure tests in ephemeral container
+ * - **runSharedTests**: Execute shared configuration tests in ephemeral container  
+ * - **runHabitatTests**: Execute habitat-specific tests in ephemeral container
  * - **showTestMenu**: Interactive habitat selection and test type menus
  * 
  * See README.md for complete testing documentation including unit tests,
@@ -474,40 +474,24 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     // Get resolved environment variables for USER and WORKDIR
     let containerUser = 'root';
     let workDir = '/workspace';
+    let compiledEnv = {};
     try {
       const { createHabitatPathHelpers } = require('./habitat-path-helpers');
       const pathHelpers = await createHabitatPathHelpers(habitatConfig);
-      const compiledEnv = pathHelpers.getEnvironment();
+      compiledEnv = pathHelpers.getEnvironment();
       containerUser = compiledEnv.USER || 'root';
       workDir = compiledEnv.WORKDIR || '/workspace';
     } catch (err) {
       console.warn(`Warning: Could not resolve environment variables: ${err.message}`);
     }
 
-    // Parse environment variables from config
-    const envArgs = [];
-    if (habitatConfig.env && Array.isArray(habitatConfig.env)) {
-      habitatConfig.env.forEach(env => {
-        if (env && typeof env === 'string' && !env.startsWith('GITHUB_APP_PRIVATE_KEY_FILE=')) {
-          envArgs.push('-e', env.replace(/^- /, ''));
-        }
-      });
-    }
+    // Environment variables will be handled later from compiled environment
 
-    // Use shared container logic like normal habitat start
-    const { createHabitatContainer } = require('./container-lifecycle');
-    const { dockerExec } = require('./container-operations');
+    const { spawn } = require('child_process');
     
-    // Create container using shared logic
-    const container = await createHabitatContainer(habitatConfig, {
-      name: containerName,
-      temporary: true,
-      preparedTag: imageTag
-    });
+    console.log('Running tests in ephemeral container...\n');
 
-    console.log('Running tests in container...\n');
-
-    // Build test commands to run inside the already-configured container
+    // Build test commands to run inside ephemeral container
     const testCommands = tests.map(testScript => {
       let testPath;
       if (testType === 'habitat') {
@@ -544,14 +528,13 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       `;
     }).join('\n');
 
-    // Get compiled environment variables from path helpers
-    const compiledEnv = pathHelpers.getEnvironment();
+    // Use compiled environment variables 
     const systemPath = compiledEnv.SYSTEM_PATH || '/habitat/system';
     const sharedPath = compiledEnv.SHARED_PATH || '/habitat/shared';
     const systemToolsPath = compiledEnv.SYSTEM_TOOLS_PATH || `${systemPath}/tools/bin`;
     const envPath = compiledEnv.PATH || `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${systemToolsPath}`;
 
-    // Execute tests inside the properly configured container
+    // Execute tests using ephemeral container with docker run --rm
     const testScript = `#!/bin/bash
 set -e
 
@@ -567,8 +550,51 @@ ${testCommands}
 echo "All tests completed"
 `;
 
+    // Build environment args from compiled environment
+    const envArgs = [];
+    for (const [key, value] of Object.entries(compiledEnv)) {
+      envArgs.push('-e', `${key}=${value}`);
+    }
+
+    // Docker run arguments for ephemeral test execution
+    const dockerArgs = [
+      'run', '--rm',
+      ...envArgs,
+      '-u', containerUser,
+      '-w', workDir,
+      '-v', '/var/run/docker.sock:/var/run/docker.sock',
+      imageTag,
+      '/bin/bash', '-c', testScript
+    ];
+
     try {
-      const output = await dockerExec(container.name, testScript, containerUser);
+      // Execute test container and capture output
+      const output = await new Promise((resolve, reject) => {
+        const dockerProcess = spawn('docker', dockerArgs);
+        let stdout = '';
+        let stderr = '';
+        
+        dockerProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+        
+        dockerProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+        
+        dockerProcess.on('close', (code) => {
+          if (code === 0) {
+            resolve(stdout);
+          } else {
+            reject(new Error(`Test execution failed with exit code ${code}. stderr: ${stderr}`));
+          }
+        });
+        
+        dockerProcess.on('error', (error) => {
+          reject(new Error(`Process error: ${error.message}`));
+        });
+      });
+      
       console.log(output);
       results = parseTestOutput(output, testType);
     } catch (err) {
@@ -577,10 +603,8 @@ echo "All tests completed"
         message: `Test execution failed: ${err.message}`,
         scope: testType
       }];
-    } finally {
-      // Cleanup the container
-      await container.cleanup();
     }
+    // No cleanup needed - container is automatically removed with --rm
 
     return captureResults ? results : undefined;
 
