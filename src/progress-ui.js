@@ -84,7 +84,11 @@ class ProgressReporter {
   handlePipelineStart(event) {
     this.startTime = event.timestamp;
     console.log(`🚀 Starting ${event.pipeline}...`);
-    console.log(`📋 ${event.totalStages} stages to complete`);
+    
+    // Use domain language: report phases, not internal stages
+    const { BUILD_PHASES } = require('./phases');
+    const totalPhases = BUILD_PHASES.length;
+    console.log(`📋 ${totalPhases} phases to complete`);
     console.log('');
   }
 
@@ -92,6 +96,11 @@ class ProgressReporter {
    * Handle stage start event
    */
   handleStageStart(event) {
+    // Hide internal snapshot operations from user - only show phase executions
+    if (event.stage.startsWith('snapshot-')) {
+      return;
+    }
+    
     const progress = this.options.showProgress ? `[${event.progress}%] ` : '';
     console.log(`${progress}${this.capitalize(event.stage)}...`);
   }
@@ -100,6 +109,11 @@ class ProgressReporter {
    * Handle stage completion event
    */
   handleStageComplete(event) {
+    // Hide internal snapshot operations from user - only show phase completions
+    if (event.stage.startsWith('snapshot-')) {
+      return;
+    }
+    
     const duration = this.options.showDurations ? ` (${this.formatDuration(event.duration)})` : '';
     const progress = this.options.showProgress ? `[${event.progress}%] ` : '';
     
