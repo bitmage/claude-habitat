@@ -284,8 +284,9 @@ async function createHabitatContainer(config, options = {}) {
 
   // Check if container is running
   if (!await dockerIsRunning(containerName)) {
-    const { stdout: logs } = await execAsync(`docker logs ${containerName}`).catch(() => ({ stdout: 'No logs available' }));
-    throw new Error(`Container exited unexpectedly:\\n${logs}`);
+    const { stdout: logs, stderr: errorLogs } = await execAsync(`docker logs ${containerName} 2>&1`).catch(() => ({ stdout: 'No logs available', stderr: '' }));
+    const allLogs = [logs, errorLogs].filter(Boolean).join('\n');
+    throw new Error(`Container exited unexpectedly:\n${allLogs}`);
   }
 
   // Verify environment

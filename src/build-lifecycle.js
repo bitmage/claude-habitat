@@ -132,7 +132,13 @@ async function createBuildPipeline(habitatConfigPath, options = {}) {
           const phaseHashes = currentHashes; // Use pre-calculated hashes
           const labels = createPhaseLabels(phaseHashes, 'pass');
           
-          await createSnapshot(ctx.containerId, snapshotTag, { labels });
+          // Apply any Docker changes (like ENTRYPOINT) if present
+          const snapshotOptions = { labels };
+          if (ctx.entrypointChange) {
+            snapshotOptions.dockerChange = ctx.entrypointChange;
+          }
+          
+          await createSnapshot(ctx.containerId, snapshotTag, snapshotOptions);
           
           ctx.progressSubject?.next({
             type: 'snapshot-created',
@@ -343,6 +349,8 @@ const PHASE_HANDLERS = {
     // Create entrypoint wrapper script that ensures environment is loaded
     const entrypointScript = `#!/bin/bash
 # Habitat entrypoint wrapper - ensures environment variables are available
+# Ensure standard PATH is available even if not set in environment
+export PATH="\${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 source /etc/profile.d/habitat-env.sh 2>/dev/null || true
 exec "$@"
 `;

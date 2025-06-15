@@ -285,7 +285,7 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
       temporary: true,
       rebuild,
       preparedTag,
-      command: 'tail -f /dev/null'  // Keep container alive for tests
+      command: 'tail -f /dev/null'  // Keep container alive for tests (entrypoint will handle PATH)
     });
     
     // For claude-habitat (bypass mode), ensure file initialization has completed

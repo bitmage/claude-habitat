@@ -411,9 +411,8 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
   const containerName = `${habitatConfig.name}_test_${testType}_${Date.now()}`;
 
   try {
-    // Get or build the prepared image for testing
-    const hash = calculateCacheHash(habitatConfig, []);
-    const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
+    // Use same tagging system as the build pipeline
+    const preparedTag = `habitat-${habitatConfig.name}:12-final`;
     let imageTag = preparedTag;
 
     if (!await dockerImageExists(preparedTag) || rebuild) {
@@ -461,29 +460,13 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       
       // Check if we actually built something or used fully cached image
       if (context.containerId) {
-        // We have a build container, create snapshot with expected tag name
-        const { createSnapshot } = require('./snapshot-manager');
-        await createSnapshot(context.containerId, preparedTag, { result: 'pass' });
-        
-        // Clean up build container
+        // Clean up build container (final snapshot already created by pipeline)
         await dockerRun(['stop', context.containerId]);
         await dockerRun(['rm', context.containerId]);
-        
-        imageTag = preparedTag;
-      } else {
-        // Fully cached build - the final image already exists
-        // Check if the expected tag exists or use the standard final tag
-        const finalTag = `habitat-${habitatConfig.name}:12-final`;
-        console.log(`Checking for cached final image: ${finalTag}`);
-        if (await dockerImageExists(finalTag)) {
-          // Tag the final image with our expected name
-          console.log(`Tagging ${finalTag} as ${preparedTag}`);
-          await dockerRun(['tag', finalTag, preparedTag]);
-          imageTag = preparedTag;
-        } else {
-          throw new Error(`No final image found for ${habitatConfig.name}`);
-        }
       }
+      
+      // The final image should exist with our expected tag
+      imageTag = preparedTag;
     }
 
     console.log(`Using habitat image: ${imageTag}`);

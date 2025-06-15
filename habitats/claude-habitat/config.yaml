@@ -1,12 +1,6 @@
 name: claude-habitat
 description: Development environment for Claude Habitat itself
 
-# Habitat tests (run with: claude-habitat test claude-habitat)
-# Temporarily disabled to test core functionality
-# tests:
-#   - tests/test-claude-habitat-inception.sh
-#   - tests/test-tools-and-auth.sh
-
 # Use Node.js base image instead of Dockerfile
 base_image: node:20-bookworm
 
@@ -63,44 +57,20 @@ volumes:
   - /var/run/docker.sock:/var/run/docker.sock
 
 scripts:
-  # Detect Docker socket GID after Docker socket is mounted
+  # Detect Docker socket GID after Docker socket is mounted and add it to habitat-env.sh
   - run_as: root
     after: files
     commands:
       - |
-        echo "🔍 Detecting Docker socket GID after files phase..."
-        
-        # Ensure the environment file exists
+        set -e
         mkdir -p /etc/profile.d
-        
-        # Detect the Docker socket GID dynamically
-        if [ -S /var/run/docker.sock ]; then
-          DETECTED_GID=$(stat -c '%g' /var/run/docker.sock)
-          echo "✅ Detected Docker socket GID: $DETECTED_GID"
-          
-          # Update the environment file with the detected GID
-          echo "export DOCKER_GROUP_GID=$DETECTED_GID" >> /etc/profile.d/habitat-env.sh
-          echo "✅ Docker socket GID set to: $DETECTED_GID"
-        else
-          echo "⚠️  Warning: Docker socket not found, using default GID 966"
-          echo "export DOCKER_GROUP_GID=966" >> /etc/profile.d/habitat-env.sh
-        fi
-        
-        # Verify the environment file has been updated
-        echo "📋 Environment file contents:"
-        cat /etc/profile.d/habitat-env.sh | grep DOCKER_GROUP_GID
-  
+        DETECTED_GID=$(stat -c '%g' /var/run/docker.sock)
+        echo "export DOCKER_GROUP_GID=$DETECTED_GID" >> /etc/profile.d/habitat-env.sh
+
   # Setup commands migrated from Dockerfile
   - run_as: root
     commands:
       - |
-        # Use dynamically detected docker group GID (will be available from environment)
-        echo "🔍 Loading environment and checking Docker GID..."
-        source /etc/profile.d/habitat-env.sh || echo "Warning: Could not source environment file"
-        echo "📋 DOCKER_GROUP_GID value: ${DOCKER_GROUP_GID:-NOT_SET}"
-        DOCKER_GROUP_GID=${DOCKER_GROUP_GID:-966}
-        echo "✅ Using Docker GID: $DOCKER_GROUP_GID"
-
         # Install essential system dependencies including Docker
         apt-get update && apt-get install -y \
           vim \
@@ -133,7 +103,7 @@ scripts:
           (groupadd -g ${DOCKER_GROUP_GID} docker && echo "✅ Created docker group with GID $DOCKER_GROUP_GID")
         (usermod -aG docker node && echo "✅ Added node to docker group") || \
           echo "⚠️  Warning: Could not add node to docker group, will run without Docker access"
-        
+
         # Verify the group was created correctly
         echo "📋 Docker group info:"
         getent group docker || echo "❌ Docker group not found after creation"
@@ -199,6 +169,11 @@ verify-fs:
     # user files
     - ~/.gitconfig
     - ~/.claude/.credentials.json
+
+# Habitat tests (run with: claude-habitat test claude-habitat)
+tests:
+  - tests/test-claude-habitat-inception.sh
+  - tests/test-tools-and-auth.sh
 
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)
 claude:
