@@ -1,6 +1,6 @@
 {
   "name": "claude-habitat",
-  "version": "2.0.0",
+  "version": "0.1.1",
   "description": "Create completely isolated development environments for Claude Code",
   "main": "claude-habitat.js",
   "bin": {

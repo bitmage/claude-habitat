@@ -4,6 +4,53 @@
 
 Claude Habitat creates isolated Docker environments for development. Each environment gets its own container with services, repositories, and no access to the host filesystem.
 
+## Deprecation Policy & Versioning
+
+**Claude Habitat is PRE-ALPHA software.** No backwards compatibility should be expected.
+
+### Version Management
+- **Starting version**: 0.1.1
+- **Increment policy**: Version should be bumped with every commit that contains breaking changes or new features
+- **Version location**: Update the version in `package.json`
+
+### Committing Changes
+When making commits that change functionality:
+1. **Update version in package.json** - Increment patch version (0.1.1 → 0.1.2)
+2. **Breaking changes** - Increment minor version (0.1.x → 0.2.0) 
+3. **Major architectural changes** - Increment major version (0.x.y → 1.0.0)
+
+Example commit workflow:
+```bash
+# Make your changes
+vim src/some-file.js
+
+# Update version
+npm version patch  # or minor/major as appropriate
+
+# Commit with descriptive message
+git commit -am "Add new feature X
+
+- Implement functionality Y
+- Update Z for better performance
+- BREAKING: Remove deprecated setup format
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+```
+
+### Backwards Compatibility
+- **Pre-alpha**: No backwards compatibility guaranteed
+- **Configuration changes**: May break existing config.yaml files without warning
+- **API changes**: Function signatures and module exports may change
+- **CLI changes**: Command-line interface may change without deprecation warnings
+
+### Migration Strategy
+Since this is pre-alpha with no users:
+- Remove deprecated features immediately rather than maintaining backwards compatibility
+- Prefer clean, simple code over complex compatibility layers
+- Focus on architectural correctness over migration paths
+
 ## Where to Find Information
 
 Claude Habitat uses **contextual documentation** - information is located where you need it.  Please MAINTAIN this standard for any new code being written.

@@ -15,6 +15,17 @@ git clone <repo-url> && cd claude-habitat && npm install
 ./claude-habitat add
 ```
 
+## ⚠️ Pre-Alpha Software
+
+**Claude Habitat is PRE-ALPHA software (v0.1.x).** No backwards compatibility should be expected.
+
+- **Configuration may break** without warning between versions
+- **CLI interface may change** without deprecation notices  
+- **APIs and internal structure** are subject to major changes
+- **Focus**: Architectural correctness over stability
+
+If you're building on Claude Habitat, expect breaking changes and be prepared to update your configurations and workflows as the project evolves.
+
 ## What You Get
 
 When "Habitat" Claude runs in a container:

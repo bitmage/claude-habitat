@@ -394,8 +394,9 @@ exec "$@"
     const config = ctx.config;
     if (config.tests && Array.isArray(config.tests)) {
       const env = config._environment || {};
+      const workdir = env.WORKDIR || '/workspace';
       for (const testScript of config.tests) {
-        await dockerExec(ctx.containerId, `bash ${testScript}`, env.USER || 'root');
+        await dockerExec(ctx.containerId, `cd ${workdir} && bash ${testScript}`, env.USER || 'root');
       }
     }
     return ctx;
