@@ -84,6 +84,22 @@
  * - "Habitat" Claude: Completely isolated in Docker, can only see project and development environment
  * - Implementation: Container isolation in src/container-operations.js
  * 
+ * Build Phases
+ * The 12-phase progressive build system that constructs habitat containers:
+ * 1. base - Set base image (from Dockerfile or base_image)
+ * 2. users - Create users and set permissions
+ * 3. env - Set environment variables
+ * 4. workdir - Create project work directory
+ * 5. habitat - Create habitat directory structure
+ * 6. files - Copy files and mount volumes
+ * 7. repos - Clone repositories
+ * 8. tools - Install habitat tools
+ * 9. scripts - Run user-defined scripts
+ * 10. verify - Verify filesystem and permissions
+ * 11. test - Run habitat tests
+ * 12. final - Set final configuration and command
+ * - Implementation: Phase definitions in src/phases.js, execution in src/build-lifecycle.js
+ * 
  * Instructions Assembly
  * "Habitat" Claude receives a composed CLAUDE.md that combines:
  * 1. system/CLAUDE.md - Base environment and tools
