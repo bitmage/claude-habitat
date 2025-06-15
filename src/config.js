@@ -81,12 +81,12 @@ function expandEnvironmentVariables(str, env) {
   
   // Expand ${VAR} syntax (bash-style)
   result = result.replace(/\$\{([^}]+)\}/g, (match, varName) => {
-    return env[varName] || '';
+    return env.hasOwnProperty(varName) ? env[varName] : match;
   });
   
   // Expand {env.VAR} syntax
   result = result.replace(/\{env\.([^}]+)\}/g, (match, varName) => {
-    return env[varName] || '';
+    return env.hasOwnProperty(varName) ? env[varName] : match;
   });
   
   return result;

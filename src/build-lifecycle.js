@@ -220,10 +220,12 @@ const PHASE_HANDLERS = {
       .join('\n');
     
     const envScript = `#!/bin/bash\n# Habitat environment variables\n${envEntries}\n# Set working directory to WORKDIR by default\ncd "$WORKDIR" 2>/dev/null || true\n`;
-    await dockerExec(ctx.containerId, `/usr/bin/mkdir -p /etc/profile.d`, 'root');
-    await dockerExec(ctx.containerId, `/usr/bin/cat > /etc/profile.d/habitat-env.sh << 'EOF'\n${envScript}\nEOF`, 'root');
+    
+    await dockerExec(ctx.containerId, `mkdir -p /etc/profile.d`, 'root');
+    await dockerExec(ctx.containerId, `cat > /etc/profile.d/habitat-env.sh << 'EOF'\n${envScript}\nEOF`, 'root');
+    
     // Make the script executable
-    await dockerExec(ctx.containerId, '/usr/bin/chmod +x /etc/profile.d/habitat-env.sh', 'root');
+    await dockerExec(ctx.containerId, 'chmod +x /etc/profile.d/habitat-env.sh', 'root');
     
     // Run after:env file hooks
     await runFilesForPhase(ctx.containerId, ctx.config, 'after:env', user, workdir);
@@ -244,9 +246,9 @@ const PHASE_HANDLERS = {
     // Run before:workdir scripts
     await runScriptsForPhase(ctx.containerId, ctx.config, 'before:workdir', user, workdir);
     
-    await dockerExec(ctx.containerId, `/usr/bin/mkdir -p ${workdir}`, 'root');
+    await dockerExec(ctx.containerId, `mkdir -p ${workdir}`, 'root');
     if (user !== 'root') {
-      await dockerExec(ctx.containerId, `/usr/bin/chown ${user}:${user} ${workdir}`, 'root');
+      await dockerExec(ctx.containerId, `chown ${user}:${user} ${workdir}`, 'root');
     }
     
     // Run after:workdir file hooks
@@ -277,9 +279,9 @@ const PHASE_HANDLERS = {
     ];
     
     for (const dir of dirs) {
-      await dockerExec(ctx.containerId, `/usr/bin/mkdir -p ${dir}`, 'root');
+      await dockerExec(ctx.containerId, `mkdir -p ${dir}`, 'root');
       if (user !== 'root') {
-        await dockerExec(ctx.containerId, `/usr/bin/chown ${user}:${user} ${dir}`, 'root');
+        await dockerExec(ctx.containerId, `chown ${user}:${user} ${dir}`, 'root');
       }
     }
     
@@ -298,6 +300,12 @@ const PHASE_HANDLERS = {
     const user = env.USER || 'root';
     const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
     
+    // Run before:files file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'before:files', user, workdir);
+    
+    // Run before:files scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:files', user, workdir);
+    
     if (!isBypassHabitat) {
       const workDirPath = createWorkDirPath(workdir);
       
@@ -309,7 +317,7 @@ const PHASE_HANDLERS = {
       ]) {
         if (await fileExists(srcPath)) {
           const containerPath = workDirPath('habitat', dirName);
-          await dockerExec(ctx.containerId, `/usr/bin/mkdir -p ${containerPath}`, 'root');
+          await dockerExec(ctx.containerId, `mkdir -p ${containerPath}`, 'root');
           await copyDirectoryToContainer(ctx.containerId, srcPath, containerPath);
         }
       }
@@ -317,6 +325,13 @@ const PHASE_HANDLERS = {
     
     // Run file hooks for files phase (files with no before/after specified)
     await runFilesForPhase(ctx.containerId, ctx.config, 'files', user, workdir);
+    
+    // Run after:files file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, 'after:files', user, workdir);
+    
+    // Run after:files scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:files', user, workdir);
+    
     return ctx;
   },
 
@@ -331,8 +346,8 @@ const PHASE_HANDLERS = {
 source /etc/profile.d/habitat-env.sh 2>/dev/null || true
 exec "$@"
 `;
-    await dockerExec(ctx.containerId, `/usr/bin/cat > /entrypoint.sh << 'EOF'\n${entrypointScript}\nEOF`, 'root');
-    await dockerExec(ctx.containerId, '/usr/bin/chmod +x /entrypoint.sh', 'root');
+    await dockerExec(ctx.containerId, `cat > /entrypoint.sh << 'EOF'\n${entrypointScript}\nEOF`, 'root');
+    await dockerExec(ctx.containerId, 'chmod +x /entrypoint.sh', 'root');
     
     // Run file hooks for scripts phase (files with no before/after specified)
     await runFilesForPhase(ctx.containerId, ctx.config, 'scripts', user, workdir);

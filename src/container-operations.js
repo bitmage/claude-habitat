@@ -46,8 +46,7 @@ function buildDockerExecArgs(container, command, user = null) {
   if (user) args.push('-u', user);
   
   // Wrap command to source environment variables first (only if the file exists)
-  // Also ensure PATH includes standard locations for basic commands
-  const wrappedCommand = `export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"; [ -f /etc/profile.d/habitat-env.sh ] && source /etc/profile.d/habitat-env.sh || true; ${command}`;
+  const wrappedCommand = `[ -f /etc/profile.d/habitat-env.sh ] && source /etc/profile.d/habitat-env.sh || true; ${command}`;
   
   args.push(container, '/bin/bash', '-c', wrappedCommand);
   return args;

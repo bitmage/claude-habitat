@@ -27,7 +27,7 @@ env:
   - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
   - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - LOCAL_TOOLS_PATH=${LOCAL_PATH}/tools/bin
-  - PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:${SYSTEM_TOOLS_PATH}:${SHARED_TOOLS_PATH}:${LOCAL_TOOLS_PATH}
+  - PATH=${PATH}:${SYSTEM_TOOLS_PATH}:${SHARED_TOOLS_PATH}:${LOCAL_TOOLS_PATH}
   - NODE_ENV=development
   - DOCKER_HOST=unix:///var/run/docker.sock
   - GITHUB_APP_ID=1357221
@@ -63,13 +63,44 @@ volumes:
   - /var/run/docker.sock:/var/run/docker.sock
 
 scripts:
+  # Detect Docker socket GID after Docker socket is mounted
+  - run_as: root
+    after: files
+    commands:
+      - |
+        echo "🔍 Detecting Docker socket GID after files phase..."
+        
+        # Ensure the environment file exists
+        mkdir -p /etc/profile.d
+        
+        # Detect the Docker socket GID dynamically
+        if [ -S /var/run/docker.sock ]; then
+          DETECTED_GID=$(stat -c '%g' /var/run/docker.sock)
+          echo "✅ Detected Docker socket GID: $DETECTED_GID"
+          
+          # Update the environment file with the detected GID
+          echo "export DOCKER_GROUP_GID=$DETECTED_GID" >> /etc/profile.d/habitat-env.sh
+          echo "✅ Docker socket GID set to: $DETECTED_GID"
+        else
+          echo "⚠️  Warning: Docker socket not found, using default GID 966"
+          echo "export DOCKER_GROUP_GID=966" >> /etc/profile.d/habitat-env.sh
+        fi
+        
+        # Verify the environment file has been updated
+        echo "📋 Environment file contents:"
+        cat /etc/profile.d/habitat-env.sh | grep DOCKER_GROUP_GID
+  
   # Setup commands migrated from Dockerfile
   - run_as: root
     commands:
       - |
-        # Accept build argument for docker group GID (default 999)
-        DOCKER_GROUP_GID=${DOCKER_GROUP_GID:-999}
-        
+        # Use dynamically detected docker group GID (will be available from environment)
+        echo "🔍 Loading environment and checking Docker GID..."
+        source /etc/profile.d/habitat-env.sh || echo "Warning: Could not source environment file"
+        echo "📋 DOCKER_GROUP_GID value: ${DOCKER_GROUP_GID:-NOT_SET}"
+        DOCKER_GROUP_GID=${DOCKER_GROUP_GID:-966}
+        echo "✅ Using Docker GID: $DOCKER_GROUP_GID"
+
         # Install essential system dependencies including Docker
         apt-get update && apt-get install -y \
           vim \
@@ -81,7 +112,7 @@ scripts:
           gnupg \
           lsb-release \
           && rm -rf /var/lib/apt/lists/*
-        
+
         # Install Docker CE
         curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -89,18 +120,23 @@ scripts:
         apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
         rm -rf /var/lib/apt/lists/*
         groupdel docker || true
-        
+
         # Install Claude Code globally
         npm install -g @anthropic-ai/claude-code
-        
+
         # Use existing node user (UID 1000) and give it sudo access
         echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-        
+
         # Add node user to docker group (create group if it doesn't exist)
-        (getent group docker >/dev/null 2>&1 && echo "Docker group exists") || \
-          (groupadd -g ${DOCKER_GROUP_GID} docker && echo "Created docker group")
-        (usermod -aG docker node && echo "Added node to docker group") || \
-          echo "Warning: Could not add node to docker group, will run without Docker access"
+        echo "🔧 Creating Docker group with GID: $DOCKER_GROUP_GID"
+        (getent group docker >/dev/null 2>&1 && echo "✅ Docker group already exists") || \
+          (groupadd -g ${DOCKER_GROUP_GID} docker && echo "✅ Created docker group with GID $DOCKER_GROUP_GID")
+        (usermod -aG docker node && echo "✅ Added node to docker group") || \
+          echo "⚠️  Warning: Could not add node to docker group, will run without Docker access"
+        
+        # Verify the group was created correctly
+        echo "📋 Docker group info:"
+        getent group docker || echo "❌ Docker group not found after creation"
 
   - run_as: node
     commands:
