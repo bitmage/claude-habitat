@@ -167,9 +167,41 @@ async function createBuildPipeline(habitatConfigPath, options = {}) {
 
 
 /**
- * Phase handler implementations
+ * Wraps a phase handler with automatic before/after lifecycle hooks
+ * 
+ * @param {string} phaseName - Name of the phase
+ * @param {Function} handler - Core phase handler function
+ * @returns {Function} - Wrapped handler with lifecycle hooks
  */
-const PHASE_HANDLERS = {
+function withLifecycleHooks(phaseName, handler) {
+  return async (ctx) => {
+    const env = ctx.config._environment || {};
+    const user = env.USER || 'root';
+    const workdir = env.WORKDIR || '/workspace';
+    
+    // Run before:phase file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, `before:${phaseName}`, user, workdir);
+    
+    // Run before:phase scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, `before:${phaseName}`, user, workdir);
+    
+    // Execute the core phase logic
+    const result = await handler(ctx);
+    
+    // Run after:phase file hooks
+    await runFilesForPhase(ctx.containerId, ctx.config, `after:${phaseName}`, user, workdir);
+    
+    // Run after:phase scripts
+    await runScriptsForPhase(ctx.containerId, ctx.config, `after:${phaseName}`, user, workdir);
+    
+    return result;
+  };
+}
+
+/**
+ * Core phase handler implementations (without lifecycle hooks)
+ */
+const CORE_PHASE_HANDLERS = {
   base: async (ctx) => {
     const config = ctx.config;
     
@@ -205,8 +237,6 @@ const PHASE_HANDLERS = {
 
   env: async (ctx) => {
     const env = ctx.config._environment || {};
-    const workdir = env.WORKDIR || '/workspace';
-    const user = env.USER || 'root';
     
     // Environment variable implementation:
     // Variables from config are written to /etc/profile.d/habitat-env.sh
@@ -214,12 +244,6 @@ const PHASE_HANDLERS = {
     // - Login shells (via /etc/profile.d/)
     // - Build scripts (via dockerExec wrapper)
     // - Main container process (via /entrypoint.sh wrapper)
-    
-    // Run before:env file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'before:env', user, workdir);
-    
-    // Run before:env scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:env', user, workdir);
     
     const envEntries = Object.entries(env)
       .map(([key, value]) => `export ${key}="${value}"`)
@@ -233,11 +257,6 @@ const PHASE_HANDLERS = {
     // Make the script executable
     await dockerExec(ctx.containerId, 'chmod +x /etc/profile.d/habitat-env.sh', 'root');
     
-    // Run after:env file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'after:env', user, workdir);
-    
-    // Run after:env scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:env', user, workdir);
     return ctx;
   },
 
@@ -246,36 +265,18 @@ const PHASE_HANDLERS = {
     const workdir = env.WORKDIR || '/workspace';
     const user = env.USER || 'root';
     
-    // Run before:workdir file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'before:workdir', user, workdir);
-    
-    // Run before:workdir scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:workdir', user, workdir);
-    
     await dockerExec(ctx.containerId, `mkdir -p ${workdir}`, 'root');
     if (user !== 'root') {
       await dockerExec(ctx.containerId, `chown ${user}:${user} ${workdir}`, 'root');
     }
     
-    // Run after:workdir file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'after:workdir', user, workdir);
-    
-    // Run after:workdir scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:workdir', user, workdir);
     return ctx;
   },
 
   habitat: async (ctx) => {
     const env = ctx.config._environment || {};
     const habitatPath = env.HABITAT_PATH || '/workspace/habitat';
-    const workdir = env.WORKDIR || '/workspace';
     const user = env.USER || 'root';
-    
-    // Run before:habitat file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'before:habitat', user, workdir);
-    
-    // Run before:habitat scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:habitat', user, workdir);
     
     const dirs = [
       habitatPath,
@@ -291,11 +292,6 @@ const PHASE_HANDLERS = {
       }
     }
     
-    // Run after:habitat file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'after:habitat', user, workdir);
-    
-    // Run after:habitat scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:habitat', user, workdir);
     return ctx;
   },
 
@@ -305,12 +301,6 @@ const PHASE_HANDLERS = {
     const workdir = env.WORKDIR || '/workspace';
     const user = env.USER || 'root';
     const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
-    
-    // Run before:files file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'before:files', user, workdir);
-    
-    // Run before:files scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:files', user, workdir);
     
     if (!isBypassHabitat) {
       const workDirPath = createWorkDirPath(workdir);
@@ -332,12 +322,6 @@ const PHASE_HANDLERS = {
     // Run file hooks for files phase (files with no before/after specified)
     await runFilesForPhase(ctx.containerId, ctx.config, 'files', user, workdir);
     
-    // Run after:files file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'after:files', user, workdir);
-    
-    // Run after:files scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:files', user, workdir);
-    
     return ctx;
   },
 
@@ -357,9 +341,6 @@ exec "$@"
     await dockerExec(ctx.containerId, `cat > /entrypoint.sh << 'EOF'\n${entrypointScript}\nEOF`, 'root');
     await dockerExec(ctx.containerId, 'chmod +x /entrypoint.sh', 'root');
     
-    // Run file hooks for scripts phase (files with no before/after specified)
-    await runFilesForPhase(ctx.containerId, ctx.config, 'scripts', user, workdir);
-    
     // Run scripts for scripts phase (scripts with no before/after specified)
     await runScriptsForPhase(ctx.containerId, ctx.config, 'scripts', user, workdir);
     return ctx;
@@ -370,12 +351,6 @@ exec "$@"
     const env = config._environment || {};
     const workdir = env.WORKDIR || '/workspace';
     const user = env.USER || 'root';
-    
-    // Run before:repos file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'before:repos', user, workdir);
-    
-    // Run before:repos scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:repos', user, workdir);
     
     // Clone repositories from config
     const repos = config.repos || config.repositories || [];
@@ -392,34 +367,11 @@ exec "$@"
       }
     }
     
-    // Run after:repos file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'after:repos', user, workdir);
-    
-    // Run after:repos scripts (this is where npm install will go)
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:repos', user, workdir);
-    
     return ctx;
   },
 
   tools: async (ctx) => {
-    const env = ctx.config._environment || {};
-    const user = env.USER || 'root';
-    const workdir = env.WORKDIR || '/workspace';
-    
-    // Run before:tools file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'before:tools', user, workdir);
-    
-    // Run before:tools scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'before:tools', user, workdir);
-    
     // Tools are installed via file structure copied in files phase
-    
-    // Run after:tools file hooks
-    await runFilesForPhase(ctx.containerId, ctx.config, 'after:tools', user, workdir);
-    
-    // Run after:tools scripts
-    await runScriptsForPhase(ctx.containerId, ctx.config, 'after:tools', user, workdir);
-    
     return ctx;
   },
 
@@ -456,6 +408,19 @@ exec "$@"
     return ctx;
   }
 };
+
+/**
+ * Apply lifecycle hooks wrapper to all phase handlers programmatically
+ */
+const PHASE_HANDLERS = {};
+BUILD_PHASES.forEach(phase => {
+  const coreHandler = CORE_PHASE_HANDLERS[phase.name];
+  if (coreHandler) {
+    PHASE_HANDLERS[phase.name] = withLifecycleHooks(phase.name, coreHandler);
+  } else {
+    throw new Error(`Missing phase handler for phase: ${phase.name}`);
+  }
+});
 
 /**
  * Execute a specific build phase
