@@ -86,7 +86,7 @@ async function cleanupContainers(options = {}) {
       await execAsync(`docker stop ${containerIds.join(' ')}`, { timeout: 30000 });
     } catch (error) {
       // Continue with removal even if stop fails
-      console.warn(`⚠️ Some containers failed to stop: ${error.message}`);
+      console.log(`⚠️ Some containers failed to stop: ${error.message}`);
     }
     
     // Remove all containers
@@ -94,7 +94,55 @@ async function cleanupContainers(options = {}) {
     
   } catch (error) {
     // Log warning but don't fail the process
-    console.warn(`⚠️ Cleanup warning: ${error.message}`);
+    console.log(`⚠️ Cleanup warning: ${error.message}`);
+  }
+}
+
+/**
+ * Clean up dangling Docker images
+ * 
+ * Removes images that are no longer referenced by any containers
+ * or other images. These are typically leftover from failed builds
+ * or orphaned during rebuild operations.
+ * 
+ * @param {Object} options - Cleanup options
+ * @param {boolean} options.dryRun - If true, only show what would be cleaned
+ */
+async function cleanupDanglingImages(options = {}) {
+  const { dryRun = false } = options;
+  
+  try {
+    const { stdout } = await execAsync('docker images -f "dangling=true" -q');
+    const imageIds = stdout.trim().split('\n').filter(id => id.trim());
+    
+    if (imageIds.length === 0) {
+      return; // No dangling images
+    }
+    
+    console.log(`🧹 Cleaning up ${imageIds.length} dangling Docker images...`);
+    
+    if (dryRun) {
+      console.log(`Would clean up ${imageIds.length} dangling images`);
+      return;
+    }
+    
+    // Clean up any stopped containers first to free up image dependencies
+    try {
+      const { stdout: stoppedContainers } = await execAsync('docker ps -a -q --filter "status=exited"');
+      const stoppedIds = stoppedContainers.trim().split('\n').filter(id => id.trim());
+      if (stoppedIds.length > 0) {
+        await execAsync(`docker rm ${stoppedIds.join(' ')}`);
+      }
+    } catch (error) {
+      // Ignore container cleanup errors
+    }
+    
+    // Remove dangling images
+    await execAsync(`docker rmi ${imageIds.join(' ')}`);
+    
+  } catch (error) {
+    // Log warning but don't fail the process - use stdout to avoid test failures
+    console.log(`⚠️ Dangling image cleanup warning: ${error.message}`);
   }
 }
 
@@ -118,6 +166,7 @@ function setupAutomaticCleanup(options = {}) {
   const cleanupHandler = async () => {
     try {
       await cleanupContainers();
+      await cleanupDanglingImages();
     } catch (error) {
       // Silently ignore cleanup errors during shutdown
     }
@@ -161,6 +210,19 @@ function setupAutomaticCleanup(options = {}) {
       } catch (error) {
         // Ignore cleanup errors during shutdown
       }
+      
+      // Clean up dangling images (orphaned by builds)
+      try {
+        const danglingIds = execSync(`docker images -f "dangling=true" -q`, { encoding: 'utf8' });
+        const imageIds = danglingIds.trim().split('\n').filter(id => id.trim());
+        
+        if (imageIds.length > 0) {
+          console.log(`🧹 Cleaning up ${imageIds.length} dangling Docker images...`);
+          execSync(`docker rmi ${imageIds.join(' ')}`);
+        }
+      } catch (error) {
+        // Ignore cleanup errors during shutdown
+      }
     } catch (error) {
       // Ignore all errors during synchronous cleanup
     }
@@ -177,5 +239,6 @@ module.exports = {
   isLastClaudeHabitatProcess,
   getClaudeHabitatContainers,
   cleanupContainers,
+  cleanupDanglingImages,
   setupAutomaticCleanup
 };

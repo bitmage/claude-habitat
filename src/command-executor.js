@@ -84,7 +84,7 @@ OPTIONS:
     --rebuild [PHASE]      Force rebuild of Docker images (ignore cache)
                            Optional phase name/number to rebuild from
     --show-phases          Show available build phases and their descriptions
-    --clean                Remove all Claude Habitat Docker images
+    --clean                Remove all Claude Habitat containers, images, and dangling images
     --clean-images [TARGET] Clean Docker images (all|orphans|HABITAT_NAME, default: all)
     --list-configs         List available configuration files
     --test-sequence=SEQ    Run UI test sequence (e.g., "t2f" for test>claude-habitat>filesystem)
@@ -186,10 +186,20 @@ async function listConfigs() {
 }
 
 /**
- * Clean Docker images
+ * Clean Docker containers, images, and dangling images
  */
 async function cleanDockerImages() {
-  console.log('Cleaning Claude Habitat Docker images...');
+  console.log(colors.green('🧹 Comprehensive Claude Habitat cleanup...'));
+  
+  // Import cleanup functions
+  const { cleanupContainers, cleanupDanglingImages } = require('./container-cleanup');
+  
+  // Clean containers first
+  console.log('\n1. Cleaning containers...');
+  await cleanupContainers();
+  
+  // Clean claude-habitat images
+  console.log('\n2. Cleaning Claude Habitat images...');
   try {
     const { stdout } = await execAsync('docker images --format "{{.Repository}}:{{.Tag}}" | grep "^claude-habitat-"');
     const images = stdout.trim().split('\n').filter(Boolean);
@@ -205,11 +215,17 @@ async function cleanDockerImages() {
           console.log(colors.yellow(`  Warning: Could not remove ${image}: ${err.message}`));
         }
       }
-      console.log(colors.green(`Clean complete. Removed ${images.length} image(s).`));
+      console.log(colors.green(`Removed ${images.length} image(s).`));
     }
   } catch {
     console.log('No Claude Habitat images found.');
   }
+  
+  // Clean dangling images
+  console.log('\n3. Cleaning dangling images...');
+  await cleanupDanglingImages();
+  
+  console.log(colors.green('\n✅ Comprehensive cleanup complete!'));
 }
 
 /**

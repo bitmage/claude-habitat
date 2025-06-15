@@ -133,9 +133,9 @@ test('--clean command exits successfully with code 0', async () => {
   assert.strictEqual(result.code, 0, `--clean should exit with code 0, got ${result.code}`);
   
   // Should show clean output
-  assert.ok(result.stdout.includes('Cleaning Claude Habitat Docker images'), 'Should show cleaning message');
+  assert.ok(result.stdout.includes('Comprehensive Claude Habitat cleanup'), 'Should show cleaning message');
   assert.ok(result.stdout.includes('No Claude Habitat images found') || 
-           result.stdout.includes('Clean complete'), 
+           result.stdout.includes('Comprehensive cleanup complete'), 
            'Should show completion message');
   
   // Should not have errors

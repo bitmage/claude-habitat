@@ -29,7 +29,7 @@ scripts:
           openssl \
           sudo \
           && rm -rf /var/lib/apt/lists/*
-        
+
         # Create a simple init script (no chmod needed, it will be executable)
         echo '#!/bin/bash\nwhile true; do sleep 3600; done' > /sbin/init
 

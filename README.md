@@ -13,6 +13,12 @@ git clone <repo-url> && cd claude-habitat && npm install
 
 # Or create your own (with AI assistance)
 ./claude-habitat add
+
+# Cleanup commands
+./claude-habitat --clean                  # Remove all containers, images, and dangling images
+./claude-habitat --clean-images           # Clean all habitat images
+./claude-habitat --clean-images orphans   # Clean orphaned images only
+./claude-habitat --clean-images discourse # Clean specific habitat images
 ```
 
 ## ⚠️ Pre-Alpha Software
