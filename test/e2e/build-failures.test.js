@@ -163,11 +163,11 @@ test('handles repository clone failures gracefully', async () => {
   }
 });
 
-test('handles setup command failures gracefully', async () => {
+test('handles build process failures gracefully', async () => {
   const testRunner = new ProductTestBase();
   
   try {
-    console.log('Testing setup command failure handling...');
+    console.log('Testing build process failure handling...');
     
     // Test our error recovery by examining build output
     const buildResult = await testRunner.runClaudeHabitatCommand(['test', 'base', '--system'], {
@@ -175,19 +175,19 @@ test('handles setup command failures gracefully', async () => {
       captureOutput: true
     });
     
-    // System should handle setup command issues gracefully
-    assert.ok(buildResult.exitCode !== undefined, 'Should complete setup process');
+    // System should handle build process issues gracefully
+    assert.ok(buildResult.exitCode !== undefined, 'Should complete build process');
     
     const output = buildResult.stdout + buildResult.stderr;
     
-    // Should show progression through setup steps
-    const hasSetupProgression = output.includes('system') || 
+    // Should show progression through build steps
+    const hasBuildProgression = output.includes('system') || 
                                output.includes('test') ||
                                output.includes('running') ||
                                output.includes('ok') ||
                                output.length > 100; // Substantial output
     
-    assert.ok(hasSetupProgression, 'Should show setup progression');
+    assert.ok(hasBuildProgression, 'Should show build progression');
     
     // If there are failures, should continue or provide recovery information
     if (buildResult.exitCode !== 0) {

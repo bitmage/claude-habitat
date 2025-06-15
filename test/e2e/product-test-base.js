@@ -97,7 +97,7 @@ class ProductTestBase {
         baseImageCreated: result.stdout.includes('Base image ready') || result.stdout.includes('Using base image'),
         preparedImageCreated: result.stdout.includes('Prepared image ready') || result.stdout.includes('Using cached prepared image'),
         repositoryCloned: result.stdout.includes('Cloning') || result.stdout.includes('Repository'),
-        setupCommandsRan: result.stdout.includes('Running setup commands') || result.stdout.includes('Setup complete'),
+        scriptsCommandsRan: result.stdout.includes('Running scripts') || result.stdout.includes('Scripts complete'),
         testsExecuted: result.stdout.includes('test') && result.stdout.includes('ok'),
         filesystemVerified: options.verifyFs && result.stdout.includes('Filesystem verification')
       };

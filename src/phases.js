@@ -36,7 +36,7 @@ const BUILD_PHASES = [
   { id: '6', name: 'files', description: 'Copy files and mount volumes', configSections: ['files', 'volumes'] },
   { id: '7', name: 'repos', description: 'Clone repositories', configSections: ['repos', 'repositories'] },
   { id: '8', name: 'tools', description: 'Install habitat tools', configSections: ['tools'] },
-  { id: '9', name: 'scripts', description: 'Run user-defined scripts', configSections: ['scripts', 'setup'] },
+  { id: '9', name: 'scripts', description: 'Run user-defined scripts', configSections: ['scripts'] },
   { id: '10', name: 'verify', description: 'Verify filesystem and permissions', configSections: ['verify-fs'] },
   { id: '11', name: 'test', description: 'Run habitat tests', configSections: ['tests'] },
   { id: '12', name: 'final', description: 'Set final configuration and command', configSections: ['entry', 'container', 'claude'] }

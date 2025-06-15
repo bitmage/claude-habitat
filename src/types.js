@@ -106,7 +106,7 @@
  * The layered approach to building "Habitat" Claude's environment:
  * 1. Infrastructure Layer (system/) - Managed by Claude Habitat itself
  * 2. Preferences Layer (shared/) - Managed by User (you)  
- * 3. Project Layer (habitats/*/) - Managed per-project basis
+ * 3. Project Layer (habitats/[project]/) - Managed per-project basis
  * - Implementation: Layer composition in src/config.js
  * 
  * Instructions Assembly  
@@ -599,7 +599,7 @@ class Image {
  * Configuration - Structured habitat configuration data
  * 
  * Represents the complete configuration for a habitat including
- * metadata, image settings, repositories, environment, and setup.
+ * metadata, image settings, repositories, environment, and scripts.
  * 
  * Used by:
  * - src/config.js: Configuration loading and processing
@@ -650,26 +650,6 @@ class Configuration {
     return this.environment;
   }
 
-  /**
-   * Get setup commands for root user
-   */
-  getRootSetupCommands() {
-    return this.data.setup?.root || [];
-  }
-
-  /**
-   * Get setup commands for container user
-   */
-  getUserSetupCommands() {
-    return this.data.setup?.user?.commands || [];
-  }
-
-  /**
-   * Get the user that setup commands should run as
-   */
-  getSetupUser() {
-    return this.data.setup?.user?.run_as || this.getContainer().user;
-  }
 
   /**
    * Get startup delay in seconds

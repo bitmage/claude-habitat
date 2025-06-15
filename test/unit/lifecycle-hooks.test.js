@@ -38,7 +38,7 @@ test('getPhaseConfigSections returns correct config sections', () => {
   
   assert.deepStrictEqual(reposConfig, ['repos', 'repositories'], 'repos phase should map to repos and repositories config sections');
   assert.deepStrictEqual(toolsConfig, ['tools'], 'tools phase should map to tools config section');
-  assert.deepStrictEqual(scriptsConfig, ['scripts', 'setup'], 'scripts phase should map to scripts and setup config sections');
+  assert.deepStrictEqual(scriptsConfig, ['scripts'], 'scripts phase should map to scripts config sections');
 });
 
 test('BUILD_PHASES has required properties', () => {

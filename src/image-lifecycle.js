@@ -229,38 +229,6 @@ async function copyConfigFiles(container, config, resolvedUser = 'root', resolve
   }
 }
 
-/**
- * Run setup commands inside a container
- * Note: Config is already fully expanded with environment variables and container values
- */
-async function runSetupCommands(container, config, resolvedUser = 'root', resolvedWorkDir = '/workspace') {
-  if (!config.setup) return;
-  
-  console.log('Running setup commands...');
-  
-  // Run root setup commands
-  if (config.setup.root && config.setup.root.length > 0) {
-    console.log('Running root setup commands...');
-    for (const cmd of config.setup.root) {
-      if (cmd && cmd.trim()) {
-        console.log(`  ${cmd}`);
-        await dockerExec(container, cmd, 'root');
-      }
-    }
-  }
-  
-  // Run user setup commands
-  if (config.setup.user && config.setup.user.commands && config.setup.user.commands.length > 0) {
-    const runAsUser = config.setup.user.run_as || resolvedUser;
-    console.log(`Running user setup commands as ${runAsUser}...`);
-    for (const cmd of config.setup.user.commands) {
-      if (cmd && cmd.trim()) {
-        console.log(`  ${cmd}`);
-        await dockerExec(container, cmd, runAsUser);
-      }
-    }
-  }
-}
 
 /**
  * Copy a directory and its contents to a container
@@ -335,7 +303,6 @@ async function cloneRepository(container, repoInfo, workDir, containerUser = nul
 
 module.exports = {
   buildBaseImage,
-  runSetupCommands,
   copyConfigFiles,
   cloneRepository,
   copyDirectoryToContainer

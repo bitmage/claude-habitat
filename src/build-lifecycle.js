@@ -27,7 +27,7 @@ const { createSnapshot, findValidSnapshot } = require('./snapshot-manager');
 const { calculateAllPhaseHashes, createPhaseLabels } = require('./phase-hash');
 const { BUILD_PHASES, findPhaseIndex } = require('./phases');
 const { execDockerCommand, dockerRun, dockerExec, startTempContainer, execDockerBuild } = require('./container-operations');
-const { buildBaseImage, runSetupCommands, cloneRepository, copyDirectoryToContainer, copyConfigFiles } = require('./image-lifecycle');
+const { buildBaseImage, cloneRepository, copyDirectoryToContainer, copyConfigFiles } = require('./image-lifecycle');
 const { fileExists, rel, createWorkDirPath } = require('./utils');
 const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
 
@@ -494,35 +494,10 @@ async function runFilesForPhase(containerId, config, hook, defaultUser, workdir)
  * @param {string} workdir - Working directory
  */
 async function runScriptsForPhase(containerId, config, hook, defaultUser, workdir) {
-  // Support both old 'setup' format and new 'scripts' format for backwards compatibility
   const scripts = config.scripts || [];
-  const oldSetup = config.setup;
-  
-  // Convert old setup format to new scripts format for processing
-  const allScripts = [...scripts];
-  
-  if (oldSetup && hook === 'scripts') {
-    // Convert old setup.root format
-    if (oldSetup.root && Array.isArray(oldSetup.root)) {
-      for (const cmd of oldSetup.root) {
-        allScripts.push({
-          run_as: 'root',
-          commands: [cmd]
-        });
-      }
-    }
-    
-    // Convert old setup.user format  
-    if (oldSetup.user && oldSetup.user.commands && Array.isArray(oldSetup.user.commands)) {
-      allScripts.push({
-        run_as: oldSetup.user.run_as || defaultUser,
-        commands: oldSetup.user.commands
-      });
-    }
-  }
   
   // Filter scripts for this hook
-  const hookScripts = allScripts.filter(script => {
+  const hookScripts = scripts.filter(script => {
     if (hook === 'scripts') {
       // Default scripts phase - scripts with no before/after specified
       return !script.before && !script.after;
@@ -533,11 +508,7 @@ async function runScriptsForPhase(containerId, config, hook, defaultUser, workdi
     }
   });
   
-  if (hookScripts.length === 0) {
-    return; // No scripts for this hook
-  }
-  
-  console.log(`Running ${hook} scripts...`);
+  if (hookScripts.length > 0) {console.log(`Running ${hook} scripts...`)};
   
   // Execute scripts in order
   for (const script of hookScripts) {
