@@ -368,6 +368,11 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
     
     const fullCommand = claudeCommand;
     
+    // CRITICAL: All container commands must use /entrypoint.sh to ensure proper environment
+    // variable expansion. Environment variables like PATH are intentionally left unexpanded
+    // (as ${PATH}) in configuration files to preserve system defaults across different
+    // Linux distributions. The expansion happens at container runtime via the entrypoint
+    // script, ensuring system PATH is preserved while adding habitat-specific paths.
     const dockerArgs = [
       'run', '--rm', ...dockerFlags,
       ...envArgs,
@@ -375,7 +380,7 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
       '-w', workDir,
       ...volumeArgs,
       tag,
-      '/bin/bash', '-c', fullCommand
+      '/entrypoint.sh', '/bin/bash', '-c', fullCommand
     ];
     
     const claudeProcess = spawn('docker', dockerArgs, {
