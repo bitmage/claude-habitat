@@ -6,6 +6,52 @@
  * no other claude-habitat processes are running. Uses "last process wins"
  * strategy for safe multi-process cleanup coordination.
  * 
+ * ## Node.js Process Exit Event Understanding
+ * 
+ * This module handles process termination through various Node.js events:
+ * 
+ * ### Normal Completion
+ * ```
+ * beforeExit → exit
+ * ```
+ * - beforeExit: Allows async operations, can extend process lifetime
+ * - exit: Synchronous only, immediate termination
+ * 
+ * ### Explicit process.exit()
+ * ```
+ * exit (immediate)
+ * ```
+ * - No beforeExit event
+ * - Only exit event fires
+ * - We don't handle this - let it exit immediately
+ * 
+ * ### SIGINT (Ctrl-C)
+ * ```
+ * SIGINT → [custom handler] → exit
+ * ```
+ * - Multiple handlers execute in registration order
+ * - Can prevent default termination
+ * - We handle gracefully with progressive messaging
+ * 
+ * ### SIGTERM (kill PID)
+ * ```
+ * SIGTERM → [custom handler] → exit
+ * ```
+ * - External graceful shutdown signal
+ * - Similar handling to SIGINT
+ * 
+ * ### SIGKILL (kill -9)
+ * ```
+ * [immediate termination - no events]
+ * ```
+ * - Cannot be caught - no cleanup possible
+ * 
+ * ### Our Strategy
+ * - Single async cleanup implementation
+ * - Progressive Ctrl-C handling (5 attempts before force exit)
+ * - No sync fallback - if user wants to force exit, let them
+ * - Cleanup will run next time anyway
+ * 
  * @requires module:container-operations - Docker container operations
  * @see {@link claude-habitat.js} - System composition and architectural overview
  * 
@@ -17,6 +63,11 @@
 const { promisify } = require('util');
 const { exec } = require('child_process');
 const execAsync = promisify(exec);
+
+// Module-level state for handler registration and cleanup coordination
+let handlersRegistered = false;
+let cleanupState = 'idle'; // 'idle' | 'starting' | 'inProgress' | 'complete'
+let ctrlCCount = 0;
 
 /**
  * Check if there are other claude-habitat processes running
@@ -147,10 +198,85 @@ async function cleanupDanglingImages(options = {}) {
 }
 
 /**
+ * Perform graceful cleanup with progress messaging
+ * 
+ * Uses state machine to prevent concurrent cleanup and provides
+ * user feedback about cleanup progress.
+ */
+async function performGracefulCleanup() {
+  if (cleanupState !== 'idle') {
+    return; // Already in progress
+  }
+  
+  cleanupState = 'starting';
+  
+  try {
+    // Check if we're the last process
+    if (!(await isLastClaudeHabitatProcess())) {
+      console.log('🔄 Other claude-habitat processes detected, skipping cleanup');
+      cleanupState = 'complete';
+      return;
+    }
+    
+    cleanupState = 'inProgress';
+    console.log('🧹 Starting graceful cleanup...');
+    
+    // Clean containers with progress
+    const containerIds = await getClaudeHabitatContainers();
+    if (containerIds.length > 0) {
+      console.log(`🧹 Cleaning up ${containerIds.length} containers...`);
+      await cleanupContainers();
+    }
+    
+    // Clean dangling images
+    try {
+      const { stdout } = await execAsync('docker images -f "dangling=true" -q');
+      const imageIds = stdout.trim().split('\n').filter(id => id.trim());
+      if (imageIds.length > 0) {
+        console.log(`🧹 Cleaning up ${imageIds.length} dangling images...`);
+        await cleanupDanglingImages();
+      }
+    } catch (error) {
+      console.log(`⚠️ Dangling image cleanup warning: ${error.message}`);
+    }
+    
+    console.log('✅ Cleanup complete!');
+    cleanupState = 'complete';
+    
+  } catch (error) {
+    console.log(`⚠️ Cleanup warning: ${error.message}`);
+    cleanupState = 'complete'; // Don't block exit on cleanup errors
+  }
+}
+
+/**
+ * Handle SIGINT (Ctrl-C) with progressive messaging
+ * 
+ * Implements 5-step progression:
+ * 1. Start graceful cleanup
+ * 2-4. Show "please wait" message  
+ * 5. Force exit
+ */
+async function handleSigint() {
+  ctrlCCount++;
+  
+  if (ctrlCCount === 1) {
+    console.log('\\n🛑 Shutting down gracefully...');
+    await performGracefulCleanup();
+    process.exit(0);
+  } else if (ctrlCCount <= 4) {
+    console.log(`🛑 Shutdown in progress, please wait... (Ctrl-C ${5-ctrlCCount} more times to force exit)`);
+  } else {
+    console.log('\\n💥 Force exit requested!');
+    process.exit(1);
+  }
+}
+
+/**
  * Setup automatic cleanup on process exit
  * 
- * Registers signal handlers for clean shutdown. Only performs cleanup
- * if this is the last claude-habitat process running.
+ * Registers signal handlers for clean shutdown using async-only approach.
+ * Progressive Ctrl-C handling allows graceful shutdown with option to force exit.
  * 
  * @param {Object} options - Setup options  
  * @param {boolean} options.disabled - Disable automatic cleanup
@@ -158,81 +284,20 @@ async function cleanupDanglingImages(options = {}) {
 function setupAutomaticCleanup(options = {}) {
   const { disabled = false } = options;
   
-  if (disabled) {
+  if (disabled || handlersRegistered) {
     return;
   }
   
-  // Create cleanup handler that ignores errors
-  const cleanupHandler = async () => {
-    try {
-      await cleanupContainers();
-      await cleanupDanglingImages();
-    } catch (error) {
-      // Silently ignore cleanup errors during shutdown
-    }
-  };
+  handlersRegistered = true;
   
-  // Create synchronous handler for exit event (async doesn't work)
-  const syncCleanupHandler = () => {
-    // For normal exit, we need to use synchronous docker commands
-    try {
-      const { execSync } = require('child_process');
-      
-      // Quick check if we're the last process
-      try {
-        const processes = execSync(`pgrep -f "claude-habitat"`, { encoding: 'utf8' });
-        const processCount = processes.trim().split('\n').filter(line => line.trim()).length;
-        if (processCount > 1) {
-          return; // Other processes running
-        }
-      } catch (error) {
-        // pgrep returns non-zero if no processes found, we're the last one
-      }
-      
-      // Get container IDs
-      try {
-        const containerIds = execSync(`docker ps -a -q --filter "name=claude-habitat"`, { encoding: 'utf8' });
-        const ids = containerIds.trim().split('\n').filter(id => id.trim());
-        
-        if (ids.length > 0) {
-          console.log('🧹 Cleaning up claude-habitat containers...');
-          
-          // Stop containers (ignore failures)
-          try {
-            execSync(`docker stop ${ids.join(' ')}`, { timeout: 30000 });
-          } catch (error) {
-            // Continue with removal
-          }
-          
-          // Remove containers
-          execSync(`docker rm ${ids.join(' ')}`);
-        }
-      } catch (error) {
-        // Ignore cleanup errors during shutdown
-      }
-      
-      // Clean up dangling images (orphaned by builds)
-      try {
-        const danglingIds = execSync(`docker images -f "dangling=true" -q`, { encoding: 'utf8' });
-        const imageIds = danglingIds.trim().split('\n').filter(id => id.trim());
-        
-        if (imageIds.length > 0) {
-          console.log(`🧹 Cleaning up ${imageIds.length} dangling Docker images...`);
-          execSync(`docker rmi ${imageIds.join(' ')}`);
-        }
-      } catch (error) {
-        // Ignore cleanup errors during shutdown
-      }
-    } catch (error) {
-      // Ignore all errors during synchronous cleanup
-    }
-  };
+  // Handle normal completion
+  process.on('beforeExit', performGracefulCleanup);
   
-  // Register for various exit conditions
-  process.on('SIGINT', cleanupHandler);       // Ctrl-C (async)
-  process.on('SIGTERM', cleanupHandler);      // Termination signal (async)
-  process.on('beforeExit', cleanupHandler);   // Normal exit (async - better than 'exit')
-  process.on('exit', syncCleanupHandler);     // Final fallback (sync only)
+  // Handle graceful shutdown signals
+  process.on('SIGTERM', performGracefulCleanup);
+  
+  // Handle Ctrl-C with progressive messaging
+  process.on('SIGINT', handleSigint);
 }
 
 module.exports = {
