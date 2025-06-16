@@ -161,7 +161,9 @@ class ProgressReporter {
     console.log(`${colors.red('❌')} ${event.pipeline} failed`);
     console.log(`   ${colors.red('Error:')} ${event.error}`);
     if (event.stage) {
-      console.log(`   ${colors.yellow('Failed at stage:')} ${event.stage}`);
+      // Convert internal stage name to user-friendly phase information
+      const phaseName = this._getPhaseNameFromStage(event.stage);
+      console.log(`   ${colors.yellow('Failed at phase:')} ${phaseName}`);
     }
   }
 
@@ -195,6 +197,30 @@ class ProgressReporter {
       const seconds = Math.floor((ms % 60000) / 1000);
       return `${minutes}m ${seconds}s`;
     }
+  }
+
+  /**
+   * Convert internal stage name to user-friendly phase name
+   * 
+   * @private
+   * @param {string} stageName - Internal stage name (e.g., "1-base", "snapshot-base")
+   * @returns {string} - User-friendly phase name
+   */
+  _getPhaseNameFromStage(stageName) {
+    // Hide snapshot operations from users - they're implementation details
+    if (stageName.startsWith('snapshot-')) {
+      const phaseName = stageName.replace('snapshot-', '');
+      return phaseName;
+    }
+    
+    // Phase execution stages (e.g., "1-base" → "base")
+    const match = stageName.match(/^\d+-(.+)$/);
+    if (match) {
+      return match[1];
+    }
+    
+    // Fallback: return stage name as-is
+    return stageName;
   }
 
   /**

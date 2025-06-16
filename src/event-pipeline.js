@@ -6,9 +6,26 @@
  * progress tracking, error handling, and snapshot integration. Enables
  * real-time feedback during container builds and other operations.
  * 
+ * ## Terminology: Stages vs Phases
+ * 
+ * This module uses "stage" terminology internally to represent the atomic units
+ * of pipeline execution. However, users see "phases" in the UI and documentation.
+ * 
+ * - **Stages**: Internal execution units including both phase work and snapshots
+ *   - Examples: "1-base", "snapshot-base", "2-users", "snapshot-users"
+ *   - Used for technical accuracy and progress tracking (22 stages total)
+ * 
+ * - **Phases**: Domain concepts representing logical build steps (12 phases total)
+ *   - Examples: "base", "users", "env", "workdir", "habitat", etc.
+ *   - Used in user-facing messages and domain documentation
+ * 
+ * The distinction maintains Domain Driven Design: users think in phases,
+ * while the implementation tracks stages for technical precision.
+ * 
  * @requires rxjs - Reactive Extensions for JavaScript
  * @requires module:snapshot-manager - Container snapshot management
  * @see {@link claude-habitat.js} - System composition and architectural overview
+ * @see {@link src/phases.js} - Phase definitions and domain concepts
  * 
  * @tests
  * - Unit tests: `npm test -- test/unit/event-pipeline.test.js`
