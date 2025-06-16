@@ -128,6 +128,42 @@ When troubleshooting be sure to identify at what layer our code differs from the
 
 This is declarative infrastructure based on yaml files, and the resulting behavior should be predictable from reading the relevant yaml files.
 
+## Documentation Standards
+
+### JSDoc Link Format
+When referencing other modules or files in JSDoc comments, use this format:
+```
+@see {@link filename} for [purpose/description]
+```
+
+Examples:
+- `@see {@link src/phases.js} for phase definitions and configuration sections`
+- `@see {@link claude-habitat.js} for system composition and architectural overview`
+- `@see {@link src/config.js} for configuration loading and processing`
+
+### Avoid Duplication
+- Reference authoritative sources rather than copying information
+- Link to implementations rather than describing them inline
+- Maintain single source of truth for domain concepts (e.g., phase definitions in src/phases.js)
+
+### Module Documentation Pattern
+Each module should have a consistent JSDoc header:
+```javascript
+/**
+ * @module module-name
+ * @description Brief description of module purpose
+ * 
+ * Detailed explanation of functionality and architectural role
+ * 
+ * @requires module:dependency - Why this dependency is needed
+ * @see {@link related-module.js} for related functionality
+ * 
+ * @tests
+ * - Unit tests: `npm test -- test/unit/module.test.js`
+ * - Integration tests: `npm run test:e2e`
+ */
+```
+
 ## Memories
 
 - Don't guess at what is true, find evidence. Only speculate if you've exhausted available options to know for sure.
