@@ -535,26 +535,20 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
     const envPath = compiledEnv.PATH || `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${systemToolsPath}`;
 
     // Execute tests using ephemeral container with docker run --rm
+    // NOTE: We rely on the entrypoint script to set up the environment properly,
+    // rather than manually duplicating environment setup or passing -e flags.
+    // This ensures consistency with how the main habitat runner works.
     const testScript = `#!/bin/bash
 set -e
-
-# Set up environment variables (matching the habitat environment)
-export USER="${containerUser}"
-export WORKDIR="${workDir}"
-export SYSTEM_PATH="${systemPath}"
-export SHARED_PATH="${sharedPath}"
-export SYSTEM_TOOLS_PATH="${systemToolsPath}"
-export PATH="${envPath}"
 
 ${testCommands}
 echo "All tests completed"
 `;
 
-    // Build environment args from compiled environment
-    const envArgs = [];
-    for (const [key, value] of Object.entries(compiledEnv)) {
-      envArgs.push('-e', `${key}=${value}`);
-    }
+    // NOTE: We do NOT pass environment variables via -e flags because:
+    // 1. The entrypoint script (/entrypoint.sh) and habitat-env.sh handle all environment setup
+    // 2. Passing -e variables can override the container's built-in environment setup
+    // 3. This approach maintains consistency with the main habitat execution path
 
     // Load and resolve volumes from configuration
     const { loadAndResolveVolumes, buildVolumeArgs } = require('./volume-resolver');
@@ -562,14 +556,14 @@ echo "All tests completed"
     const volumeArgs = buildVolumeArgs(resolvedVolumes);
     
     // Docker run arguments for ephemeral test execution
+    // NOTE: We use the entrypoint script for consistency with main habitat execution.
+    // No -e or -w flags needed as the entrypoint handles environment and working directory.
     const dockerArgs = [
       'run', '--rm',
-      ...envArgs,
       '-u', containerUser,
-      '-w', workDir,
       ...volumeArgs,
       imageTag,
-      '/bin/bash', '-c', testScript
+      '/entrypoint.sh', '/bin/bash', '-c', testScript
     ];
 
     try {

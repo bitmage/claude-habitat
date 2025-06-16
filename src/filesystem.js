@@ -331,11 +331,10 @@ echo "Running filesystem verification (scope: ${effectiveScope})..."
 ${scriptPath} ${effectiveScope}
 `;
     
-    // Build environment args from compiled environment
-    const envArgs = [];
-    for (const [key, value] of Object.entries(compiledEnv)) {
-      envArgs.push('-e', `${key}=${value}`);
-    }
+    // NOTE: We do NOT pass environment variables via -e flags because:
+    // 1. The entrypoint script (/entrypoint.sh) and habitat-env.sh handle all environment setup
+    // 2. Passing -e variables can override the container's built-in environment setup
+    // 3. This approach maintains consistency with the main habitat execution path
     
     // Load and resolve volumes from configuration
     const { loadAndResolveVolumes, buildVolumeArgs } = require('./volume-resolver');
@@ -343,14 +342,14 @@ ${scriptPath} ${effectiveScope}
     const volumeArgs = buildVolumeArgs(resolvedVolumes);
     
     // Docker run arguments for ephemeral verification
+    // NOTE: We use the entrypoint script for consistency with main habitat execution.
+    // No -e or -w flags needed as the entrypoint handles environment and working directory.
     const dockerArgs = [
       'run', '--rm',
-      ...envArgs,
       '-u', containerUser,
-      '-w', workDir,
       ...volumeArgs,
       preparedTag,
-      '/bin/bash', '-c', verificationScript
+      '/entrypoint.sh', '/bin/bash', '-c', verificationScript
     ];
     
     // Execute verification in ephemeral container

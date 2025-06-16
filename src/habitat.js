@@ -404,11 +404,12 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
     }
     const dockerFlags = enableTTY ? ['-it'] : ['-i'];
     
-    // Build environment args from compiled environment
-    const envArgs = [];
-    for (const [key, value] of Object.entries(compiledEnv)) {
-      envArgs.push('-e', `${key}=${value}`);
-    }
+    // NOTE: We do NOT pass environment variables via -e flags because:
+    // 1. The entrypoint script (/entrypoint.sh) and habitat-env.sh already handle all environment setup
+    // 2. Passing -e variables overrides the container's built-in environment, causing issues like
+    //    PATH='${PATH}:...' being passed literally instead of being expanded properly
+    // 3. The entrypoint ensures proper variable expansion at runtime within the container context
+    // 4. This approach is cleaner and more reliable than trying to duplicate environment setup externally
     
     // Load and resolve volumes from configuration
     const { loadAndResolveVolumes, buildVolumeArgs } = require('./volume-resolver');
@@ -422,11 +423,15 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
     // (as ${PATH}) in configuration files to preserve system defaults across different
     // Linux distributions. The expansion happens at container runtime via the entrypoint
     // script, ensuring system PATH is preserved while adding habitat-specific paths.
+    //
+    // NOTE: We do NOT use -e or -w flags because:
+    // - Environment variables are handled by the entrypoint script and habitat-env.sh
+    // - Working directory is set by the entrypoint via 'cd "$WORKDIR"' 
+    // - Using -e overrides the container's environment setup and causes variable expansion issues
+    // - Using -w can conflict with the entrypoint's directory management
     const dockerArgs = [
       'run', '--rm', ...dockerFlags,
-      ...envArgs,
       '-u', containerUser,
-      '-w', workDir,
       ...volumeArgs,
       tag,
       '/entrypoint.sh', '/bin/bash', '-c', fullCommand
