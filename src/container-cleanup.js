@@ -263,7 +263,8 @@ async function handleSigint() {
   if (ctrlCCount === 1) {
     console.log('\\n🛑 Shutting down gracefully...');
     await performGracefulCleanup();
-    process.exit(0);
+    // Let the process exit naturally instead of forcing it
+    // This allows any ongoing operations to complete and show proper error messages
   } else if (ctrlCCount <= 4) {
     console.log(`🛑 Shutdown in progress, please wait... (Ctrl-C ${5-ctrlCCount} more times to force exit)`);
   } else {

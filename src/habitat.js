@@ -74,8 +74,29 @@ const { createSnapshot } = require('./snapshot-manager');
  * @private
  */
 async function cleanupBuildContainer(containerId) {
-  await dockerRun(['stop', containerId]);
-  await dockerRun(['rm', containerId]);
+  try {
+    await dockerRun(['stop', containerId]);
+  } catch (stopError) {
+    console.log(`⚠️ Failed to stop container ${containerId}: ${stopError.message}`);
+    // Try force stop
+    try {
+      await dockerRun(['kill', containerId]);
+    } catch (killError) {
+      console.log(`⚠️ Failed to kill container ${containerId}: ${killError.message}`);
+    }
+  }
+  
+  try {
+    await dockerRun(['rm', containerId]);
+  } catch (rmError) {
+    // Try force remove
+    try {
+      await dockerRun(['rm', '-f', containerId]);
+    } catch (forceRmError) {
+      console.log(`⚠️ Failed to force remove container ${containerId}: ${forceRmError.message}`);
+      throw forceRmError;
+    }
+  }
 }
 
 // Start a new session with the specified habitat
@@ -88,63 +109,77 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
   
   console.log(`Starting habitat session from: ${configPath}`);
   
+  // Create the build pipeline with snapshot support
+  const pipeline = await createBuildPipeline(configPath, { 
+    rebuild, 
+    rebuildFrom, 
+    extraRepos 
+  });
+  
+  // Attach progress reporter for real-time feedback
+  const progressReporter = new ProgressReporter();
+  progressReporter.attach(pipeline);
+  
+  // Load config for context
+  const { loadHabitatEnvironmentFromConfig } = require('./config');
+  const config = await loadHabitatEnvironmentFromConfig(configPath);
+  
+  // Prepare initial context
+  let initialContext = {
+    config,
+    configPath,
+    extraRepos,
+    rebuild,
+    rebuildFrom
+  };
+  
+  let buildContainerId = null;
+  let context = null;
+  
   try {
-    // Create the build pipeline with snapshot support
-    const pipeline = await createBuildPipeline(configPath, { 
-      rebuild, 
-      rebuildFrom, 
-      extraRepos 
-    });
-    
-    // Attach progress reporter for real-time feedback
-    const progressReporter = new ProgressReporter();
-    progressReporter.attach(pipeline);
-    
-    // Load config for context
-    const { loadHabitatEnvironmentFromConfig } = require('./config');
-    const config = await loadHabitatEnvironmentFromConfig(configPath);
-    
-    // Prepare initial context
-    let initialContext = {
-      config,
-      configPath,
-      extraRepos,
-      rebuild,
-      rebuildFrom
-    };
-    
-    // If we have a cached snapshot to start from, create container from it
-    if (pipeline._context && pipeline._context.baseImageTag && pipeline._context.startFromPhase > 0) {
-      const containerId = await startTempContainer(pipeline._context.baseImageTag);
-      initialContext.containerId = containerId;
-      initialContext.baseImageTag = pipeline._context.baseImageTag;
+      // If we have a cached snapshot to start from, create container from it
+      if (pipeline._context && pipeline._context.baseImageTag && pipeline._context.startFromPhase > 0) {
+        buildContainerId = await startTempContainer(pipeline._context.baseImageTag);
+        initialContext.containerId = buildContainerId;
+        initialContext.baseImageTag = pipeline._context.baseImageTag;
+      }
+      
+      // Run the pipeline
+      context = await pipeline.run(initialContext);
+      
+      // Track the build container ID from context if we didn't have one already
+      if (!buildContainerId && context.containerId) {
+        buildContainerId = context.containerId;
+      }
+      
+      // The final container should be in context.containerId
+      const finalTag = `habitat-${config.name}:12-final`;
+      
+      // Commit the final container as the prepared image
+      const snapshotOptions = { result: 'pass' };
+      if (context.entrypointChange) {
+        snapshotOptions.dockerChange = context.entrypointChange;
+      }
+      await createSnapshot(context.containerId, finalTag, snapshotOptions);
+      
+      console.log(`Prepared image created: ${finalTag}`);
+      
+      // Run the habitat container using the final image
+      return await runEphemeralContainer(finalTag, config, overrideCommand, options.tty);
+      
+    } catch (error) {
+      console.error(`Failed to start habitat session: ${error.message}`);
+      throw error;
+    } finally {
+      // Always clean up the build container, regardless of success or failure
+      if (buildContainerId) {
+        try {
+          await cleanupBuildContainer(buildContainerId);
+        } catch (cleanupError) {
+          console.log(`⚠️ Failed to cleanup build container ${buildContainerId}: ${cleanupError.message}`);
+        }
+      }
     }
-    
-    // Run the pipeline
-    const context = await pipeline.run(initialContext);
-    
-    // The final container should be in context.containerId
-    const finalTag = `habitat-${config.name}:12-final`;
-    
-    // Commit the final container as the prepared image
-    const snapshotOptions = { result: 'pass' };
-    if (context.entrypointChange) {
-      snapshotOptions.dockerChange = context.entrypointChange;
-    }
-    await createSnapshot(context.containerId, finalTag, snapshotOptions);
-    
-    console.log(`Prepared image created: ${finalTag}`);
-    
-    // Stop the build container
-    await cleanupBuildContainer(context.containerId);
-    
-    // Run the habitat container using the final image
-    return await runEphemeralContainer(finalTag, config, overrideCommand, options.tty);
-    
-  } catch (error) {
-    console.error(`Failed to start habitat session: ${error.message}`);
-    throw error;
-  }
 }
 
 // Build habitat image (base + prepared)
@@ -155,69 +190,83 @@ async function buildHabitatImage(configPath, extraRepos = [], options = {}) {
   const { createBuildPipeline } = require('./build-lifecycle');
   const { ProgressReporter } = require('./progress-ui');
   
+  // Create the build pipeline
+  const pipeline = await createBuildPipeline(configPath, { extraRepos, rebuild });
+  
+  // Attach progress reporter
+  const progressReporter = new ProgressReporter();
+  progressReporter.attach(pipeline);
+  
+  // Load config for context
+  const { loadHabitatEnvironmentFromConfig } = require('./config');
+  const config = await loadHabitatEnvironmentFromConfig(configPath);
+  
+  // Prepare initial context
+  let initialContext = {
+    config,
+    configPath,
+    extraRepos
+  };
+  
+  let buildContainerId = null;
+  let context = null;
+  
   try {
-    // Create the build pipeline
-    const pipeline = await createBuildPipeline(configPath, { extraRepos, rebuild });
-    
-    // Attach progress reporter
-    const progressReporter = new ProgressReporter();
-    progressReporter.attach(pipeline);
-    
-    // Load config for context
-    const { loadHabitatEnvironmentFromConfig } = require('./config');
-    const config = await loadHabitatEnvironmentFromConfig(configPath);
-    
-    // Prepare initial context
-    let initialContext = {
-      config,
-      configPath,
-      extraRepos
-    };
-    
-    // If we have a cached snapshot to start from, create container from it
-    if (pipeline._context && pipeline._context.baseImageTag && pipeline._context.startFromPhase > 0) {
-      const containerId = await startTempContainer(pipeline._context.baseImageTag);
-      initialContext.containerId = containerId;
-      initialContext.baseImageTag = pipeline._context.baseImageTag;
-    }
-    
-    // Run the pipeline
-    const context = await pipeline.run(initialContext);
-    
-    // Create final snapshot
-    const finalTag = `habitat-${config.name}:final`;
-    
-    // Check if we need to create a snapshot or if final image already exists
-    if (context.containerId) {
-      // We have a build container, create the final snapshot
-      await createSnapshot(context.containerId, finalTag, { result: 'pass' });
+      // If we have a cached snapshot to start from, create container from it
+      if (pipeline._context && pipeline._context.baseImageTag && pipeline._context.startFromPhase > 0) {
+        buildContainerId = await startTempContainer(pipeline._context.baseImageTag);
+        initialContext.containerId = buildContainerId;
+        initialContext.baseImageTag = pipeline._context.baseImageTag;
+      }
       
-      // Clean up build container
-      await cleanupBuildContainer(context.containerId);
-    } else {
-      // Fully cached - check if final image exists
-      const expectedFinalTag = `habitat-${config.name}:12-final`;
-      if (await dockerImageExists(expectedFinalTag)) {
-        // The final image already exists from previous build
-        console.log(`Using existing final image: ${expectedFinalTag}`);
-        // Tag it with the expected name if different
-        if (expectedFinalTag !== finalTag) {
-          await dockerRun(['tag', expectedFinalTag, finalTag]);
-        }
+      // Run the pipeline
+      context = await pipeline.run(initialContext);
+      
+      // Track the build container ID from context if we didn't have one already
+      if (!buildContainerId && context.containerId) {
+        buildContainerId = context.containerId;
+      }
+      
+      // Create final snapshot
+      const finalTag = `habitat-${config.name}:final`;
+      
+      // Check if we need to create a snapshot or if final image already exists
+      if (context.containerId) {
+        // We have a build container, create the final snapshot
+        await createSnapshot(context.containerId, finalTag, { result: 'pass' });
       } else {
-        throw new Error(`No final image found for ${config.name}`);
+        // Fully cached - check if final image exists
+        const expectedFinalTag = `habitat-${config.name}:12-final`;
+        if (await dockerImageExists(expectedFinalTag)) {
+          // The final image already exists from previous build
+          console.log(`Using existing final image: ${expectedFinalTag}`);
+          // Tag it with the expected name if different
+          if (expectedFinalTag !== finalTag) {
+            await dockerRun(['tag', expectedFinalTag, finalTag]);
+          }
+        } else {
+          throw new Error(`No final image found for ${config.name}`);
+        }
+      }
+      
+      return { 
+        baseTag: context.baseImageTag || pipeline._context?.baseImageTag, 
+        preparedTag: finalTag 
+      };
+      
+    } catch (error) {
+      console.error(`Failed to build habitat image: ${error.message}`);
+      throw error;
+    } finally {
+      // Always clean up the build container, regardless of success or failure
+      if (buildContainerId) {
+        try {
+          await cleanupBuildContainer(buildContainerId);
+        } catch (cleanupError) {
+          console.log(`⚠️ Failed to cleanup build container ${buildContainerId}: ${cleanupError.message}`);
+        }
       }
     }
-    
-    return { 
-      baseTag: context.baseImageTag || pipeline._context?.baseImageTag, 
-      preparedTag: finalTag 
-    };
-    
-  } catch (error) {
-    console.error(`Failed to build habitat image: ${error.message}`);
-    throw error;
-  }
 }
 
 // Get last used configuration

@@ -40,6 +40,7 @@ class ProgressReporter {
    * Attach to an event pipeline
    */
   attach(pipeline) {
+    this.pipeline = pipeline; // Store reference for accessing context
     return pipeline.onProgress(event => this.handleEvent(event));
   }
 
@@ -87,8 +88,14 @@ class ProgressReporter {
     
     // Use domain language: report phases, not internal stages
     const { BUILD_PHASES } = require('./phases');
-    const totalPhases = BUILD_PHASES.length;
-    console.log(`📋 ${totalPhases} phases to complete`);
+    
+    // Calculate remaining phases based on pipeline context
+    let remainingPhases = BUILD_PHASES.length;
+    if (this.pipeline && this.pipeline._context && this.pipeline._context.startFromPhase) {
+      remainingPhases = BUILD_PHASES.length - this.pipeline._context.startFromPhase;
+    }
+    
+    console.log(`📋 ${remainingPhases} phases to complete`);
     console.log('');
   }
 
