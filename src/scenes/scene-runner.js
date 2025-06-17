@@ -137,6 +137,7 @@ function formatSnapshots(results) {
 
 module.exports = {
   runInteractive,
+  runScene: runInteractive, // Alias for backward compatibility
   runSequence,
   runAllSequences,
   formatSnapshots

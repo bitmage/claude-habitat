@@ -125,6 +125,7 @@ Claude Habitat has self-hosting capabilities. If `/.dockerenv` exists, you're de
 - **Create improvement proposals** - When you discover problems or opportunities to improve, create a proposal in `claude/scratch/[foo].md`, continue working on the original objective, and list any new proposals when reporting on task completion
 - **Value evidence over speculation** - Don't guess at what is true, find evidence. Only speculate if you've exhausted available options to know for sure.
 - **config.yaml files are part of the spec** - Unless specifically instructed to change them, assume that the config.yaml files are part of the architectural spec given to you, and don't modify them without confirming with the user.
+- **WE LOATHE CODE DUPLICATION** - If you find yourself writing code that looks 90% similar to other code, or implements the same functionality for a slightly different use case, STOP.  See if you can find a way to share logic, and if you can't BRING IT UP IN CONVERSATION before continuing with implementation.  It's much easier to catch code divergence early than after other parts of the codebase have begun to rely on it.
 
 This is a complex architecture with many layers - be sure you understand what layer you are on and what the idiomatic practices for that layer are.
 

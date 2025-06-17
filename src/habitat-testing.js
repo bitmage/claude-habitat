@@ -5,14 +5,13 @@
  * Provides test orchestration for habitat environments including system tests
  * (infrastructure), shared tests (user configuration), and habitat tests 
  * (environment-specific validation). Uses ephemeral containers (docker run --rm)
- * for fast, clean test execution and provides interactive test menus and result reporting.
+ * for fast, clean test execution.
  * 
  * ## Key Functions
  * - **runTestMode**: Main entry point for habitat test execution
  * - **runSystemTests**: Execute system infrastructure tests in ephemeral container
  * - **runSharedTests**: Execute shared configuration tests in ephemeral container  
  * - **runHabitatTests**: Execute habitat-specific tests in ephemeral container
- * - **showTestMenu**: Interactive habitat selection and test type menus
  * 
  * See README.md for complete testing documentation including unit tests,
  * E2E tests, UI snapshots, and development workflows.
@@ -48,9 +47,6 @@ async function runTestMode(testType, testTarget, rebuild = false) {
   if (testType === 'all' && !testTarget) {
     // Run all tests for all habitats
     await runAllTests();
-  } else if (testType === 'menu' || (!testType && !testTarget)) {
-    // Show test menu
-    await showTestMenu();
   } else if (testTarget) {
     // Run tests for specific habitat
     const habitatConfigPath = rel('habitats/' + testTarget + '/config.yaml');
@@ -87,196 +83,6 @@ async function runTestMode(testType, testTarget, rebuild = false) {
     console.error(colors.red('Invalid test configuration'));
     process.exit(1);
   }
-}
-
-async function showTestMenu() {
-  const habitatsDir = rel('habitats');
-  let habitats = [];
-
-  try {
-    const dirs = await fs.readdir(habitatsDir);
-    for (const dir of dirs) {
-      const configPath = path.join(habitatsDir, dir, 'config.yaml');
-      if (await fileExists(configPath)) {
-        habitats.push({ name: dir, path: configPath });
-      }
-    }
-    habitats.sort((a, b) => a.name.localeCompare(b.name));
-  } catch (err) {
-    console.log('No habitats directory found');
-    return;
-  }
-
-  if (habitats.length === 0) {
-    console.log('No habitats found to test');
-    return;
-  }
-
-  console.log('Select Habitat to Test:\n');
-
-  habitats.forEach((habitat, index) => {
-    const key = (index + 1).toString();
-    console.log(`  ${colors.yellow(`[${key}]`)} ${habitat.name}`);
-  });
-  console.log('');
-  console.log(`  ${colors.yellow('[b]')}ack - Return to main menu\n`);
-
-  // Use single keypress for habitat selection
-  const choice = await new Promise(resolve => {
-    if (!process.stdin.isTTY) {
-      // Fallback for non-TTY mode
-      const readline = require('readline');
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
-      rl.question('Select habitat: ', answer => {
-        rl.close();
-        resolve(answer.trim().toLowerCase());
-      });
-      return;
-    }
-
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.setEncoding('utf8');
-
-    const onKeypress = (key) => {
-      // Handle Ctrl+C
-      if (key === '\u0003') {
-        console.log('\n');
-        process.exit(0);
-      }
-
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-      process.stdin.removeListener('data', onKeypress);
-      resolve(key.toLowerCase());
-    };
-
-    process.stdin.on('data', onKeypress);
-  });
-
-  if (choice === 'b') {
-    // Return to main menu - exit to let parent process handle
-    process.exit(0);
-    return;
-  }
-
-  // Check if it's a habitat number
-  const habitatIndex = parseInt(choice) - 1;
-  if (!isNaN(habitatIndex) && habitatIndex >= 0 && habitatIndex < habitats.length) {
-    await showHabitatTestMenu(habitats[habitatIndex].name);
-  } else {
-    console.error(colors.red('\n❌ Invalid choice'));
-    await sleep(1500);
-    await showTestMenu();
-  }
-}
-
-async function showHabitatTestMenu(habitatName) {
-  console.log(`\n${colors.green(`=== Testing ${habitatName} ===`)}\n`);
-  console.log('Which tests to run?\n');
-  console.log(`  ${colors.yellow('[a]')}ll     - Run all tests (default)`);
-  console.log(`  s${colors.yellow('[y]')}stem  - System infrastructure only`);
-  console.log(`  ${colors.yellow('[s]')}hared   - Shared configuration only`);
-  console.log(`  ${colors.yellow('[h]')}abitat - ${habitatName}-specific tests only`);
-  console.log(`  ${colors.yellow('[f]')}ile system - File system operations`);
-  console.log(`  ${colors.yellow('[b]')}ack    - Back to habitat selection\n`);
-
-  // Use single keypress with support for multi-char options
-  const choice = await new Promise(resolve => {
-    if (!process.stdin.isTTY) {
-      // Fallback for non-TTY mode
-      const readline = require('readline');
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
-      rl.question('Select test type (a/y/s/h/f/b): ', answer => {
-        rl.close();
-        resolve(answer.trim().toLowerCase());
-      });
-      return;
-    }
-
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.setEncoding('utf8');
-
-    const onKeypress = (key) => {
-      // Handle Ctrl+C
-      if (key === '\u0003') {
-        console.log('\n');
-        process.exit(0);
-      }
-
-      // For single key presses, resolve immediately
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-      process.stdin.removeListener('data', onKeypress);
-      resolve(key.toLowerCase());
-    };
-
-    process.stdin.on('data', onKeypress);
-  });
-
-  console.log(''); // Add newline after selection
-
-  if (choice === 'b') {
-    await showTestMenu();
-    return;
-  }
-
-  // Capture test results for interactive display
-  let testResults = [];
-  const startTime = new Date();
-
-  if (choice === 'a' || choice === '') {
-    // Default to all tests
-    testResults = await runHabitatTests(habitatName, true);
-  } else if (choice === 'y') {
-    testResults = await runSystemTests(null, true);
-  } else if (choice === 's') {
-    testResults = await runSharedTests(null, true);
-  } else if (choice === 'h') {
-    // Run only habitat-specific tests
-    const habitatConfigPath = rel('habitats/' + habitatName + '/config.yaml');
-    const habitatConfig = await loadConfig(habitatConfigPath);
-
-    if (habitatConfig.tests && habitatConfig.tests.length > 0) {
-      console.log(`Running ${habitatName}-specific tests...\n`);
-      testResults = await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, true, false, habitatConfigPath);
-    } else {
-      console.log(`No ${habitatName}-specific tests configured`);
-      testResults = [{ type: 'info', message: `No ${habitatName}-specific tests configured` }];
-    }
-  } else if (choice === 'f') {
-    // Run filesystem verification for this habitat using build pipeline
-    const habitatConfigPath = rel('habitats/' + habitatName + '/config.yaml');
-    
-    console.log(`Running filesystem verification for ${habitatName}...\n`);
-    const { runHabitat } = require('../habitat');
-    await runHabitat(habitatConfigPath, [], null, { 
-      rebuild: true,
-      rebuildFrom: 'scripts',
-      target: 'verify' 
-    });
-    testResults = [{ type: 'info', message: 'Filesystem verification completed' }];
-  } else {
-    console.error(colors.red('\n❌ Invalid choice'));
-    await sleep(1500);
-    await showHabitatTestMenu(habitatName);
-    return;
-  }
-
-  const endTime = new Date();
-  const duration = ((endTime - startTime) / 1000).toFixed(1);
-
-  // Show results screen for interactive mode
-  await showTestResults(testResults, habitatName, choice, duration);
 }
 
 async function runAllTests() {
@@ -541,6 +347,7 @@ echo "All tests completed"
       '/entrypoint.sh', '/bin/bash', '-c', testScript
     ];
 
+    let results = [];
     try {
       // Execute test container and capture output
       const output = await new Promise((resolve, reject) => {
@@ -636,117 +443,6 @@ function parseTestOutput(output, testType) {
   return results;
 }
 
-async function showTestResults(results, habitatName, testChoice, duration) {
-  console.log(`\n${colors.green('=')}${colors.green('='.repeat(50))}${colors.green('=')}`);
-  console.log(`${colors.green('Test Results Summary')}`);
-  console.log(`${colors.green('=')}${colors.green('='.repeat(50))}${colors.green('=')}`);
-
-  console.log(`\nHabitat: ${colors.cyan(habitatName)}`);
-  console.log(`Test Type: ${colors.cyan(getTestTypeName(testChoice))}`);
-  console.log(`Duration: ${colors.cyan(duration + 's')}`);
-  console.log(`Timestamp: ${colors.cyan(new Date().toLocaleString())}\n`);
-
-  // Count results by type
-  const counts = {
-    pass: results.filter(r => r.type === 'pass').length,
-    fail: results.filter(r => r.type === 'fail').length,
-    error: results.filter(r => r.type === 'error').length,
-    info: results.filter(r => r.type === 'info').length
-  };
-
-  console.log(`${colors.green('✓ Passed:')} ${counts.pass}`);
-  console.log(`${colors.red('✗ Failed:')} ${counts.fail}`);
-  console.log(`${colors.red('⚠ Errors:')} ${counts.error}`);
-  console.log(`${colors.yellow('ℹ Info:')} ${counts.info}\n`);
-
-  // Show failed tests first
-  const failedTests = results.filter(r => r.type === 'fail' || r.type === 'error');
-  if (failedTests.length > 0) {
-    console.log(`${colors.red('Failed Tests:')}`);
-    failedTests.forEach((result, index) => {
-      console.log(`  ${index + 1}. ${result.test || result.message}`);
-      if (result.details && result.details !== result.message) {
-        console.log(`     ${colors.gray(result.details)}`);
-      }
-    });
-    console.log('');
-  }
-
-  // Show passed tests
-  const passedTests = results.filter(r => r.type === 'pass');
-  if (passedTests.length > 0) {
-    console.log(`${colors.green('Passed Tests:')}`);
-    passedTests.forEach((result, index) => {
-      console.log(`  ${index + 1}. ${result.test || result.message}`);
-    });
-    console.log('');
-  }
-
-  console.log(`${colors.green('=')}${colors.green('='.repeat(50))}${colors.green('=')}\n`);
-
-  // Interactive options
-  console.log('Options:');
-  console.log(`  ${colors.yellow('[r]')}erun  - Run tests again`);
-  console.log(`  ${colors.yellow('[s]')}ave   - Save results to file`);
-  console.log(`  ${colors.yellow('[b]')}ack   - Return to test menu`);
-  console.log(`  ${colors.yellow('[m]')}ain   - Return to main menu\n`);
-
-  const choice = await new Promise(resolve => {
-    if (!process.stdin.isTTY) {
-      const readline = require('readline');
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-
-      rl.question('Choose option (r/s/b/m): ', answer => {
-        rl.close();
-        resolve(answer.trim().toLowerCase());
-      });
-      return;
-    }
-
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    process.stdin.setEncoding('utf8');
-
-    const onKeypress = (key) => {
-      if (key === '\u0003') {
-        console.log('\n');
-        process.exit(0);
-      }
-
-      process.stdin.setRawMode(false);
-      process.stdin.pause();
-      process.stdin.removeListener('data', onKeypress);
-      resolve(key.toLowerCase());
-    };
-
-    process.stdin.on('data', onKeypress);
-  });
-
-  console.log('');
-
-  switch (choice) {
-    case 'r':
-      await showHabitatTestMenu(habitatName);
-      break;
-    case 's':
-      await saveTestResults(results, habitatName, testChoice, duration);
-      await askToContinue();
-      await showTestResults(results, habitatName, testChoice, duration);
-      break;
-    case 'b':
-      await showTestMenu();
-      break;
-    case 'm':
-    default:
-      // Return to main menu is handled by the parent process
-      process.exit(0);
-      break;
-  }
-}
-
 function getTestTypeName(choice) {
   switch (choice) {
     case 'a': case '': return 'All Tests';
@@ -784,15 +480,12 @@ async function saveTestResults(results, habitatName, testChoice, duration) {
 
 module.exports = {
   runTestMode,
-  showTestMenu,
-  showHabitatTestMenu,
   runAllTests,
   runSystemTests,
   runSharedTests,
   runHabitatTests,
   runTestsInHabitatContainer,
   parseTestOutput,
-  showTestResults,
   getTestTypeName,
   saveTestResults
 };

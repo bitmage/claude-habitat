@@ -258,8 +258,13 @@ async function handleTestMode(options) {
       rebuildFrom: 'verify',  // Start from phase before test (10-verify)
       target: 'test' 
     });
+  } else if (options.testType === 'menu' || (!options.testType && !options.testTarget)) {
+    // Route to interactive test menu scene
+    const { runScene } = require('./src/scenes/scene-runner');
+    const { testMenuScene } = require('./src/scenes/test-menu.scene');
+    await runScene(testMenuScene);
   } else {
-    // Legacy test mode for other test types
+    // Direct test execution for specific test types
     await runTestMode(options.testType, options.testTarget, options.rebuild);
   }
 }

@@ -114,7 +114,7 @@ function parseCliArguments(argv) {
     .option('--system', 'Run system tests')
     .option('--shared', 'Run shared tests')
     .option('--habitat', 'Run habitat tests')
-    .option('--verify-fs [scope]', 'Filesystem verification', 'all')
+    .option('--verify-fs [scope]', 'Filesystem verification')
     .option('--all', 'Run all tests')
     .option('--rebuild', 'Force rebuild')
     .action((habitat, options) => {
@@ -137,7 +137,7 @@ function parseCliArguments(argv) {
       } else if (options.habitat) {
         result.testType = 'habitat';
       } else if (options.verifyFs !== undefined) {
-        if (typeof options.verifyFs === 'string' && options.verifyFs !== 'all') {
+        if (typeof options.verifyFs === 'string') {
           result.testType = `verify-fs:${options.verifyFs}`;
         } else {
           result.testType = 'verify-fs';
