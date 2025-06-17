@@ -292,7 +292,11 @@ function setupAutomaticCleanup(options = {}) {
   handlersRegistered = true;
   
   // Handle normal completion
-  process.on('beforeExit', performGracefulCleanup);
+  process.on('beforeExit', async () => {
+    await performGracefulCleanup();
+    // Force exit after cleanup to prevent hanging from open handles
+    process.exit(0);
+  });
   
   // Handle graceful shutdown signals
   process.on('SIGTERM', async () => {

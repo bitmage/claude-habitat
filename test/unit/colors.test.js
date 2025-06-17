@@ -99,11 +99,15 @@ test('CLI color preservation option works', async () => {
   const path = require('path');
   
   // Test CLI with preserve colors
+  // Note: CLI startup includes repository access checks which can take 10+ seconds
+  // This timeout accounts for network latency during GitHub repository verification
+  const CLI_STARTUP_TIMEOUT = 20000; // 20 seconds to allow for repository checks
+  
   const result = await new Promise((resolve, reject) => {
     const scriptPath = path.join(__dirname, '../../claude-habitat.js');
     const child = spawn('node', [scriptPath, '--test-sequence=q', '--preserve-colors'], {
       stdio: 'pipe',
-      timeout: 10000
+      timeout: CLI_STARTUP_TIMEOUT
     });
     
     let stdout = '';

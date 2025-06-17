@@ -111,12 +111,15 @@ Claude Habitat has self-hosting capabilities. If `/.dockerenv` exists, you're de
 
 ## Communication Preferences
 
-If the user asks for discussion or asks questions, don't proceed with implementation until you have answered all questions and received acknowledgement from the user that they are satisfied with your answers.
+- If the user asks for discussion or asks questions, don't proceed with implementation until you have answered all questions and received acknowledgement from the user that they are satisfied with your answers.
+- If you're referring to code and explaining how it functions, tell me what file and line number to find the code that you're talking about.
+- Don't present large code examples in proposals or discussion (or large excerpts from the codebase) unless I ask for it.  1-5 lines of code is ok.
 
 ## Coding Preferences
 
 - **Domain Driven Design** - Code reflects domain concepts from [src/types.js](src/types.js)
 - **Self Documenting Code** - Link to tests, related concepts, and clarify intention
+- **Test Driven Development (TDD)** - Rather than ad hoc probes into the system, write tests.
 - **Functional programming over OOP** - Prefer pure functions and data transformation
 - **Pure functions over mocking** - Write testable functions through dependency injection
 - **Create improvement proposals** - When you discover problems or opportunities to improve, create a proposal in `claude/scratch/[foo].md`, continue working on the original objective, and list any new proposals when reporting on task completion

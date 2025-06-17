@@ -51,6 +51,7 @@ function parseCliArguments(argv) {
     // Handle --option=value syntax
     if (arg.startsWith('--test-sequence=')) {
       options.testSequence = arg.substring('--test-sequence='.length);
+      continue;
     } else if (arg.startsWith('--rebuild=')) {
       const phase = arg.substring('--rebuild='.length);
       options.rebuild = true;
