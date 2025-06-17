@@ -243,6 +243,9 @@ async function performGracefulCleanup() {
     console.log('✅ Cleanup complete!');
     cleanupState = 'complete';
     
+    // Exit the process after successful cleanup
+    process.exit(0);
+    
   } catch (error) {
     console.log(`⚠️ Cleanup warning: ${error.message}`);
     cleanupState = 'complete'; // Don't block exit on cleanup errors
@@ -263,8 +266,7 @@ async function handleSigint() {
   if (ctrlCCount === 1) {
     console.log('\\n🛑 Shutting down gracefully...');
     await performGracefulCleanup();
-    // Exit explicitly after cleanup to prevent process hanging
-    process.exit(0);
+    // performGracefulCleanup handles the exit
   } else if (ctrlCCount <= 4) {
     console.log(`🛑 Shutdown in progress, please wait... (Ctrl-C ${5-ctrlCCount} more times to force exit)`);
   } else {
@@ -294,14 +296,13 @@ function setupAutomaticCleanup(options = {}) {
   // Handle normal completion
   process.on('beforeExit', async () => {
     await performGracefulCleanup();
-    // Force exit after cleanup to prevent hanging from open handles
-    process.exit(0);
+    // performGracefulCleanup handles the exit
   });
   
   // Handle graceful shutdown signals
   process.on('SIGTERM', async () => {
     await performGracefulCleanup();
-    process.exit(0);
+    // performGracefulCleanup handles the exit
   });
   
   // Handle Ctrl-C with progressive messaging
