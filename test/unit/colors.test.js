@@ -119,7 +119,21 @@ test('CLI color preservation option works', async () => {
   });
   
   // Should have ANSI codes when preserve-colors is used
-  assert.ok(result.stdout.includes('\x1b['), 'CLI should preserve colors when --preserve-colors is used');
+  // Debug: log the output to see what we're getting
+  if (!result.stdout.includes('\x1b[')) {
+    console.log('Debug: No ANSI codes found in output');
+    console.log('Output length:', result.stdout.length);
+    console.log('First 200 chars:', result.stdout.substring(0, 200));
+  }
+  
+  // Check for common ANSI color codes (green, yellow, cyan)
+  const hasColorCodes = result.stdout.includes('\x1b[32m') || // green
+                       result.stdout.includes('\x1b[33m') || // yellow
+                       result.stdout.includes('\x1b[36m') || // cyan
+                       result.stdout.includes('\x1b[31m') || // red
+                       result.stdout.includes('\x1b[0m');    // reset
+  
+  assert.ok(hasColorCodes, 'CLI should preserve colors when --preserve-colors is used');
   assert.ok(result.stdout.includes('Claude Habitat'), 'CLI should show menu content');
   
   console.log('✅ CLI preserve colors test passed');

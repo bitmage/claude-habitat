@@ -63,12 +63,12 @@ test('buildDockerRunArgs combines all options', () => {
 
 test('buildDockerExecArgs constructs basic exec command', () => {
   const args = buildDockerExecArgs('container', 'echo hello');
-  assert.deepStrictEqual(args, ['exec', 'container', '/bin/bash', '-c', 'echo hello']);
+  assert.deepStrictEqual(args, ['exec', 'container', '/bin/bash', '-c', '[ -f /etc/profile.d/habitat-env.sh ] && source /etc/profile.d/habitat-env.sh || true; echo hello']);
 });
 
 test('buildDockerExecArgs adds user flag', () => {
   const args = buildDockerExecArgs('container', 'echo hello', 'testuser');
-  assert.deepStrictEqual(args, ['exec', '-u', 'testuser', 'container', '/bin/bash', '-c', 'echo hello']);
+  assert.deepStrictEqual(args, ['exec', '-u', 'testuser', 'container', '/bin/bash', '-c', '[ -f /etc/profile.d/habitat-env.sh ] && source /etc/profile.d/habitat-env.sh || true; echo hello']);
 });
 
 // Test existing pure functions still work
@@ -124,5 +124,5 @@ test('buildDockerRunArgs handles undefined options', () => {
 
 test('buildDockerExecArgs handles null user', () => {
   const args = buildDockerExecArgs('container', 'cmd', null);
-  assert.deepStrictEqual(args, ['exec', 'container', '/bin/bash', '-c', 'cmd']);
+  assert.deepStrictEqual(args, ['exec', 'container', '/bin/bash', '-c', '[ -f /etc/profile.d/habitat-env.sh ] && source /etc/profile.d/habitat-env.sh || true; cmd']);
 });

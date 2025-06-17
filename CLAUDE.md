@@ -40,8 +40,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ```
 
 ### Backwards Compatibility
-- **Pre-alpha**: No backwards compatibility guaranteed
-- **Configuration changes**: May break existing config.yaml files without warning
+- **We are in Pre-alpha**: No backwards compatibility guaranteed
 - **API changes**: Function signatures and module exports may change
 - **CLI changes**: Command-line interface may change without deprecation warnings
 
@@ -121,6 +120,8 @@ If the user asks for discussion or asks questions, don't proceed with implementa
 - **Functional programming over OOP** - Prefer pure functions and data transformation
 - **Pure functions over mocking** - Write testable functions through dependency injection
 - **Create improvement proposals** - When you discover problems or opportunities to improve, create a proposal in `claude/scratch/[foo].md`, continue working on the original objective, and list any new proposals when reporting on task completion
+- **Value evidence over speculation** - Don't guess at what is true, find evidence. Only speculate if you've exhausted available options to know for sure.
+- **config.yaml files are part of the spec** - Unless specifically instructed to change them, assume that the config.yaml files are part of the architectural spec given to you, and don't modify them without confirming with the user.
 
 This is a complex architecture with many layers - be sure you understand what layer you are on and what the idiomatic practices for that layer are.
 
@@ -163,10 +164,6 @@ Each module should have a consistent JSDoc header:
  * - Integration tests: `npm run test:e2e`
  */
 ```
-
-## Memories
-
-- Don't guess at what is true, find evidence. Only speculate if you've exhausted available options to know for sure.
 
 ## Good luck!
 

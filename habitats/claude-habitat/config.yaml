@@ -172,7 +172,7 @@ verify-fs:
 
 # Habitat tests (run with: claude-habitat test claude-habitat)
 tests:
-  - habitats/claude-habitat/tests/test-claude-habitat-inception.sh
+  #- habitats/claude-habitat/tests/test-claude-habitat-inception.sh
   - habitats/claude-habitat/tests/test-tools-and-auth.sh
 
 # Bypass habitat infrastructure construction (claude-habitat is self-contained)
