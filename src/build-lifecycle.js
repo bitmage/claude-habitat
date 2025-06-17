@@ -134,7 +134,6 @@ async function createBuildPipeline(habitatConfigPath, options = {}) {
           // This fixes the stale hash issue when config changes between pipeline creation and snapshot
           let phaseHashes;
           if (phase.name === 'final') {
-            console.log(`🔍 [DEBUG] Recalculating hashes for final snapshot to ensure current data`);
             phaseHashes = await calculateAllPhaseHashes(habitatConfigPath, phaseNames);
           } else {
             phaseHashes = currentHashes; // Use pre-calculated hashes for non-final phases

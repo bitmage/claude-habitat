@@ -75,20 +75,8 @@ async function calculateAllPhaseHashes(habitatConfigPath, phaseNames) {
     throw new Error('phaseNames must be an array');
   }
 
-  // DEBUG: Log hash calculation call
-  console.log(`🔍 [DEBUG] calculateAllPhaseHashes called for ${habitatConfigPath}`);
-  console.log(`🔍 [DEBUG] Stack trace:`, new Error().stack.split('\n').slice(1, 4).join('\n'));
-  
   // Load config once and reuse for all phases
   const coalescedConfig = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
-  
-  // DEBUG: Log config loading timestamp and key sections
-  console.log(`🔍 [DEBUG] Config loaded at ${new Date().toISOString()}`);
-  console.log(`🔍 [DEBUG] Config name: ${coalescedConfig.name}`);
-  console.log(`🔍 [DEBUG] Config test section exists: ${!!coalescedConfig.tests}`);
-  if (coalescedConfig.tests) {
-    console.log(`🔍 [DEBUG] Config test content: ${JSON.stringify(coalescedConfig.tests, null, 2)}`);
-  }
   
   const hashes = {};
   
@@ -103,17 +91,7 @@ async function calculateAllPhaseHashes(habitatConfigPath, phaseNames) {
     const hash = crypto.createHash('sha256').update(compactJson).digest('hex');
     
     hashes[phaseName] = hash.slice(0, 12);
-    
-    // DEBUG: Log hash calculation for test phase specifically
-    if (phaseName === 'test') {
-      console.log(`🔍 [DEBUG] Test phase hash calculation:`);
-      console.log(`  - Relevant sections: ${JSON.stringify(relevantSections)}`);
-      console.log(`  - Phase data: ${compactJson}`);
-      console.log(`  - Hash: ${hash.slice(0, 12)}`);
-    }
   }
-  
-  console.log(`🔍 [DEBUG] Final hashes: ${JSON.stringify(hashes, null, 2)}`);
   
   return hashes;
 }

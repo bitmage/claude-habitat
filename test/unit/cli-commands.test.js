@@ -51,7 +51,7 @@ test('--help command exits successfully with code 0', async () => {
   // Should show help content
   assert.ok(result.stdout.includes('Usage:'), 'Should show usage information');
   assert.ok(result.stdout.includes('claude-habitat'), 'Should mention claude-habitat');
-  assert.ok(result.stdout.includes('OPTIONS:'), 'Should show options section');
+  assert.ok(result.stdout.includes('Options:'), 'Should show options section');
   
   // Should not have errors
   assert.strictEqual(result.stderr, '', 'Should not have stderr output');
@@ -176,7 +176,7 @@ test('invalid CLI option exits with code 1', async () => {
   assert.strictEqual(result.code, 1, `Invalid option should exit with code 1, got ${result.code}`);
   
   // Should show error message
-  assert.ok(result.stderr.includes('Unknown option') || result.stdout.includes('Unknown option'), 
+  assert.ok(result.stderr.includes('unknown option') || result.stdout.includes('unknown option'), 
            'Should show unknown option error');
   
   console.log('✅ Invalid option exits with error code 1');
@@ -390,30 +390,100 @@ test('start command shows improved runtime exit messages', async () => {
   console.log('✅ Start command shows appropriate CLI error messages');
 });
 
-test('--rebuild flag is parsed correctly', async () => {
-  console.log('Testing --rebuild flag parsing...');
+test('--rebuild flag works with start and test commands', async () => {
+  console.log('Testing --rebuild flag with valid commands...');
   
-  const { parseCliArguments, validateCliOptions } = require('../../src/cli-parser');
+  const scriptPath = path.join(__dirname, '../../claude-habitat.js');
   
-  // Test rebuild with start command
-  const args1 = ['start', 'discourse', '--rebuild'];
-  const options1 = parseCliArguments(args1);
+  // Test that --rebuild alone fails (unknown option since it's only available on subcommands)
+  const rebuildAloneResult = await new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, '--rebuild'], {
+      stdio: 'pipe'
+    });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      resolve({ code, stdout, stderr });
+    });
+    
+    child.on('error', reject);
+  });
   
-  assert.strictEqual(options1.rebuild, true, 'Should parse --rebuild flag');
-  assert.strictEqual(options1.start, true, 'Should parse start command');
-  assert.strictEqual(options1.habitatName, 'discourse', 'Should parse habitat name');
+  // Should fail with unknown option error since --rebuild is only available on subcommands
+  assert.notStrictEqual(rebuildAloneResult.code, 0, '--rebuild alone should fail');
+  assert.ok(rebuildAloneResult.stderr.includes('unknown option') || 
+           rebuildAloneResult.stdout.includes('unknown option'), 
+           'Should show unknown option error message');
   
-  // Test validation passes
-  assert.doesNotThrow(() => validateCliOptions(options1), 'Should validate successfully');
+  // Test that start command recognizes --rebuild (should fail due to missing habitat but recognize the flag)
+  const startRebuildResult = await new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, 'start', '--rebuild'], {
+      stdio: 'pipe'
+    });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      resolve({ code, stdout, stderr });
+    });
+    
+    child.on('error', reject);
+  });
   
-  // Test rebuild without start/config should fail validation
-  const args2 = ['--rebuild'];
-  const options2 = parseCliArguments(args2);
+  // Should not show "unknown option" error, meaning the flag was recognized
+  assert.ok(!startRebuildResult.stderr.includes('unknown option') && 
+           !startRebuildResult.stdout.includes('unknown option'), 
+           'start --rebuild should recognize the flag');
   
-  assert.strictEqual(options2.rebuild, true, 'Should parse --rebuild flag');
-  assert.throws(() => validateCliOptions(options2), 'Should fail validation without start/config');
+  // Test that test command recognizes --rebuild  
+  const testRebuildResult = await new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, 'test', '--rebuild'], {
+      stdio: 'pipe'
+    });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      resolve({ code, stdout, stderr });
+    });
+    
+    child.on('error', reject);
+  });
   
-  console.log('✅ --rebuild flag parsing works correctly');
+  // Should not show "unknown option" error, meaning the flag was recognized
+  assert.ok(!testRebuildResult.stderr.includes('unknown option') && 
+           !testRebuildResult.stdout.includes('unknown option'), 
+           'test --rebuild should recognize the flag');
+  
+  console.log('✅ --rebuild flag works correctly with start and test commands');
 });
 
 test('--help shows rebuild documentation', async () => {

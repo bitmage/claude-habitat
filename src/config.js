@@ -46,17 +46,6 @@ const fs = require('fs').promises;
 const { fileExists, rel } = require('./utils');
 const { validateHabitatConfig, getConfigValidationHelp } = require('./config-validation');
 
-/**
- * Get file timestamp for debugging
- */
-async function getFileTimestamp(filePath) {
-  try {
-    const stats = await fs.stat(filePath);
-    return stats.mtime.toISOString();
-  } catch (error) {
-    return `Error: ${error.message}`;
-  }
-}
 
 /**
  * Process environment variables from config and expand variable references
@@ -168,9 +157,6 @@ async function loadConfig(configPath, existingEnv = {}, validateAsHabitat = true
  * Load config with environment variable chain: system → shared → habitat
  */
 async function loadHabitatEnvironmentFromConfig(habitatConfigPath) {
-  // DEBUG: Log config loading
-  console.log(`🔍 [DEBUG] loadHabitatEnvironmentFromConfig called for ${habitatConfigPath}`);
-  
   // Start with empty environment
   let accumulatedEnv = {};
   
@@ -190,15 +176,6 @@ async function loadHabitatEnvironmentFromConfig(habitatConfigPath) {
   
   // 3. Load habitat config last (can reference system and shared variables)
   const habitatConfig = await loadConfig(habitatConfigPath, accumulatedEnv, true); // Validate as habitat
-  
-  // DEBUG: Log final config details
-  console.log(`🔍 [DEBUG] Final habitat config loaded:`);
-  console.log(`  - Name: ${habitatConfig.name}`);
-  console.log(`  - Tests section exists: ${!!habitatConfig.tests}`);
-  if (habitatConfig.tests) {
-    console.log(`  - Tests content: ${JSON.stringify(habitatConfig.tests, null, 2)}`);
-  }
-  console.log(`  - Config file timestamp: ${await getFileTimestamp(habitatConfigPath)}`);
   
   return habitatConfig;
 }

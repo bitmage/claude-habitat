@@ -39,10 +39,6 @@ async function createSnapshot(containerId, snapshotTag, options = {}) {
 
   const { labels = {}, result = 'pass', dockerChange = null } = options;
   
-  // DEBUG: Log snapshot creation
-  console.log(`🔍 [DEBUG] createSnapshot called for ${snapshotTag}`);
-  console.log(`🔍 [DEBUG] Labels being stored:`, JSON.stringify(labels, null, 2));
-  
   // Build docker commit command with labels using --change LABEL
   const changeArgs = [];
   const allLabels = {
@@ -50,11 +46,6 @@ async function createSnapshot(containerId, snapshotTag, options = {}) {
     'habitat.result': result,
     'habitat.timestamp': new Date().toISOString()
   };
-  
-  // DEBUG: Log test hash specifically
-  if (allLabels['test.hash']) {
-    console.log(`🔍 [DEBUG] Test hash being stored in snapshot: ${allLabels['test.hash']}`);
-  }
   
   for (const [key, value] of Object.entries(allLabels)) {
     changeArgs.push('--change', `LABEL ${key}="${value}"`);
@@ -69,7 +60,6 @@ async function createSnapshot(containerId, snapshotTag, options = {}) {
   
   try {
     await execDockerCommand(commitArgs);
-    console.log(`🔍 [DEBUG] Snapshot ${snapshotTag} created successfully`);
     return snapshotTag;
   } catch (error) {
     throw new Error(`Failed to create snapshot ${snapshotTag}: ${error.message}`);

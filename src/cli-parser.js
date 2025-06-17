@@ -182,22 +182,20 @@ function parseCliArguments(argv) {
   // Parse with Commander.js natural behavior
   program.parse(processedArgv, { from: 'user' });
   
-  // Get global options (in case no command was run)
+  // Get global options and apply them regardless of command
   const globalOptions = program.opts();
-  if (!result.start && !result.add && !result.maintain && !result.test) {
-    result.configPath = result.configPath || globalOptions.config || null;
-    result.extraRepos = result.extraRepos.length > 0 ? result.extraRepos : (globalOptions.repo || []);
-    result.clean = result.clean || globalOptions.clean || false;
-    result.listConfigs = result.listConfigs || globalOptions.listConfigs || false;
-    result.testSequence = result.testSequence || globalOptions.testSequence || null;
-    result.preserveColors = result.preserveColors || globalOptions.preserveColors || false;
-    result.overrideCommand = result.overrideCommand || globalOptions.cmd || null;
-    result.showPhases = result.showPhases || globalOptions.showPhases || false;
-    result.cleanImages = result.cleanImages || (globalOptions.cleanImages !== undefined && globalOptions.cleanImages !== false);
-    result.cleanImagesTarget = result.cleanImagesTarget !== 'all' ? result.cleanImagesTarget : (typeof globalOptions.cleanImages === 'string' ? globalOptions.cleanImages : 'all');
-    result.noCleanup = result.noCleanup || globalOptions.noCleanup || false;
-    result.tty = result.tty !== null ? result.tty : (globalOptions.tty === true ? true : (globalOptions.tty === false ? false : null));
-  }
+  result.configPath = result.configPath || globalOptions.config || null;
+  result.extraRepos = result.extraRepos.length > 0 ? result.extraRepos : (globalOptions.repo || []);
+  result.clean = result.clean || globalOptions.clean || false;
+  result.listConfigs = result.listConfigs || globalOptions.listConfigs || false;
+  result.testSequence = result.testSequence || globalOptions.testSequence || null;
+  result.preserveColors = result.preserveColors || globalOptions.preserveColors || false;
+  result.overrideCommand = result.overrideCommand || globalOptions.cmd || null;
+  result.showPhases = result.showPhases || globalOptions.showPhases || false;
+  result.cleanImages = result.cleanImages || (globalOptions.cleanImages !== undefined && globalOptions.cleanImages !== false);
+  result.cleanImagesTarget = result.cleanImagesTarget !== 'all' ? result.cleanImagesTarget : (typeof globalOptions.cleanImages === 'string' ? globalOptions.cleanImages : 'all');
+  result.noCleanup = result.noCleanup || globalOptions.noCleanup || false;
+  result.tty = result.tty !== null ? result.tty : (globalOptions.tty === true ? true : (globalOptions.tty === false ? false : null));
 
   // Handle positional config argument (for backwards compatibility)
   if (!result.start && !result.add && !result.maintain && !result.test && 

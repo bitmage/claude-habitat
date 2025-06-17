@@ -159,7 +159,6 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
       // Check if the 12-final snapshot already exists (from build pipeline)
       // If it does, don't recreate it to preserve phase hash labels
       if (await dockerImageExists(finalTag)) {
-        console.log(`🔍 [DEBUG] Final snapshot ${finalTag} already exists, preserving phase hash labels`);
         console.log(`Prepared image created: ${finalTag}`);
       } else {
         // Commit the final container as the prepared image
@@ -442,7 +441,7 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
       '-u', containerUser,
       ...volumeArgs,
       tag,
-      '/entrypoint.sh', '/bin/bash', '-c', fullCommand
+      '/bin/bash', '-c', fullCommand
     ];
     
     const claudeProcess = spawn('docker', dockerArgs, {
