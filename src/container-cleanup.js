@@ -263,8 +263,8 @@ async function handleSigint() {
   if (ctrlCCount === 1) {
     console.log('\\n🛑 Shutting down gracefully...');
     await performGracefulCleanup();
-    // Let the process exit naturally instead of forcing it
-    // This allows any ongoing operations to complete and show proper error messages
+    // Exit explicitly after cleanup to prevent process hanging
+    process.exit(0);
   } else if (ctrlCCount <= 4) {
     console.log(`🛑 Shutdown in progress, please wait... (Ctrl-C ${5-ctrlCCount} more times to force exit)`);
   } else {
@@ -295,7 +295,10 @@ function setupAutomaticCleanup(options = {}) {
   process.on('beforeExit', performGracefulCleanup);
   
   // Handle graceful shutdown signals
-  process.on('SIGTERM', performGracefulCleanup);
+  process.on('SIGTERM', async () => {
+    await performGracefulCleanup();
+    process.exit(0);
+  });
   
   // Handle Ctrl-C with progressive messaging
   process.on('SIGINT', handleSigint);
