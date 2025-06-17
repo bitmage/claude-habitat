@@ -235,7 +235,7 @@ async function handleTestMode(options) {
     console.log(`Running filesystem verification for ${options.testTarget}...`);
     await runHabitat(configPath, [], null, { 
       rebuild: options.rebuild || true,  // Always rebuild for tests
-      rebuildFrom: 'verify',  // Start from verify phase
+      rebuildFrom: 'scripts',  // Start from phase before verify (9-scripts)
       target: 'verify' 
     });
   } else if (options.testType === 'habitat') {
@@ -255,7 +255,7 @@ async function handleTestMode(options) {
     console.log(`Running habitat tests for ${options.testTarget}...`);
     await runHabitat(configPath, [], null, { 
       rebuild: options.rebuild || true,  // Always rebuild for tests
-      rebuildFrom: 'test',  // Start from test phase
+      rebuildFrom: 'verify',  // Start from phase before test (10-verify)
       target: 'test' 
     });
   } else {

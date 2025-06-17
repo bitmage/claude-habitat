@@ -44,6 +44,7 @@ files:
   - src: /dev/null
     dest: ${HOME}/.claude/.keep
     mode: 644
+    owner: ${USER}
     description: "Ensure .claude directory exists for Claude workspace"
   # Copy Claude credentials from host to container during build (bypass habitat only)
   - src: ~/.claude/.credentials.json
