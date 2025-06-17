@@ -212,12 +212,12 @@ async function cleanupDanglingImages(options = {}) {
 }
 
 /**
- * Perform immediate cleanup without exiting process
+ * Perform graceful cleanup with progress messaging
  * 
- * Called when habitat completes successfully to clean up immediately
- * rather than waiting for process exit.
+ * Uses state machine to prevent concurrent cleanup and provides
+ * user feedback about cleanup progress.
  */
-async function performImmediateCleanup() {
+async function performGracefulCleanup() {
   if (cleanupState !== 'idle') {
     return; // Already in progress or complete
   }
@@ -228,7 +228,8 @@ async function performImmediateCleanup() {
     // Check if we're the last process
     if (!(await isLastClaudeHabitatProcess())) {
       cleanupState = 'complete';
-      return; // Don't exit, just skip cleanup
+      process.exit(0);
+      return;
     }
     
     cleanupState = 'inProgress';
@@ -256,22 +257,14 @@ async function performImmediateCleanup() {
     console.log('✅ Cleanup complete!');
     cleanupState = 'complete';
     
+    // Exit the process after successful cleanup
+    process.exit(0);
+    
   } catch (error) {
     console.log(`⚠️ Cleanup warning: ${error.message}`);
-    cleanupState = 'complete'; // Don't block on cleanup errors
+    cleanupState = 'complete'; // Don't block exit on cleanup errors
+    process.exit(0);
   }
-}
-
-/**
- * Perform graceful cleanup with progress messaging
- * 
- * Uses state machine to prevent concurrent cleanup and provides
- * user feedback about cleanup progress.
- */
-async function performGracefulCleanup() {
-  await performImmediateCleanup();
-  // Exit the process after cleanup
-  process.exit(0);
 }
 
 /**
@@ -341,6 +334,5 @@ module.exports = {
   cleanupContainers,
   cleanupDanglingImages,
   setupAutomaticCleanup,
-  performGracefulCleanup,
-  performImmediateCleanup
+  performGracefulCleanup
 };

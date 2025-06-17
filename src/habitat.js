@@ -67,7 +67,7 @@ const { loadConfig } = require('./config');
 // Old build functions replaced by new progressive build pipeline
 const { dockerImageExists, dockerRun, dockerExec, dockerIsRunning, startTempContainer } = require('./container-operations');
 const { testRepositoryAccess } = require('./github');
-const { performImmediateCleanup } = require('./container-cleanup');
+const { performGracefulCleanup } = require('./container-cleanup');
 const { createSnapshot } = require('./snapshot-manager');
 
 /**
@@ -448,8 +448,8 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
         if (code === 0) {
           console.log(colors.green('✅ Habitat completed successfully'));
           // Trigger immediate cleanup instead of waiting for process exit
-          await performImmediateCleanup();
-          resolve();
+          await performGracefulCleanup();
+          // performGracefulCleanup calls process.exit(0)
         } else if (code === 130) {
           console.log(colors.cyan('ℹ️  Habitat interrupted by user (ctrl-c)'));
           resolve();
