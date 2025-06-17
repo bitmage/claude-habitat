@@ -113,12 +113,9 @@ else
     exit 1
 fi
 
-echo "DEBUG: Reached GitHub CLI section check"
-
 # Test GitHub CLI authentication using GitHub App
 echo ""
 echo "Testing GitHub CLI authentication..."
-echo "DEBUG: GITHUB_APP_ID=$GITHUB_APP_ID, PEM_FILE=$PEM_FILE"
 
 # Generate GitHub App token using the same logic as regenerate-github-token.sh
 if [ -n "$GITHUB_APP_ID" ] && [ -f "$PEM_FILE" ]; then
