@@ -204,14 +204,27 @@ async function copyConfigFiles(container, config, resolvedUser = 'root', resolve
     } else {
       console.log(`Copying ${srcPath} → ${destPath}`);
       
-      // Create destination directory
+      // Create destination directory with proper ownership
       const destDir = path.dirname(destPath);
       await dockerExec(container, `mkdir -p ${destDir}`, 'root');
+      
+      // Set ownership on parent directories if specified
+      if (fileSpec.owner) {
+        let owner = fileSpec.owner;
+        // Replace {env.USER} with resolved user
+        owner = owner.replace(/\{env\.USER\}/g, resolvedUser);
+        
+        // Set ownership on all parent directories that were created
+        await dockerExec(container, `chown -R ${owner}:${owner} ${destDir}`, 'root');
+        
+        // Set directory permissions to ensure execute bit for directories
+        await dockerExec(container, `find ${destDir} -type d -exec chmod 755 {} \\;`, 'root');
+      }
       
       // Copy the file
       await copyFileToContainer(container, srcPath, destPath);
       
-      // Set ownership if specified
+      // Set ownership if specified (this will set it on the file itself)
       if (fileSpec.owner) {
         let owner = fileSpec.owner;
         // Replace {env.USER} with resolved user
