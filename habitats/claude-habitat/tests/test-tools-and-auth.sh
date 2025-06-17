@@ -121,8 +121,8 @@ echo "Testing GitHub CLI authentication..."
 if gh auth status >/dev/null 2>&1; then
     echo "✅ GitHub CLI authenticated successfully"
     
-    # Test basic API access
-    if gh api user >/dev/null 2>&1; then
+    # Test basic API access (GitHub Apps use different endpoints than user tokens)
+    if gh api /installation/repositories >/dev/null 2>&1; then
         echo "✅ GitHub CLI API access working"
     else
         echo "❌ GitHub CLI API access failed"
