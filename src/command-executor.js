@@ -34,7 +34,7 @@ const { cleanAllImages, cleanHabitatImages, cleanOrphanImages, showImageSummary 
  * These commands show output and exit (not return to menu)
  */
 async function executeCliCommand(options) {
-  // Handle help
+  // Handle help - show Commander.js generated help
   if (options.help) {
     await showHelp();
     process.exit(0);
@@ -68,87 +68,60 @@ async function executeCliCommand(options) {
 }
 
 /**
- * Show help information
+ * Show help information using Commander.js
  */
 async function showHelp() {
-  console.log(`Usage: ${path.basename(process.argv[1])} [OPTIONS|SHORTCUTS]
+  const { Command } = require('commander');
+  const program = new Command();
+  
+  // Configure the program exactly like in cli-parser.js
+  program
+    .name('claude-habitat')
+    .version('0.1.2')
+    .description('Create completely isolated development environments for Claude Code')
+    .option('-c, --config <file>', 'Path to configuration YAML file')
+    .option('-r, --repo <repo>', 'Additional repository (URL:PATH[:BRANCH])')
+    .option('--cmd <command>', 'Override claude command')
+    .option('--tty', 'Force TTY allocation')
+    .option('--no-tty', 'Disable TTY allocation')
+    .option('--no-cleanup', 'Disable automatic container cleanup')
+    .option('--clean', 'Remove all containers and images')
+    .option('--clean-images [target]', 'Clean Docker images (all|orphans|HABITAT_NAME)')
+    .option('--list-configs', 'List available configurations')
+    .option('--test-sequence <seq>', 'Run UI test sequence')
+    .option('--preserve-colors', 'Preserve ANSI color codes')
+    .option('--show-phases', 'Show build phases')
+    .option('-h, --help', 'Display help message');
 
-OPTIONS:
-    -c, --config FILE       Path to configuration YAML file
-    -r, --repo REPO_SPEC    Additional repository to clone (format: URL:PATH[:BRANCH])
-                           Can be specified multiple times
-    --cmd COMMAND          Override the claude command for this session
-    --tty                  Force TTY allocation (interactive mode)
-    --no-tty               Disable TTY allocation (for scripts/automation)
-    --no-cleanup           Disable automatic container cleanup on exit
-    --rebuild [PHASE]      Force rebuild of Docker images (ignore cache)
-                           Optional phase name/number to rebuild from
-    --show-phases          Show available build phases and their descriptions
-    --clean                Remove all Claude Habitat containers, images, and dangling images
-    --clean-images [TARGET] Clean Docker images (all|orphans|HABITAT_NAME, default: all)
-    --list-configs         List available configuration files
-    --test-sequence=SEQ    Run UI test sequence (e.g., "t2f" for test>claude-habitat>filesystem)
-    --preserve-colors      Preserve ANSI color codes in test sequence output
-    -h, --help             Display this help message
+  // Start command
+  program
+    .command('start [habitat]')
+    .description('Start habitat (last used if no name given)')
+    .option('--rebuild [phase]', 'Force rebuild from phase')
+    .option('--show-phases', 'Show build phases');
 
-SHORTCUTS:
-    s, start [HABITAT]     Start habitat (last used if no name given)
-    start HABITAT --rebuild    Force rebuild and start habitat
-    a, add                 Create new configuration with AI assistance
-    m, maintain            Update/troubleshoot Claude Habitat itself
-    test [HABITAT] [TYPE]  Run tests (show menu if no args)
+  // Test command
+  program
+    .command('test [habitat]')
+    .description('Run tests (show menu if no args)')
+    .option('--system', 'Run system tests')
+    .option('--shared', 'Run shared tests')
+    .option('--habitat', 'Run habitat tests')
+    .option('--verify-fs [scope]', 'Filesystem verification', 'all')
+    .option('--all', 'Run all tests')
+    .option('--rebuild', 'Force rebuild');
 
-TEST OPTIONS:
-    test                   Show interactive test menu
-    test all               Run all tests for all habitats
-    test discourse         Run all tests for discourse habitat  
-    test discourse --system    Run system tests in discourse habitat
-    test discourse --shared    Run shared tests in discourse habitat
-    test discourse --verify-fs    Run filesystem verification for discourse habitat
-    test discourse --verify-fs=system   Run system filesystem verification
-    test discourse --verify-fs=shared   Run shared filesystem verification  
-    test discourse --verify-fs=habitat  Run habitat filesystem verification
-    test discourse --verify-fs=all      Run all filesystem verification scopes
-    test discourse --habitat   Run discourse-specific tests only
-    test discourse --all       Run all tests for discourse habitat
+  // Add command
+  program
+    .command('add')
+    .description('Create new configuration with AI assistance');
 
-EXAMPLES:
-    # Start with shortcut
-    ${path.basename(process.argv[1])} s
+  // Maintain command
+  program
+    .command('maintain')
+    .description('Update/troubleshoot Claude Habitat itself');
 
-    # Start specific habitat
-    ${path.basename(process.argv[1])} start discourse
-
-    # Start with rebuild (ignores cache)
-    ${path.basename(process.argv[1])} start discourse --rebuild
-    
-    # Rebuild from specific phase onward
-    ${path.basename(process.argv[1])} start discourse --rebuild=repos
-    ${path.basename(process.argv[1])} start discourse --rebuild 8
-
-    # Clean all images
-    ${path.basename(process.argv[1])} --clean-images
-
-    # Clean specific habitat images
-    ${path.basename(process.argv[1])} --clean-images discourse
-
-    # Clean orphan images only
-    ${path.basename(process.argv[1])} --clean-images orphans
-
-    # Start with custom command
-    ${path.basename(process.argv[1])} start claude-habitat --cmd "claude -p 'do some stuff'"
-    
-    # Disable automatic container cleanup
-    ${path.basename(process.argv[1])} start discourse --no-cleanup
-
-    # Use a configuration file
-    ${path.basename(process.argv[1])} --config discourse.yaml
-
-    # Override/add repositories
-    ${path.basename(process.argv[1])} --config discourse.yaml --repo "https://github.com/myuser/my-plugin:/src/plugins/my-plugin"
-
-    # List available configs
-    ${path.basename(process.argv[1])} --list-configs`);
+  console.log(program.helpInformation());
 }
 
 /**
