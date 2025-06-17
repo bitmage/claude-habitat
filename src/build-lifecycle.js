@@ -60,20 +60,32 @@ async function createBuildPipeline(habitatConfigPath, options = {}) {
   // Calculate hashes for all phases (no separate dockerfile phase anymore)
   const currentHashes = await calculateAllPhaseHashes(habitatConfigPath, phaseNames);
   
+  // Determine target phase index if target is specified
+  let targetPhaseIndex = BUILD_PHASES.length - 1; // Default to all phases
+  if (target !== null) {
+    targetPhaseIndex = findPhaseIndex(target);
+    if (targetPhaseIndex === -1) {
+      throw new Error(`Unknown target phase: ${target}`);
+    }
+    console.log(`🎯 Building up to phase ${target}`);
+  }
+  
   // Find valid snapshot to start from (unless forcing full rebuild)
   let startFromPhase = 0;
   let baseImageTag = null;
   
   if (!rebuild) {
-    const validSnapshot = await findValidSnapshot(habitatName, currentHashes, BUILD_PHASES);
+    const validSnapshot = await findValidSnapshot(habitatName, currentHashes, BUILD_PHASES, targetPhaseIndex);
     if (validSnapshot) {
       startFromPhase = validSnapshot.startFromPhase;
       baseImageTag = validSnapshot.snapshotTag;
       
-      if (startFromPhase >= BUILD_PHASES.length) {
-        // All phases are cached - final image is available
-        const finalPhase = BUILD_PHASES[BUILD_PHASES.length - 1];
-        console.log(`✅ Using cached snapshot: ${validSnapshot.snapshotTag} (${finalPhase.id}-${finalPhase.name})`);
+      if (startFromPhase > targetPhaseIndex) {
+        // Target phase is already cached - use that snapshot directly
+        const targetPhase = BUILD_PHASES[targetPhaseIndex];
+        console.log(`✅ Using cached snapshot: ${validSnapshot.snapshotTag} (${targetPhase.id}-${targetPhase.name})`);
+        // Set startFromPhase beyond target so no phases will be executed
+        startFromPhase = BUILD_PHASES.length;
       } else {
         console.log(`✅ Using cached snapshot: ${validSnapshot.snapshotTag} (skipping ${startFromPhase} phases)`);
       }
@@ -111,16 +123,6 @@ async function createBuildPipeline(habitatConfigPath, options = {}) {
   
   // Add phases to pipeline
   let phaseIndex = 0;
-  
-  // Determine target phase index if target is specified
-  let targetPhaseIndex = BUILD_PHASES.length - 1; // Default to all phases
-  if (target !== null) {
-    targetPhaseIndex = findPhaseIndex(target);
-    if (targetPhaseIndex === -1) {
-      throw new Error(`Unknown target phase: ${target}`);
-    }
-    console.log(`🎯 Building up to phase ${target}`);
-  }
   
   // Standard phases
   for (const phase of BUILD_PHASES) {

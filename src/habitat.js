@@ -155,31 +155,46 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
       }
       
       // If we have a target phase, we're done after building to that phase
-      if (target) {
+      // UNLESS we have an override command, in which case we want to run the command
+      if (target && !overrideCommand) {
         console.log(`✅ Built up to phase ${target} successfully`);
         return;
       }
       
-      // The final container should be in context.containerId
-      const finalTag = `habitat-${config.name}:12-final`;
+      // Determine which image to use for the ephemeral container
+      let imageToUse;
       
-      // Check if the 12-final snapshot already exists (from build pipeline)
-      // If it does, don't recreate it to preserve phase hash labels
-      if (await dockerImageExists(finalTag)) {
-        console.log(`Prepared image created: ${finalTag}`);
+      if (target && pipeline.stages.length === 0) {
+        // We used a cached target snapshot directly - use that
+        const { findPhaseIndex } = require('./phases');
+        const { BUILD_PHASES } = require('./phases');
+        const targetPhaseIndex = findPhaseIndex(target);
+        const targetPhase = BUILD_PHASES[targetPhaseIndex];
+        imageToUse = `habitat-${config.name}:${targetPhase.id}-${targetPhase.name}`;
+        console.log(`Using target snapshot: ${imageToUse}`);
       } else {
-        // Commit the final container as the prepared image
-        const snapshotOptions = { result: 'pass' };
-        if (context.entrypointChange) {
-          snapshotOptions.dockerChange = context.entrypointChange;
-        }
-        await createSnapshot(context.containerId, finalTag, snapshotOptions);
+        // Normal flow - use or create 12-final image
+        const finalTag = `habitat-${config.name}:12-final`;
         
-        console.log(`Prepared image created: ${finalTag}`);
+        // Check if the 12-final snapshot already exists (from build pipeline)
+        // If it does, don't recreate it to preserve phase hash labels
+        if (await dockerImageExists(finalTag)) {
+          console.log(`Prepared image created: ${finalTag}`);
+        } else {
+          // Commit the final container as the prepared image
+          const snapshotOptions = { result: 'pass' };
+          if (context.entrypointChange) {
+            snapshotOptions.dockerChange = context.entrypointChange;
+          }
+          await createSnapshot(context.containerId, finalTag, snapshotOptions);
+          
+          console.log(`Prepared image created: ${finalTag}`);
+        }
+        imageToUse = finalTag;
       }
       
-      // Run the habitat container using the final image
-      return await runEphemeralContainer(finalTag, config, overrideCommand, options.tty);
+      // Run the habitat container using the selected image
+      return await runEphemeralContainer(imageToUse, config, overrideCommand, options.tty);
       
     } catch (error) {
       console.error(`Failed to start habitat session: ${error.message}`);

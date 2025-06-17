@@ -40,12 +40,6 @@ files:
     after: repos
     owner: ${USER}
     description: "Shared configuration and resources (writable copy)"
-  # Create .claude directory structure for Claude to use
-  - src: /dev/null
-    dest: ${HOME}/.claude/.keep
-    mode: 644
-    owner: ${USER}
-    description: "Ensure .claude directory exists for Claude workspace"
   # Copy Claude credentials from host to container during build (bypass habitat only)
   - src: ~/.claude/.credentials.json
     dest: ~/.claude/.credentials.json

@@ -36,7 +36,7 @@ const { exec } = require('child_process');
 const execAsync = promisify(exec);
 
 // @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
-const { colors, sleep, fileExists, calculateCacheHash, executeCommand, processTestResults, rel } = require('./utils');
+const { colors, sleep, fileExists, executeCommand, processTestResults, rel } = require('./utils');
 const { dockerRun, dockerImageExists } = require('./container-operations');
 const { loadConfig } = require('./config');
 const { askToContinue } = require('./cli');
@@ -79,31 +79,6 @@ async function runTestMode(testType, testTarget, rebuild = false) {
       }
       console.log(`Running shared tests in ${testTarget} habitat...`);
       await runSharedTests(habitatConfig, false, rebuild, habitatConfigPath);
-    } else if (testType === 'verify-fs') {
-      // Support scope parameter: verify-fs:scope or just verify-fs (defaults to 'all')
-      const parts = testType.split(':');
-      const scope = parts[1] || 'all';
-      console.log(`Running filesystem verification (scope: ${scope}) for ${testTarget} habitat...`);
-      const { runEnhancedFilesystemVerification } = require('./filesystem');
-      const { calculateCacheHash } = require('./utils');
-      
-      // Calculate prepared image tag
-      const hash = calculateCacheHash(habitatConfig, []);
-      const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
-      
-      // Show cached image message if image exists and not rebuilding
-      if (!rebuild && await dockerImageExists(preparedTag)) {
-        console.log(`✅ Using cached snapshot: ${preparedTag} (12-final)`);
-      }
-      
-      await runEnhancedFilesystemVerification(preparedTag, scope, habitatConfig, rebuild);
-    } else if (testType === 'habitat') {
-      console.log(`Running ${testTarget}-specific tests...`);
-      if (habitatConfig.tests && habitatConfig.tests.length > 0) {
-        await runTestsInHabitatContainer(habitatConfig.tests, 'habitat', habitatConfig, false, rebuild, habitatConfigPath);
-      } else {
-        console.log(`No ${testTarget}-specific tests configured`);
-      }
     } else {
       // Default: run all tests for the habitat
       await runHabitatTests(testTarget, false, rebuild);
@@ -279,16 +254,16 @@ async function showHabitatTestMenu(habitatName) {
       testResults = [{ type: 'info', message: `No ${habitatName}-specific tests configured` }];
     }
   } else if (choice === 'f') {
-    // Run filesystem verification for this habitat
+    // Run filesystem verification for this habitat using build pipeline
     const habitatConfigPath = rel('habitats/' + habitatName + '/config.yaml');
-    const habitatConfig = await loadConfig(habitatConfigPath);
-
+    
     console.log(`Running filesystem verification for ${habitatName}...\n`);
-    const { runEnhancedFilesystemVerification } = require('./filesystem');
-    const { calculateCacheHash } = require('./utils');
-    const hash = calculateCacheHash(habitatConfig, []);
-    const preparedTag = `claude-habitat-${habitatConfig.name}:${hash}`;
-    await runEnhancedFilesystemVerification(preparedTag, 'all', habitatConfig);
+    const { runHabitat } = require('../habitat');
+    await runHabitat(habitatConfigPath, [], null, { 
+      rebuild: true,
+      rebuildFrom: 'scripts',
+      target: 'verify' 
+    });
     testResults = [{ type: 'info', message: 'Filesystem verification completed' }];
   } else {
     console.error(colors.red('\n❌ Invalid choice'));

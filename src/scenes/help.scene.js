@@ -21,6 +21,7 @@ OPTIONS:
     -r, --repo REPO_SPEC    Additional repository to clone (format: URL:PATH[:BRANCH])
                            Can be specified multiple times
     --cmd COMMAND          Override the claude command for this session
+    --target PHASE         Build up to target phase and stop (e.g. --target verify)
     --clean                 Remove all Claude Habitat Docker images
     --list-configs          List available configuration files
     -h, --help             Display this help message
@@ -60,6 +61,12 @@ EXAMPLES:
 
     # Override/add repositories
     claude-habitat.js --config discourse.yaml --repo "https://github.com/myuser/my-plugin:/src/plugins/my-plugin"
+
+    # Build up to verify phase and stop
+    claude-habitat.js start discourse --target verify
+
+    # Build up to specific phase
+    claude-habitat.js start claude-habitat --target scripts
 
     # List available configs
     claude-habitat.js --list-configs`);

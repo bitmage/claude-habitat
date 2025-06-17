@@ -116,9 +116,10 @@ async function imageExists(imageTag) {
  * @param {string} habitatName - Name of the habitat
  * @param {Object} currentHashes - Current phase hashes from config
  * @param {Array} phases - Array of phase definitions (with id and name)
+ * @param {number} maxPhaseIndex - Optional maximum phase index to consider (for --target support)
  * @returns {Promise<Object|null>} - Valid snapshot info or null if none found
  */
-async function findValidSnapshot(habitatName, currentHashes, phases) {
+async function findValidSnapshot(habitatName, currentHashes, phases, maxPhaseIndex = null) {
   if (!habitatName) {
     throw new Error('habitatName is required');
   }
@@ -132,7 +133,9 @@ async function findValidSnapshot(habitatName, currentHashes, phases) {
   }
 
   // Check phases in reverse order (latest to earliest)
-  for (let i = phases.length - 1; i >= 0; i--) {
+  // If maxPhaseIndex is specified, only consider phases up to that index
+  const endIndex = maxPhaseIndex !== null ? Math.min(maxPhaseIndex, phases.length - 1) : phases.length - 1;
+  for (let i = endIndex; i >= 0; i--) {
     const phase = phases[i];
     const snapshotTag = `habitat-${habitatName}:${phase.id}-${phase.name}`;
     
