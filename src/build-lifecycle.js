@@ -43,7 +43,7 @@ const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
  * @returns {Promise<EventPipeline>} - Configured build pipeline
  */
 async function createBuildPipeline(habitatConfigPath, options = {}) {
-  const { rebuild = false, rebuildFrom = null, extraRepos = [] } = options;
+  const { rebuild = false, rebuildFrom = null, target = null, extraRepos = [] } = options;
   
   // Load the coalesced configuration
   const config = await loadHabitatEnvironmentFromConfig(habitatConfigPath);
@@ -112,9 +112,19 @@ async function createBuildPipeline(habitatConfigPath, options = {}) {
   // Add phases to pipeline
   let phaseIndex = 0;
   
+  // Determine target phase index if target is specified
+  let targetPhaseIndex = BUILD_PHASES.length - 1; // Default to all phases
+  if (target !== null) {
+    targetPhaseIndex = findPhaseIndex(target);
+    if (targetPhaseIndex === -1) {
+      throw new Error(`Unknown target phase: ${target}`);
+    }
+    console.log(`🎯 Building up to phase ${target}`);
+  }
+  
   // Standard phases
   for (const phase of BUILD_PHASES) {
-    if (phaseIndex >= startFromPhase) {
+    if (phaseIndex >= startFromPhase && phaseIndex <= targetPhaseIndex) {
       const noSnapshot = phase.name === 'verify' || phase.name === 'test';
       
       pipeline.stage(`${phase.id}-${phase.name}`, async (ctx) => {

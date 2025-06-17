@@ -102,7 +102,7 @@ async function cleanupBuildContainer(containerId) {
 
 // Start a new session with the specified habitat
 async function startSession(configPath, extraRepos = [], overrideCommand = null, options = {}) {
-  const { rebuild = false, rebuildFrom = null } = options;
+  const { rebuild = false, rebuildFrom = null, target = null } = options;
   
   // Use the new progressive build pipeline
   const { createBuildPipeline } = require('./build-lifecycle');
@@ -113,7 +113,8 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
   // Create the build pipeline with snapshot support
   const pipeline = await createBuildPipeline(configPath, { 
     rebuild, 
-    rebuildFrom, 
+    rebuildFrom,
+    target,
     extraRepos 
   });
   
@@ -151,6 +152,12 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
       // Track the build container ID from context if we didn't have one already
       if (!buildContainerId && context.containerId) {
         buildContainerId = context.containerId;
+      }
+      
+      // If we have a target phase, we're done after building to that phase
+      if (target) {
+        console.log(`✅ Built up to phase ${target} successfully`);
+        return;
       }
       
       // The final container should be in context.containerId

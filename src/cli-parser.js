@@ -43,6 +43,7 @@ function parseCliArguments(argv) {
     rebuild: false,
     rebuildFrom: null,
     showPhases: false,
+    target: null,
     cleanImages: false,
     cleanImagesTarget: 'all',
     noCleanup: false,
@@ -88,6 +89,7 @@ function parseCliArguments(argv) {
     .description('Start habitat (last used if no name given)')
     .option('--rebuild [phase]', 'Force rebuild from phase')
     .option('--show-phases', 'Show build phases')
+    .option('--target <phase>', 'Build up to target phase and stop')
     .action((habitat, options) => {
       result.start = true;
       result.habitatName = habitat || null;
@@ -99,6 +101,9 @@ function parseCliArguments(argv) {
       }
       if (options.showPhases) {
         result.showPhases = true;
+      }
+      if (options.target) {
+        result.target = options.target;
       }
     });
 

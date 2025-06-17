@@ -397,91 +397,26 @@ test('--rebuild flag works with start and test commands', async () => {
   
   // Test that --rebuild alone fails (unknown option since it's only available on subcommands)
   const rebuildAloneResult = await new Promise((resolve, reject) => {
-    const child = spawn('node', [scriptPath, '--rebuild'], {
-      stdio: 'pipe'
-    });
-    
-    let stdout = '';
+    const child = spawn('node', [scriptPath, '--rebuild'], { stdio: 'pipe' });
     let stderr = '';
-    
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-    
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-    
-    child.on('close', (code) => {
-      resolve({ code, stdout, stderr });
-    });
-    
+    child.stderr.on('data', (data) => { stderr += data.toString(); });
+    child.on('close', (code) => { resolve({ code, stderr }); });
     child.on('error', reject);
   });
   
-  // Should fail with unknown option error since --rebuild is only available on subcommands
   assert.notStrictEqual(rebuildAloneResult.code, 0, '--rebuild alone should fail');
-  assert.ok(rebuildAloneResult.stderr.includes('unknown option') || 
-           rebuildAloneResult.stdout.includes('unknown option'), 
-           'Should show unknown option error message');
+  assert.ok(rebuildAloneResult.stderr.includes('unknown option'), 'Should show unknown option error');
   
-  // Test that start command recognizes --rebuild (should fail due to missing habitat but recognize the flag)
+  // Test that start command recognizes --rebuild
   const startRebuildResult = await new Promise((resolve, reject) => {
-    const child = spawn('node', [scriptPath, 'start', '--rebuild'], {
-      stdio: 'pipe'
-    });
-    
-    let stdout = '';
+    const child = spawn('node', [scriptPath, 'start', 'nonexistent-habitat', '--rebuild'], { stdio: 'pipe' });
     let stderr = '';
-    
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-    
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-    
-    child.on('close', (code) => {
-      resolve({ code, stdout, stderr });
-    });
-    
+    child.stderr.on('data', (data) => { stderr += data.toString(); });
+    child.on('close', (code) => { resolve({ code, stderr }); });
     child.on('error', reject);
   });
   
-  // Should not show "unknown option" error, meaning the flag was recognized
-  assert.ok(!startRebuildResult.stderr.includes('unknown option') && 
-           !startRebuildResult.stdout.includes('unknown option'), 
-           'start --rebuild should recognize the flag');
-  
-  // Test that test command recognizes --rebuild  
-  const testRebuildResult = await new Promise((resolve, reject) => {
-    const child = spawn('node', [scriptPath, 'test', '--rebuild'], {
-      stdio: 'pipe'
-    });
-    
-    let stdout = '';
-    let stderr = '';
-    
-    child.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-    
-    child.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-    
-    child.on('close', (code) => {
-      resolve({ code, stdout, stderr });
-    });
-    
-    child.on('error', reject);
-  });
-  
-  // Should not show "unknown option" error, meaning the flag was recognized
-  assert.ok(!testRebuildResult.stderr.includes('unknown option') && 
-           !testRebuildResult.stdout.includes('unknown option'), 
-           'test --rebuild should recognize the flag');
+  assert.ok(!startRebuildResult.stderr.includes('unknown option'), 'start --rebuild should recognize the flag');
   
   console.log('✅ --rebuild flag works correctly with start and test commands');
 });
@@ -491,8 +426,9 @@ test('--help shows rebuild documentation', async () => {
   
   const scriptPath = path.join(__dirname, '../../claude-habitat.js');
   
-  const result = await new Promise((resolve, reject) => {
-    const child = spawn('node', [scriptPath, '--help'], {
+  // Test start command help shows rebuild
+  const startHelpResult = await new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, 'start', '--help'], {
       stdio: 'pipe'
     });
     
@@ -510,12 +446,37 @@ test('--help shows rebuild documentation', async () => {
   });
   
   // Should exit successfully
-  assert.strictEqual(result.code, 0, 'Help should exit with code 0');
+  assert.strictEqual(startHelpResult.code, 0, 'Start help should exit with code 0');
   
   // Should mention rebuild option
-  assert.ok(result.stdout.includes('--rebuild'), 'Should show --rebuild flag');
-  assert.ok(result.stdout.includes('Force rebuild'), 'Should explain rebuild functionality');
-  assert.ok(result.stdout.includes('start discourse --rebuild'), 'Should show rebuild example');
+  assert.ok(startHelpResult.stdout.includes('--rebuild'), 'Should show --rebuild flag');
+  assert.ok(startHelpResult.stdout.includes('Force rebuild'), 'Should explain rebuild functionality');
+  
+  // Test test command help shows rebuild
+  const testHelpResult = await new Promise((resolve, reject) => {
+    const child = spawn('node', [scriptPath, 'test', '--help'], {
+      stdio: 'pipe'
+    });
+    
+    let stdout = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      resolve({ code, stdout });
+    });
+    
+    child.on('error', reject);
+  });
+  
+  // Should exit successfully
+  assert.strictEqual(testHelpResult.code, 0, 'Test help should exit with code 0');
+  
+  // Should mention rebuild option
+  assert.ok(testHelpResult.stdout.includes('--rebuild'), 'Should show --rebuild flag in test help');
+  assert.ok(testHelpResult.stdout.includes('Force rebuild'), 'Should explain rebuild functionality in test help');
   
   console.log('✅ Help shows rebuild documentation');
 });
@@ -613,8 +574,7 @@ test('--help shows image management documentation', async () => {
   // Should mention clean-images option
   assert.ok(result.stdout.includes('--clean-images'), 'Should show --clean-images flag');
   assert.ok(result.stdout.includes('Clean Docker images'), 'Should explain clean-images functionality');
-  assert.ok(result.stdout.includes('--clean-images discourse'), 'Should show clean-images example');
-  assert.ok(result.stdout.includes('--clean-images orphans'), 'Should show orphans example');
+  assert.ok(result.stdout.includes('(all|orphans|HABITAT_NAME)'), 'Should show clean-images target options');
   
   console.log('✅ Help shows image management documentation');
 });

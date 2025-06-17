@@ -186,7 +186,7 @@ async function main() {
     }
 
     if (options.test) {
-      await runTestMode(options.testType, options.testTarget, options.rebuild);
+      await handleTestMode(options);
       return;
     }
 
@@ -194,7 +194,8 @@ async function main() {
     if (options.configPath) {
       await runHabitat(options.configPath, options.extraRepos, options.overrideCommand, { 
         rebuild: options.rebuild,
-        rebuildFrom: options.rebuildFrom 
+        rebuildFrom: options.rebuildFrom,
+        target: options.target
       });
       return;
     }
@@ -212,6 +213,57 @@ async function main() {
  * Handle direct habitat start commands
  * Resolves habitat names to config paths and launches
  */
+async function handleTestMode(options) {
+  const path = require('path');
+  const habitatsDir = path.join(__dirname, 'habitats');
+  
+  // Map test types to target phases
+  if (options.testType === 'verify-fs' || options.testType.startsWith('verify-fs:')) {
+    // Run up to phase 10 (verify)
+    if (!options.testTarget) {
+      console.error(colors.red('Test target habitat required for verify-fs'));
+      process.exit(1);
+    }
+    
+    const configPath = path.join(habitatsDir, options.testTarget, 'config.yaml');
+    if (!await fileExists(configPath)) {
+      console.error(colors.red(`Habitat '${options.testTarget}' not found`));
+      process.exit(1);
+    }
+    
+    console.log(colors.green('\n=== Claude Habitat Test Runner ===\n'));
+    console.log(`Running filesystem verification for ${options.testTarget}...`);
+    await runHabitat(configPath, [], null, { 
+      rebuild: options.rebuild || true,  // Always rebuild for tests
+      rebuildFrom: 'verify',  // Start from verify phase
+      target: 'verify' 
+    });
+  } else if (options.testType === 'habitat') {
+    // Run up to phase 11 (test)
+    if (!options.testTarget) {
+      console.error(colors.red('Test target habitat required for habitat tests'));
+      process.exit(1);
+    }
+    
+    const configPath = path.join(habitatsDir, options.testTarget, 'config.yaml');
+    if (!await fileExists(configPath)) {
+      console.error(colors.red(`Habitat '${options.testTarget}' not found`));
+      process.exit(1);
+    }
+    
+    console.log(colors.green('\n=== Claude Habitat Test Runner ===\n'));
+    console.log(`Running habitat tests for ${options.testTarget}...`);
+    await runHabitat(configPath, [], null, { 
+      rebuild: options.rebuild || true,  // Always rebuild for tests
+      rebuildFrom: 'test',  // Start from test phase
+      target: 'test' 
+    });
+  } else {
+    // Legacy test mode for other test types
+    await runTestMode(options.testType, options.testTarget, options.rebuild);
+  }
+}
+
 async function handleDirectStart(options) {
   const path = require('path');
   const fs = require('fs').promises;
@@ -262,7 +314,8 @@ async function handleDirectStart(options) {
   if (options.configPath) {
     await runHabitat(options.configPath, options.extraRepos, options.overrideCommand, { 
       rebuild: options.rebuild,
-      rebuildFrom: options.rebuildFrom 
+      rebuildFrom: options.rebuildFrom,
+      target: options.target
     });
   }
 }
