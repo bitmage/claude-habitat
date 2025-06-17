@@ -76,12 +76,26 @@ let ctrlCCount = 0;
  */
 async function isLastClaudeHabitatProcess() {
   try {
-    const { stdout } = await execAsync(`pgrep -f "claude-habitat"`);
+    // Get all Node.js processes running claude-habitat
+    const { stdout } = await execAsync(`ps aux | grep -E 'node.*claude-habitat' | grep -v grep`);
     const processes = stdout.trim().split('\n').filter(line => line.trim());
-    return processes.length <= 1; // Only this process running
+    
+    // Filter out this current process by PID
+    const currentPid = process.pid;
+    const otherProcesses = processes.filter(line => {
+      const pid = line.trim().split(/\s+/)[1];
+      return pid && pid !== currentPid.toString();
+    });
+    
+    if (otherProcesses.length > 0) {
+      console.log(`🔄 Detected ${otherProcesses.length} other claude-habitat processes still running`);
+      return false;
+    }
+    
+    return true; // Only this process running
   } catch (error) {
-    // pgrep returns non-zero exit code when no processes found
-    return true; // No other processes, we're the last one
+    // No processes found or ps command failed
+    return true; // Assume we're the last one
   }
 }
 
@@ -198,14 +212,14 @@ async function cleanupDanglingImages(options = {}) {
 }
 
 /**
- * Perform graceful cleanup with progress messaging
+ * Perform immediate cleanup without exiting process
  * 
- * Uses state machine to prevent concurrent cleanup and provides
- * user feedback about cleanup progress.
+ * Called when habitat completes successfully to clean up immediately
+ * rather than waiting for process exit.
  */
-async function performGracefulCleanup() {
+async function performImmediateCleanup() {
   if (cleanupState !== 'idle') {
-    return; // Already in progress
+    return; // Already in progress or complete
   }
   
   cleanupState = 'starting';
@@ -213,9 +227,8 @@ async function performGracefulCleanup() {
   try {
     // Check if we're the last process
     if (!(await isLastClaudeHabitatProcess())) {
-      console.log('🔄 Other claude-habitat processes detected, skipping cleanup');
       cleanupState = 'complete';
-      return;
+      return; // Don't exit, just skip cleanup
     }
     
     cleanupState = 'inProgress';
@@ -243,13 +256,22 @@ async function performGracefulCleanup() {
     console.log('✅ Cleanup complete!');
     cleanupState = 'complete';
     
-    // Exit the process after successful cleanup
-    process.exit(0);
-    
   } catch (error) {
     console.log(`⚠️ Cleanup warning: ${error.message}`);
-    cleanupState = 'complete'; // Don't block exit on cleanup errors
+    cleanupState = 'complete'; // Don't block on cleanup errors
   }
+}
+
+/**
+ * Perform graceful cleanup with progress messaging
+ * 
+ * Uses state machine to prevent concurrent cleanup and provides
+ * user feedback about cleanup progress.
+ */
+async function performGracefulCleanup() {
+  await performImmediateCleanup();
+  // Exit the process after cleanup
+  process.exit(0);
 }
 
 /**
@@ -295,6 +317,10 @@ function setupAutomaticCleanup(options = {}) {
   
   // Handle normal completion
   process.on('beforeExit', async () => {
+    if (cleanupState === 'complete') {
+      return; // Cleanup already completed
+    }
+    console.log('🧹 Running cleanup before exit...');
     await performGracefulCleanup();
     // performGracefulCleanup handles the exit
   });
@@ -314,5 +340,7 @@ module.exports = {
   getClaudeHabitatContainers,
   cleanupContainers,
   cleanupDanglingImages,
-  setupAutomaticCleanup
+  setupAutomaticCleanup,
+  performGracefulCleanup,
+  performImmediateCleanup
 };

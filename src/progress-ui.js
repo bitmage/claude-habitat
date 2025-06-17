@@ -214,6 +214,11 @@ class ProgressReporter {
    * @returns {string} - User-friendly phase name
    */
   _getPhaseNameFromStage(stageName) {
+    // Ensure stageName is a string
+    if (typeof stageName !== 'string') {
+      return String(stageName || 'unknown');
+    }
+    
     // Hide snapshot operations from users - they're implementation details
     if (stageName.startsWith('snapshot-')) {
       const phaseName = stageName.replace('snapshot-', '');
