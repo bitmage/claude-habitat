@@ -36,7 +36,7 @@ const { exec } = require('child_process');
 const execAsync = promisify(exec);
 
 // @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
-const { colors, sleep, fileExists, calculateCacheHash, executeCommand, processTestResults, manageContainer, rel } = require('./utils');
+const { colors, sleep, fileExists, calculateCacheHash, executeCommand, processTestResults, rel } = require('./utils');
 const { dockerRun, dockerImageExists } = require('./container-operations');
 const { loadConfig } = require('./config');
 const { askToContinue } = require('./cli');

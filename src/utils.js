@@ -155,36 +155,6 @@ const executeCommand = async (command, options = {}) => {
   }
 };
 
-// Container management pattern helper
-const manageContainer = async (action, containerName, options = {}) => {
-  const { image, runArgs = [], user } = options;
-  
-  const commandMap = {
-    start: () => {
-      const args = ['run', '-d', '--name', containerName, ...runArgs];
-      if (image) args.push(image);
-      return args;
-    },
-    stop: () => ['stop', containerName],
-    remove: () => ['rm', containerName],
-    exec: () => {
-      const args = ['exec'];
-      if (user) args.push('-u', user);
-      args.push(containerName);
-      return args;
-    },
-    exists: () => ['ps', '-q', '-f', `name=${containerName}`],
-    running: () => ['ps', '-q', '-f', `name=${containerName}`]
-  };
-  
-  const args = commandMap[action]();
-  if (!args) {
-    throw new Error(`Unknown container action: ${action}`);
-  }
-  
-  return executeCommand(`docker ${args.join(' ')}`, { ignoreErrors: options.ignoreErrors });
-};
-
 // File permission and ownership pattern helper
 const setFilePermissions = async (container, filePath, options = {}) => {
   const { mode = '644', user, description } = options;
@@ -275,7 +245,6 @@ module.exports = {
   
   // New parameterized helpers
   executeCommand,
-  manageContainer,
   setFilePermissions,
   categorizeError,
   processConfig,

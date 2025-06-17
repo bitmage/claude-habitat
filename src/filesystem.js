@@ -21,7 +21,7 @@ const fs = require('fs').promises;
 const path = require('path');
 
 // @see {@link module:standards/path-resolution} for project-root relative path conventions using rel()
-const { colors, sleep, fileExists, calculateCacheHash, executeCommand, setFilePermissions, manageContainer, rel } = require('./utils');
+const { colors, sleep, fileExists, calculateCacheHash, executeCommand, setFilePermissions, rel } = require('./utils');
 const { dockerRun, dockerExec } = require('./container-operations');
 
 // File ignore patterns functionality
