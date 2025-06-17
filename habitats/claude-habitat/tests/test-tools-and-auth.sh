@@ -113,62 +113,33 @@ else
     exit 1
 fi
 
-# Test GitHub CLI authentication using GitHub App
+# Test GitHub CLI authentication
 echo ""
 echo "Testing GitHub CLI authentication..."
 
-# Generate GitHub App token using the same logic as regenerate-github-token.sh
-if [ -n "$GITHUB_APP_ID" ] && [ -f "$PEM_FILE" ]; then
-    echo "Generating GitHub App token for CLI authentication..."
+# Test that GitHub CLI can authenticate using existing setup
+if gh auth status >/dev/null 2>&1; then
+    echo "✅ GitHub CLI authenticated successfully"
     
-    # Generate JWT for GitHub App
-    header='{"alg":"RS256","typ":"JWT"}'
-    payload="{\"iat\":$(date +%s),\"exp\":$(($(date +%s) + 600)),\"iss\":\"$GITHUB_APP_ID\"}"
-    
-    # Encode header and payload
-    header_b64=$(echo -n "$header" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-    payload_b64=$(echo -n "$payload" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-    
-    # Create signature
-    signature=$(echo -n "$header_b64.$payload_b64" | openssl dgst -sha256 -sign "$PEM_FILE" | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-    
-    if [ -n "$signature" ]; then
-        # Create JWT
-        jwt="$header_b64.$payload_b64.$signature"
-        
-        # Get installation token
-        installations_response=$(curl -s -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations" 2>/dev/null)
-        installation_id=$(echo "$installations_response" | jq -r '.[0].id' 2>/dev/null)
-        
-        if [ "$installation_id" != "null" ] && [ -n "$installation_id" ]; then
-            token_response=$(curl -s -X POST -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations/$installation_id/access_tokens" 2>/dev/null)
-            token=$(echo "$token_response" | jq -r '.token' 2>/dev/null)
-            
-            if [ "$token" != "null" ] && [ -n "$token" ]; then
-                # Set GitHub token for CLI authentication
-                export GITHUB_TOKEN="$token"
-                echo "✅ GitHub App token generated and set for CLI"
-                
-                # Test GitHub CLI access with token
-                echo "Testing GitHub CLI repository access..."
-                if gh repo list --limit 5 >/dev/null 2>&1; then
-                    echo "✅ GitHub CLI authenticated successfully"
-                    echo "Available repositories:"
-                    gh repo list --limit 5 2>/dev/null || echo "  (Repository list not accessible)"
-                else
-                    echo "❌ GitHub CLI authentication failed"
-                fi
-            else
-                echo "❌ Failed to generate GitHub App access token"
-            fi
-        else
-            echo "❌ Failed to get GitHub App installation ID"
-        fi
+    # Test basic API access
+    if gh api user >/dev/null 2>&1; then
+        echo "✅ GitHub CLI API access working"
     else
-        echo "❌ Failed to create JWT signature for GitHub App"
+        echo "❌ GitHub CLI API access failed"
+        exit 1
+    fi
+    
+    # Test repository access
+    if gh repo list --limit 3 >/dev/null 2>&1; then
+        echo "✅ GitHub CLI repository access working"
+    else
+        echo "❌ GitHub CLI repository access failed"
+        exit 1
     fi
 else
-    echo "❌ GitHub App authentication not available (missing ID or PEM file)"
+    echo "❌ GitHub CLI not authenticated"
+    echo "   Run setup-github-auth to configure authentication"
+    exit 1
 fi
 
 # Test tool versions (basic smoke test)
