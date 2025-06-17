@@ -113,7 +113,7 @@ echo "✅ Created git credential helper: $CREDENTIAL_HELPER"
 
 # Set environment variables for the credential helper
 export GITHUB_APP_PEM_FILE="$PEM_FILE"
-echo "export GITHUB_APP_PEM_FILE=\"$PEM_FILE\"" >> /etc/profile.d/habitat-env.sh
+echo "export GITHUB_APP_PEM_FILE=\"$PEM_FILE\"" | sudo tee -a /etc/profile.d/habitat-env.sh > /dev/null
 
 # Configure git to use our credential helper for GitHub
 git config --global credential."https://github.com".helper "$CREDENTIAL_HELPER"
@@ -148,7 +148,7 @@ if [ -f "$PEM_FILE" ] && [ -n "$GITHUB_APP_ID" ]; then
             if [ "$token" != "null" ] && [ -n "$token" ] && [ "$token" != "" ]; then
                 # Set GitHub token for CLI authentication
                 export GITHUB_TOKEN="$token"
-                echo "export GITHUB_TOKEN=\"$token\"" >> /etc/profile.d/habitat-env.sh
+                echo "export GITHUB_TOKEN=\"$token\"" | sudo tee -a /etc/profile.d/habitat-env.sh > /dev/null
                 echo "✅ GitHub CLI token configured"
             else
                 echo "❌ Failed to generate GitHub CLI token"
