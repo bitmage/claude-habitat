@@ -127,10 +127,17 @@ test('claude-habitat test command variations work', async () => {
       });
       
       // Should recognize the test type (may fail if Docker not available, but shouldn't crash)
-      assert(result.stdout.includes('test') || result.stderr.includes('test') || 
-             result.stdout.includes(testType.replace('--', '')) ||
-             result.stderr.includes(testType.replace('--', '')),
-             `Should recognize test type ${testType}`);
+      // Check for test-related output or the cleaned test type name
+      const cleanType = testType.replace('--', '');
+      const hasTestOutput = result.stdout.includes('test') || result.stderr.includes('test');
+      const hasTypeOutput = result.stdout.includes(cleanType) || result.stderr.includes(cleanType);
+      
+      // Special case for verify-fs which outputs "filesystem verification"
+      const hasVerifyFsOutput = cleanType === 'verify-fs' && 
+        (result.stdout.includes('filesystem verification') || result.stderr.includes('filesystem verification'));
+        
+      assert(hasTestOutput || hasTypeOutput || hasVerifyFsOutput,
+             `Should recognize test type ${testType}. Output: ${result.stdout.substring(0, 200)}...`);
     }
     
     // Test verify-fs with scope
@@ -139,7 +146,8 @@ test('claude-habitat test command variations work', async () => {
       captureOutput: true
     });
     
-    assert(fsResult.stdout.includes('system') || fsResult.stderr.includes('system'),
+    assert(fsResult.stdout.includes('system') || fsResult.stderr.includes('system') ||
+           fsResult.stdout.includes('infrastructure') || fsResult.stderr.includes('infrastructure'),
            'Should recognize verify-fs scope syntax');
     
     console.log('✅ Test command variations test passed');

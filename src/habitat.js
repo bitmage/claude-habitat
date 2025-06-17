@@ -156,14 +156,21 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
       // The final container should be in context.containerId
       const finalTag = `habitat-${config.name}:12-final`;
       
-      // Commit the final container as the prepared image
-      const snapshotOptions = { result: 'pass' };
-      if (context.entrypointChange) {
-        snapshotOptions.dockerChange = context.entrypointChange;
+      // Check if the 12-final snapshot already exists (from build pipeline)
+      // If it does, don't recreate it to preserve phase hash labels
+      if (await dockerImageExists(finalTag)) {
+        console.log(`🔍 [DEBUG] Final snapshot ${finalTag} already exists, preserving phase hash labels`);
+        console.log(`Prepared image created: ${finalTag}`);
+      } else {
+        // Commit the final container as the prepared image
+        const snapshotOptions = { result: 'pass' };
+        if (context.entrypointChange) {
+          snapshotOptions.dockerChange = context.entrypointChange;
+        }
+        await createSnapshot(context.containerId, finalTag, snapshotOptions);
+        
+        console.log(`Prepared image created: ${finalTag}`);
       }
-      await createSnapshot(context.containerId, finalTag, snapshotOptions);
-      
-      console.log(`Prepared image created: ${finalTag}`);
       
       // Run the habitat container using the final image
       return await runEphemeralContainer(finalTag, config, overrideCommand, options.tty);

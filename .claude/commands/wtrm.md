@@ -1,6 +1,6 @@
 Remove a git worktree that was created for parallel development.
 
-Please run: `./worktree rm $ARGUMENTS`
+Please run: `./worktrees rm $ARGUMENTS`
 
 This will:
 - Remove the worktree at `../claude-habitat-$ARGUMENTS`

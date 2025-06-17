@@ -34,11 +34,7 @@ const { cleanAllImages, cleanHabitatImages, cleanOrphanImages, showImageSummary 
  * These commands show output and exit (not return to menu)
  */
 async function executeCliCommand(options) {
-  // Handle help - show Commander.js generated help
-  if (options.help) {
-    await showHelp();
-    process.exit(0);
-  }
+  // Note: Help is now handled automatically by Commander.js
 
   // Handle list configs
   if (options.listConfigs) {
@@ -67,62 +63,6 @@ async function executeCliCommand(options) {
   return false; // No command executed
 }
 
-/**
- * Show help information using Commander.js
- */
-async function showHelp() {
-  const { Command } = require('commander');
-  const program = new Command();
-  
-  // Configure the program exactly like in cli-parser.js
-  program
-    .name('claude-habitat')
-    .version('0.1.2')
-    .description('Create completely isolated development environments for Claude Code')
-    .option('-c, --config <file>', 'Path to configuration YAML file')
-    .option('-r, --repo <repo>', 'Additional repository (URL:PATH[:BRANCH])')
-    .option('--cmd <command>', 'Override claude command')
-    .option('--tty', 'Force TTY allocation')
-    .option('--no-tty', 'Disable TTY allocation')
-    .option('--no-cleanup', 'Disable automatic container cleanup')
-    .option('--clean', 'Remove all containers and images')
-    .option('--clean-images [target]', 'Clean Docker images (all|orphans|HABITAT_NAME)')
-    .option('--list-configs', 'List available configurations')
-    .option('--test-sequence <seq>', 'Run UI test sequence')
-    .option('--preserve-colors', 'Preserve ANSI color codes')
-    .option('--show-phases', 'Show build phases')
-    .option('-h, --help', 'Display help message');
-
-  // Start command
-  program
-    .command('start [habitat]')
-    .description('Start habitat (last used if no name given)')
-    .option('--rebuild [phase]', 'Force rebuild from phase')
-    .option('--show-phases', 'Show build phases');
-
-  // Test command
-  program
-    .command('test [habitat]')
-    .description('Run tests (show menu if no args)')
-    .option('--system', 'Run system tests')
-    .option('--shared', 'Run shared tests')
-    .option('--habitat', 'Run habitat tests')
-    .option('--verify-fs [scope]', 'Filesystem verification', 'all')
-    .option('--all', 'Run all tests')
-    .option('--rebuild', 'Force rebuild');
-
-  // Add command
-  program
-    .command('add')
-    .description('Create new configuration with AI assistance');
-
-  // Maintain command
-  program
-    .command('maintain')
-    .description('Update/troubleshoot Claude Habitat itself');
-
-  console.log(program.helpInformation());
-}
 
 /**
  * List available configurations
@@ -245,4 +185,4 @@ async function showPhases() {
   console.log(`  ./claude-habitat start discourse --rebuild 8`);
 }
 
-module.exports = { executeCliCommand, showHelp, listConfigs, cleanDockerImages, handleCleanImages, showPhases };
+module.exports = { executeCliCommand, listConfigs, cleanDockerImages, handleCleanImages, showPhases };

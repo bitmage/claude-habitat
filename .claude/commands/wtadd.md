@@ -1,6 +1,6 @@
 Create a new git worktree for parallel development using the project's worktree script.
 
-Please run: `./worktree add $ARGUMENTS`
+Please run: `./worktrees add $ARGUMENTS`
 
 This will:
 - Create a new worktree at `../claude-habitat-$ARGUMENTS`
