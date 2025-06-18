@@ -36,9 +36,9 @@ function validateHabitatConfig(config) {
     throw new Error('Missing required config: name');
   }
 
-  // Validate container section exists
-  if (!config.container) {
-    throw new Error(`Missing required section: container in ${config.name}`);
+  // Entry section is optional, validate if present
+  if (config.entry) {
+    validateEntrySection(config.entry, config.name);
   }
   
   // Validate required environment variables
@@ -78,29 +78,24 @@ function validateHabitatConfig(config) {
     throw new Error(`WORKDIR environment variable must be absolute path in ${config.name}, got: ${envVars.WORKDIR}`);
   }
 
-  // Validate optional fields if present
-  if (config.container.startup_delay !== undefined) {
-    if (typeof config.container.startup_delay !== 'number' || config.container.startup_delay < 0) {
-      throw new Error(`container.startup_delay must be a non-negative number in ${config.name}`);
-    }
-  }
+  // Entry validation is handled separately if section exists
 
-  // Validate repositories section if present
-  if (config.repositories) {
-    if (!Array.isArray(config.repositories)) {
-      throw new Error(`repositories must be an array in ${config.name}`);
+  // Validate repos section if present
+  if (config.repos) {
+    if (!Array.isArray(config.repos)) {
+      throw new Error(`repos must be an array in ${config.name}`);
     }
 
-    for (let i = 0; i < config.repositories.length; i++) {
-      const repo = config.repositories[i];
+    for (let i = 0; i < config.repos.length; i++) {
+      const repo = config.repos[i];
       if (!repo.url) {
-        throw new Error(`repositories[${i}].url is required in ${config.name}`);
+        throw new Error(`repos[${i}].url is required in ${config.name}`);
       }
       if (!repo.path) {
-        throw new Error(`repositories[${i}].path is required in ${config.name}`);
+        throw new Error(`repos[${i}].path is required in ${config.name}`);
       }
       if (!repo.path.startsWith('/')) {
-        throw new Error(`repositories[${i}].path must be absolute path in ${config.name}, got: ${repo.path}`);
+        throw new Error(`repos[${i}].path must be absolute path in ${config.name}, got: ${repo.path}`);
       }
     }
   }
@@ -113,6 +108,35 @@ function validateHabitatConfig(config) {
   }
   
   return true;
+}
+
+/**
+ * Validate entry section structure
+ * @param {Object} entry - Entry configuration section
+ * @param {string} configName - Name of config for error messages
+ */
+function validateEntrySection(entry, configName) {
+  if (typeof entry !== 'object') {
+    throw new Error(`entry section must be an object in ${configName}`);
+  }
+  
+  // Validate startup_delay if present
+  if (entry.startup_delay !== undefined) {
+    const delay = entry.startup_delay;
+    if (typeof delay !== 'number' || delay < 0) {
+      throw new Error(`entry.startup_delay must be a non-negative number in ${configName}`);
+    }
+  }
+  
+  // Validate tty if present
+  if (entry.tty !== undefined && typeof entry.tty !== 'boolean') {
+    throw new Error(`entry.tty must be a boolean in ${configName}`);
+  }
+  
+  // Validate bypass_habitat_construction if present
+  if (entry.bypass_habitat_construction !== undefined && typeof entry.bypass_habitat_construction !== 'boolean') {
+    throw new Error(`entry.bypass_habitat_construction must be a boolean in ${configName}`);
+  }
 }
 
 /**

@@ -48,7 +48,7 @@ class HabitatPathHelpers {
     }
     
     this.habitatConfig = habitatConfig;
-    this.isBypassHabitat = habitatConfig.claude?.bypass_habitat_construction || false;
+    this.isBypassHabitat = habitatConfig.entry?.bypass_habitat_construction || false;
     this.environment = {};
     
     // Compile environment state synchronously in constructor

@@ -4,7 +4,7 @@ description: Development environment for Claude Habitat itself
 # Use Node.js base image instead of Dockerfile
 base_image: node:20-bookworm
 
-repositories:
+repos:
   - url: https://github.com/bitmage/claude-habitat
     path: ${WORKDIR}
     branch: main
@@ -120,7 +120,11 @@ scripts:
         echo "Running npm install..."
         npm install
 
-container:
+# Entry configuration (container runtime settings)
+entry:
+  command: claude --dangerously-skip-permissions
+  tty: true  # Enable TTY for proper Claude output display (default: true)
+  bypass_habitat_construction: true
   startup_delay: 5
 
 # Filesystem verification structure (bypass mode - Meta Claude structure)
@@ -169,9 +173,3 @@ verify-fs:
 tests:
   #- habitats/claude-habitat/tests/test-claude-habitat-inception.sh
   - habitats/claude-habitat/tests/test-tools-and-auth.sh
-
-# Bypass habitat infrastructure construction (claude-habitat is self-contained)
-claude:
-  command: claude --dangerously-skip-permissions
-  tty: true  # Enable TTY for proper Claude output display (default: true)
-  bypass_habitat_construction: true

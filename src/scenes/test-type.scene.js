@@ -35,7 +35,7 @@ async function testTypeScene(context, habitatName = 'base', rebuild = false) {
         const habitatConfigPath = rel('habitats/' + habitatName + '/config.yaml');
         if (await fileExists(habitatConfigPath)) {
           habitatConfig = await loadConfig(habitatConfigPath);
-          isBypassHabitat = habitatConfig.claude?.bypass_habitat_construction || false;
+          isBypassHabitat = habitatConfig.entry?.bypass_habitat_construction || false;
         }
       } catch (err) {
         // Continue without config if it can't be loaded

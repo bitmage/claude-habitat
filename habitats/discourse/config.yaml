@@ -27,7 +27,7 @@ env:
   - GITHUB_APP_PRIVATE_KEY_FILE=/habitat/shared/behold-the-power-of-claude.2025-06-04.private-key.pem
 
 # Git repositories to clone
-repositories:
+repos:
   - url: https://github.com/discourse/discourse
     path: /discourse
     branch: main
@@ -112,8 +112,9 @@ scripts:
         echo "Setting up test database..."
         RAILS_ENV=test bin/rails db:create db:migrate
 
-# Container configuration
-container:
+# Entry configuration (container runtime settings)
+entry:
+  command: claude --dangerously-skip-permissions
   init_command: /sbin/boot
   startup_delay: 10
 
@@ -134,7 +135,3 @@ verify-fs:
     - ${SHARED_PATH}/config.yaml
     - ${LOCAL_PATH}/config.yaml
     # Note: CLAUDE.md files are excluded by .habignore but will be at /CLAUDE.md
-
-# Claude configuration
-claude:
-  command: claude --dangerously-skip-permissions

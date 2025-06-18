@@ -209,7 +209,7 @@ async function runVerifyFsScript(containerName, scope = 'all', config = null) {
     console.log(`Running filesystem verification (scope: ${scope})...`);
     
     // Determine correct path based on bypass mode
-    const isBypassHabitat = config?.claude?.bypass_habitat_construction || false;
+    const isBypassHabitat = config?.entry?.bypass_habitat_construction || false;
     const scriptPath = isBypassHabitat ? './system/tools/bin/verify-fs' : './habitat/system/tools/bin/verify-fs';
     
     // For bypass habitats, only run habitat scope (system/shared are not applicable)
@@ -299,7 +299,7 @@ async function runEnhancedFilesystemVerification(preparedTag, scope = 'all', con
     }
     
     // Determine script path and scope based on bypass mode
-    const isBypassHabitat = config?.claude?.bypass_habitat_construction || false;
+    const isBypassHabitat = config?.entry?.bypass_habitat_construction || false;
     const scriptPath = isBypassHabitat ? './system/tools/bin/verify-fs' : './habitat/system/tools/bin/verify-fs';
     const effectiveScope = isBypassHabitat ? 'habitat' : scope;
     

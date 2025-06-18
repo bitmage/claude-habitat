@@ -29,7 +29,7 @@ const {
 // Mock habitat configurations for testing
 const normalHabitatConfig = {
   name: 'test-habitat',
-  container: {
+  entry: {
     work_dir: '/workspace'
   },
   // Since we're testing synchronous HabitatPathHelpers, we need to provide
@@ -45,10 +45,8 @@ const normalHabitatConfig = {
 
 const bypassHabitatConfig = {
   name: 'claude-habitat',
-  container: {
-    work_dir: '/workspace'
-  },
-  claude: {
+  entry: {
+    work_dir: '/workspace',
     bypass_habitat_construction: true
   },
   env: [
@@ -222,7 +220,7 @@ test('joinContainerPath is deterministic', () => {
 test('path helpers work consistently across different work directories', () => {
   const workspaceConfig = { 
     name: 'test', 
-    container: { work_dir: '/workspace' },
+    entry: { work_dir: '/workspace' },
     env: [
       'WORKDIR=/workspace',
       'HABITAT_PATH=${WORKDIR}/habitat',
@@ -233,7 +231,7 @@ test('path helpers work consistently across different work directories', () => {
   };
   const srcConfig = { 
     name: 'test', 
-    container: { work_dir: '/src' },
+    entry: { work_dir: '/src' },
     env: [
       'WORKDIR=/src',
       'HABITAT_PATH=${WORKDIR}/habitat',

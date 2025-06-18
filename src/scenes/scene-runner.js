@@ -20,7 +20,7 @@ const { SceneContext } = require('./scene-context');
 /**
  * Run scenes in interactive mode
  */
-async function runInteractive(startScene) {
+async function runScene(startScene) {
   const context = new SceneContext('interactive');
   let currentScene = startScene;
 
@@ -136,8 +136,8 @@ function formatSnapshots(results) {
 }
 
 module.exports = {
-  runInteractive,
-  runScene: runInteractive, // Alias for backward compatibility
+  runScene,
+  runInteractive: runScene, // Alias for backward compatibility  
   runSequence,
   runAllSequences,
   formatSnapshots

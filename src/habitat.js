@@ -336,8 +336,8 @@ async function checkHabitatRepositories(habitatsDir) {
         if (await fileExists(configPath)) {
           const config = await loadConfig(configPath);
           
-          if (config.repositories && Array.isArray(config.repositories)) {
-            for (const repo of config.repositories) {
+          if (config.repos && Array.isArray(config.repos)) {
+            for (const repo of config.repos) {
               if (repo.url) {
                 try {
                   console.log(`Testing repository access: ${repo.url}`);
@@ -369,9 +369,7 @@ async function setupHabitatEnvironment(habitatName, config) {
   // This would include any post-creation setup
   // For now, just validation
   
-  if (!config.container) {
-    throw new Error(`Invalid habitat config: missing container section`);
-  }
+  // Entry configuration is optional, defaults will be used if not specified
   
   // Validate WORKDIR environment variable is set
   const { createHabitatPathHelpers } = require('./habitat-path-helpers');
@@ -412,7 +410,7 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
   
   const workDir = compiledEnv.WORKDIR;
   const containerUser = compiledEnv.USER;
-  const claudeCommand = overrideCommand || config.claude?.command || 'claude';
+  const claudeCommand = overrideCommand || config.entry?.command || 'claude';
   let startupCompleted = false;
 
   try {
@@ -429,7 +427,7 @@ async function runEphemeralContainer(tag, config, overrideCommand = null, ttyOve
     if (ttyOverride !== null) {
       enableTTY = ttyOverride;
     } else {
-      enableTTY = config.claude?.tty !== false;
+      enableTTY = config.entry?.tty !== false;
     }
     const dockerFlags = enableTTY ? ['-it'] : ['-i'];
     

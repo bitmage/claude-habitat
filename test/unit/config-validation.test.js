@@ -20,7 +20,7 @@ const { validateHabitatConfig, getConfigValidationHelp } = require('../../src/co
 test('config validation catches missing USER environment variable', () => {
   const invalidConfig = { 
     name: 'test',
-    container: {},
+    entry: {},
     env: ['WORKDIR=/workspace'] // Missing USER
   };
   
@@ -33,7 +33,7 @@ test('config validation catches missing USER environment variable', () => {
 test('config validation catches missing WORKDIR environment variable', () => {
   const invalidConfig = { 
     name: 'test',
-    container: {},
+    entry: {},
     env: ['USER=root'] // Missing WORKDIR
   };
   
@@ -46,7 +46,7 @@ test('config validation catches missing WORKDIR environment variable', () => {
 test('config validation catches relative WORKDIR path', () => {
   const invalidConfig = { 
     name: 'test',
-    container: {},
+    entry: {},
     env: [
       'USER=root',
       'WORKDIR=workspace'  // Missing leading /
@@ -59,19 +59,19 @@ test('config validation catches relative WORKDIR path', () => {
   );
 });
 
-test('config validation catches missing container section', () => {
+test('config validation requires env section', () => {
   const invalidConfig = { name: 'test' };
   
   assert.throws(
     () => validateHabitatConfig(invalidConfig),
-    /Missing required section: container/
+    /Missing required section: env/
   );
 });
 
 test('config validation catches missing env section', () => {
   const invalidConfig = { 
     name: 'test',
-    container: {}
+    entry: {}
   };
   
   assert.throws(
@@ -83,7 +83,7 @@ test('config validation catches missing env section', () => {
 test('config validation catches empty USER', () => {
   const invalidConfig = { 
     name: 'test',
-    container: {},
+    entry: {},
     env: [
       'USER=',  // Empty USER
       'WORKDIR=/workspace'
@@ -99,7 +99,7 @@ test('config validation catches empty USER', () => {
 test('config validation passes with valid config', () => {
   const validConfig = {
     name: 'test',
-    container: {},
+    entry: {},
     env: [
       'USER=root',
       'WORKDIR=/workspace'
@@ -112,12 +112,12 @@ test('config validation passes with valid config', () => {
 test('config validation validates repository paths', () => {
   const invalidConfig = {
     name: 'test',
-    container: {},
+    entry: {},
     env: [
       'USER=root',
       'WORKDIR=/workspace'
     ],
-    repositories: [
+    repos: [
       {
         url: 'https://github.com/test/repo',
         path: 'relative/path'  // Should be absolute
@@ -134,12 +134,12 @@ test('config validation validates repository paths', () => {
 test('config validation passes with valid repositories', () => {
   const validConfig = {
     name: 'test',
-    container: {},
+    entry: {},
     env: [
       'USER=root',
       'WORKDIR=/workspace'
     ],
-    repositories: [
+    repos: [
       {
         url: 'https://github.com/test/repo',
         path: '/workspace/repo'
@@ -171,7 +171,7 @@ test('getConfigValidationHelp provides helpful error messages for WORKDIR', () =
 test('config validation handles optional startup_delay', () => {
   const validConfig = {
     name: 'test',
-    container: {
+    entry: {
       startup_delay: 5
     },
     env: [
@@ -186,7 +186,7 @@ test('config validation handles optional startup_delay', () => {
 test('config validation catches invalid startup_delay', () => {
   const invalidConfig = {
     name: 'test',
-    container: {
+    entry: {
       startup_delay: -1
     },
     env: [
@@ -197,13 +197,13 @@ test('config validation catches invalid startup_delay', () => {
   
   assert.throws(
     () => validateHabitatConfig(invalidConfig),
-    /container.startup_delay must be a non-negative number/
+    /entry.startup_delay must be a non-negative number/
   );
 });
 
 test('config validation catches missing name', () => {
   const invalidConfig = {
-    container: {},
+    entry: {},
     env: [
       'USER=root',
       'WORKDIR=/workspace'
@@ -219,7 +219,7 @@ test('config validation catches missing name', () => {
 test('config validation handles variable references in WORKDIR', () => {
   const validConfig = {
     name: 'test',
-    container: {},
+    entry: {},
     env: [
       'USER=root',
       'WORKDIR=${WORKSPACE_ROOT}/app'  // Variable reference should pass validation

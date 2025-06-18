@@ -41,7 +41,7 @@ test('calculateCacheHash generates consistent hashes', () => {
   const config = {
     name: 'test-project',
     image: { tag: 'test:latest' },
-    repositories: [{ url: 'https://github.com/test/repo', path: '/src' }],
+    repos: [{ url: 'https://github.com/test/repo', path: '/src' }],
     environment: ['TEST=value']  // Should be excluded from hash
   };
   
@@ -58,7 +58,7 @@ test('calculateCacheHash generates consistent hashes', () => {
   // Repository changes should affect hash
   const configWithDiffRepo = { 
     ...config, 
-    repositories: [{ url: 'https://github.com/test/other', path: '/src' }]
+    repos: [{ url: 'https://github.com/test/other', path: '/src' }]
   };
   const hash4 = calculateCacheHash(configWithDiffRepo, []);
   assert.notStrictEqual(hash1, hash4);
@@ -132,10 +132,10 @@ test('loadConfig loads and parses valid YAML file', async () => {
       dockerfile: './Dockerfile',
       tag: 'test:latest'
     },
-    repositories: [
+    repos: [
       { url: 'https://github.com/test/repo', path: '/src' }
     ],
-    container: {
+    entry: {
       work_dir: '/workspace',
       user: 'root'
     },
@@ -262,14 +262,14 @@ test('cache hash excludes internal fields', () => {
     name: 'test',
     _configPath: '/path/to/config.yaml',  // Should be excluded
     environment: ['TEST=1'],              // Should be excluded
-    repositories: [{ url: 'test' }]       // Should be included
+    repos: [{ url: 'test' }]       // Should be included
   };
   
   const config2 = {
     name: 'test',
     _configPath: '/different/path.yaml',  // Different but should not matter
     environment: ['TEST=2'],               // Different but should not matter
-    repositories: [{ url: 'test' }]        // Same, so hash should match
+    repos: [{ url: 'test' }]        // Same, so hash should match
   };
   
   const hash1 = calculateCacheHash(config1);

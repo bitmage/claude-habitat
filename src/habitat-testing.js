@@ -59,7 +59,7 @@ async function runTestMode(testType, testTarget, rebuild = false) {
 
     if (testType === 'system') {
       // Check if habitat bypasses system/shared infrastructure
-      if (habitatConfig.claude?.bypass_habitat_construction) {
+      if (habitatConfig.entry?.bypass_habitat_construction) {
         console.log(colors.yellow(`❌ System tests are not available for ${testTarget} habitat`));
         console.log(colors.yellow(`This habitat uses bypass_habitat_construction and manages its own infrastructure.`));
         return;
@@ -68,7 +68,7 @@ async function runTestMode(testType, testTarget, rebuild = false) {
       await runSystemTests(habitatConfig, false, rebuild, habitatConfigPath);
     } else if (testType === 'shared') {
       // Check if habitat bypasses system/shared infrastructure
-      if (habitatConfig.claude?.bypass_habitat_construction) {
+      if (habitatConfig.entry?.bypass_habitat_construction) {
         console.log(colors.yellow(`❌ Shared tests are not available for ${testTarget} habitat`));
         console.log(colors.yellow(`This habitat uses bypass_habitat_construction and manages its own infrastructure.`));
         return;
@@ -278,14 +278,14 @@ async function runTestsInHabitatContainer(tests, testType, habitatConfig = null,
       if (testType === 'habitat') {
         // For bypass habitats (like claude-habitat), tests are in habitats/{name}/tests/
         // For normal habitats, tests are in /habitat/local/tests/
-        const isBypassHabitat = habitatConfig?.claude?.bypass_habitat_construction || false;
+        const isBypassHabitat = habitatConfig?.entry?.bypass_habitat_construction || false;
         const localPath = compiledEnv.LOCAL_PATH || '/habitat/local';
         testPath = isBypassHabitat 
           ? `${workDir}/habitats/${habitatConfig.name}/${testScript}`
           : `${localPath}/${testScript}`;
       } else {
         // System/shared tests - check for bypass habitat to use correct path
-        const isBypassHabitat = habitatConfig?.claude?.bypass_habitat_construction || false;
+        const isBypassHabitat = habitatConfig?.entry?.bypass_habitat_construction || false;
         if (isBypassHabitat) {
           // For bypass habitats, tests are not copied to /habitat structure
           testPath = `${workDir}/${testType}/${testScript}`;

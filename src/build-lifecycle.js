@@ -326,7 +326,7 @@ const CORE_PHASE_HANDLERS = {
     const env = config._environment || {};
     const workdir = env.WORKDIR || '/workspace';
     const user = env.USER || 'root';
-    const isBypassHabitat = config.claude?.bypass_habitat_construction || false;
+    const isBypassHabitat = config.entry?.bypass_habitat_construction || false;
     
     if (!isBypassHabitat) {
       const workDirPath = createWorkDirPath(workdir);
@@ -379,7 +379,7 @@ exec "$@"
     const user = env.USER || 'root';
     
     // Clone repositories from config
-    const repos = config.repos || config.repositories || [];
+    const repos = config.repos || [];
     for (const repo of repos) {
       await cloneRepository(ctx.containerId, repo, workdir, user);
     }

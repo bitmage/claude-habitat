@@ -73,8 +73,8 @@ test('buildDockerExecArgs adds user flag', () => {
 
 // Test existing pure functions still work
 test('calculateCacheHash is deterministic', () => {
-  const config1 = { name: 'test', repositories: [{ url: 'https://github.com/user/repo' }] };
-  const config2 = { name: 'test', repositories: [{ url: 'https://github.com/user/repo' }] };
+  const config1 = { name: 'test', repos: [{ url: 'https://github.com/user/repo' }] };
+  const config2 = { name: 'test', repos: [{ url: 'https://github.com/user/repo' }] };
   
   const hash1 = calculateCacheHash(config1, []);
   const hash2 = calculateCacheHash(config2, []);

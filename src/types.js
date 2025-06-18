@@ -187,14 +187,14 @@ class Habitat {
    * Get the workspace directory where Habitat Claude operates
    */
   getWorkspace() {
-    return this.config.container?.work_dir || this.environment.WORKDIR || '/workspace';
+    return this.environment.WORKDIR || '/workspace';
   }
 
   /**
    * Get repositories for active development (write access)
    */
   getDevelopmentRepositories() {
-    return (this.config.repositories || []).filter(repo => 
+    return (this.config.repos || []).filter(repo => 
       !repo.access || repo.access === 'write'
     );
   }
@@ -203,7 +203,7 @@ class Habitat {
    * Get repositories for dependencies (read access)
    */
   getDependencyRepositories() {
-    return (this.config.repositories || []).filter(repo => 
+    return (this.config.repos || []).filter(repo => 
       repo.access === 'read'
     );
   }
@@ -213,8 +213,8 @@ class Habitat {
    */
   validate() {
     if (!this.name) throw new Error('Habitat must have a name');
-    if (!this.config.container?.user) throw new Error('Habitat must specify container user');
-    if (!this.getWorkspace()) throw new Error('Habitat must specify workspace directory');
+    if (!this.environment.USER) throw new Error('Habitat must specify USER in environment');
+    if (!this.getWorkspace()) throw new Error('Habitat must specify WORKDIR in environment');
     return true;
   }
 }
