@@ -197,7 +197,6 @@ async function startSession(configPath, extraRepos = [], overrideCommand = null,
       return await runEphemeralContainer(imageToUse, config, overrideCommand, options.tty);
       
     } catch (error) {
-      console.error(`Failed to start habitat session: ${error.message}`);
       throw error;
     } finally {
       // Always clean up the build container, regardless of success or failure
@@ -284,7 +283,6 @@ async function buildHabitatImage(configPath, extraRepos = [], options = {}) {
       };
       
     } catch (error) {
-      console.error(`Failed to build habitat image: ${error.message}`);
       throw error;
     } finally {
       // Always clean up the build container, regardless of success or failure

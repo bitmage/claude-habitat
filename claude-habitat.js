@@ -204,7 +204,8 @@ async function main() {
     await runScene(mainMenuScene);
 
   } catch (err) {
-    console.error(colors.red(`Fatal error: ${err.message}`));
+    console.error('');
+    console.error(colors.red(`❌ ${err.message}`));
     process.exit(1);
   }
 }
@@ -332,7 +333,8 @@ async function handleDirectStart(options) {
 // Run if called directly
 if (require.main === module) {
   main().catch(err => {
-    console.error(colors.red(`Fatal error: ${err.message}`));
+    console.error('');
+    console.error(colors.red(`❌ ${err.message}`));
     process.exit(1);
   });
 }

@@ -282,7 +282,6 @@ async function cloneRepository(container, repoInfo, workDir, containerUser = nul
       console.log(`Clone output: ${result.substring(0, 200)}`);
     }
   } catch (err) {
-    console.error(`Clone failed with error: ${err.message}`);
     throw err;
   }
   
