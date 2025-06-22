@@ -64,7 +64,7 @@ echo "✅ JWT generated successfully"
 # Get installation token
 echo "🔗 Getting installation token..."
 installations_response=$(curl -s -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations")
-installation_id=$(echo "$installations_response" | jq -r '.[0].id')
+installation_id=$(echo "$installations_response" | "${SYSTEM_PATH:-/habitat/system}/tools/bin/jq" -r '.[0].id')
 
 if [ "$installation_id" = "null" ] || [ -z "$installation_id" ]; then
     echo "❌ Failed to get installation ID"
@@ -76,7 +76,7 @@ echo "✅ Installation ID: $installation_id"
 
 # Get access token
 token_response=$(curl -s -X POST -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/app/installations/$installation_id/access_tokens")
-token=$(echo "$token_response" | jq -r '.token')
+token=$(echo "$token_response" | "${SYSTEM_PATH:-/habitat/system}/tools/bin/jq" -r '.token')
 
 if [ "$token" = "null" ] || [ -z "$token" ]; then
     echo "❌ Failed to get access token"
@@ -87,7 +87,7 @@ fi
 echo "✅ New token generated: ${token:0:20}..."
 
 # Extract expiration time from token response
-token_expires_at=$(echo "$token_response" | jq -r '.expires_at' 2>/dev/null || echo "")
+token_expires_at=$(echo "$token_response" | "${SYSTEM_PATH:-/habitat/system}/tools/bin/jq" -r '.expires_at' 2>/dev/null || echo "")
 if [ -n "$token_expires_at" ]; then
     # Convert to Unix timestamp
     token_expires_timestamp=$(date -d "$token_expires_at" +%s 2>/dev/null || echo "")
@@ -101,7 +101,7 @@ export GITHUB_TOKEN=$token
 
 # Test the new token
 echo "🧪 Testing new token..."
-if curl -s -H "Authorization: token $token" "https://api.github.com/user" | jq -r '.login' > /dev/null; then
+if curl -s -H "Authorization: token $token" "https://api.github.com/user" | "${SYSTEM_PATH:-/habitat/system}/tools/bin/jq" -r '.login' > /dev/null; then
     echo "✅ Token test successful - authentication working"
     echo ""
     echo "🎉 GitHub App token regenerated successfully!"
