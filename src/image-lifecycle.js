@@ -269,7 +269,9 @@ async function cloneRepository(container, repoInfo, workDir, containerUser = nul
   await dockerExec(container, `rm -rf ${repoInfo.path} && mkdir -p ${repoInfo.path}`, 'root');
   
   // Clone the repository (use . to clone into existing directory)
-  let cloneCmd = `cd ${repoInfo.path} && git clone ${repoInfo.url} .`;
+  // Use GIT_TERMINAL_PROMPT=0 to prevent hanging on auth prompts
+  // Use --depth 1 for faster shallow clones
+  let cloneCmd = `cd ${repoInfo.path} && GIT_TERMINAL_PROMPT=0 git clone --depth 1 ${repoInfo.url} .`;
   if (repoInfo.branch && repoInfo.branch !== 'main' && repoInfo.branch !== 'master') {
     cloneCmd += ` -b ${repoInfo.branch}`;
   }

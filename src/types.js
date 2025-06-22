@@ -62,7 +62,7 @@
  * system/ - Infrastructure
  * - Audience: "Habitat" Claude (and managed by Claude Habitat)
  * - Content: Base instructions, development tools, system configuration
- * - Container: Copied to /workspace/claude-habitat/system/
+ * - Container: Copied to /habitat/system/
  * @see {@link src/scenes/tools.scene.js} for tool management
  * 
  * shared/ - User Preferences  
@@ -74,7 +74,7 @@
  * habitats/ - Project Environments
  * - Audience: "Habitat" Claude (configured per project)
  * - Content: Project-specific Dockerfiles, configs, and "Habitat" Claude instructions
- * - Container: Relevant files copied to /workspace/claude-habitat/
+ * - Container: Relevant files copied to /habitat/
  * @see {@link src/habitat.js} for habitat management
  */
 

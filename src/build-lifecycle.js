@@ -30,7 +30,20 @@ const { execDockerCommand, dockerRun, dockerExec, startTempContainer, execDocker
 const { buildBaseImage, cloneRepository, copyDirectoryToContainer, copyConfigFiles } = require('./image-lifecycle');
 const { fileExists, rel, createWorkDirPath } = require('./utils');
 const { loadConfig, loadHabitatEnvironmentFromConfig } = require('./config');
+const { getPhaseTimeout } = require('./timeout-utils');
 
+/**
+ * Get timeout options for a specific phase
+ * @private
+ * @param {Object} config - Configuration object
+ * @param {string} phaseName - Name of the phase
+ * @returns {Object} - Timeout options for dockerExec
+ */
+function getTimeoutOptions(config, phaseName) {
+  const timeoutConfig = config.timeout || {};
+  const timeoutMs = getPhaseTimeout(timeoutConfig, phaseName);
+  return { timeoutMs, phaseName };
+}
 
 /**
  * Create a progressive build pipeline for a habitat
@@ -275,7 +288,7 @@ const CORE_PHASE_HANDLERS = {
       .map(([key, value]) => `export ${key}="${value}"`)
       .join('\n');
     
-    const envScript = `#!/bin/bash\n# Habitat environment variables\n${envEntries}\n# Set working directory to WORKDIR by default\ncd "$WORKDIR" 2>/dev/null || true\n`;
+    const envScript = `#!/bin/bash\n# Habitat environment variables\n${envEntries}\n# Source GitHub token regeneration script for lazy token management\nsource "\${SYSTEM_PATH:-/habitat/system}/tools/regenerate-github-token.sh" 2>/dev/null || true\n# Set working directory to WORKDIR by default\ncd "$WORKDIR" 2>/dev/null || true\n`;
     
     await dockerExec(ctx.containerId, `mkdir -p /etc/profile.d`, 'root');
     await dockerExec(ctx.containerId, `cat > /etc/profile.d/habitat-env.sh << 'EOF'\n${envScript}\nEOF`, 'root');
@@ -347,6 +360,31 @@ const CORE_PHASE_HANDLERS = {
     
     // Run file hooks for files phase (files with no before/after specified)
     await runFilesForPhase(ctx.containerId, ctx.config, 'files', user, workdir);
+    
+    // Set up git credential helper for GitHub authentication (needed before repos phase)
+    const timeoutOptions = getTimeoutOptions(ctx.config, 'files');
+    try {
+      await dockerExec(ctx.containerId, 'which git', { user, ...timeoutOptions });
+      // Check if gitconfig exists (copied by files phase) and run install-gitconfig
+      // Use the actual path where files are copied, not the env variable path
+      const workDirPath = createWorkDirPath(workdir);
+      const actualSharedPath = workDirPath('habitat', 'shared');
+      const gitconfigPath = `${actualSharedPath}/gitconfig`;
+      const gitconfigCheck = await dockerExec(ctx.containerId, `test -f ${gitconfigPath} && echo "exists" || echo "missing"`, { user, ...timeoutOptions });
+      if (gitconfigCheck.includes('exists')) {
+        // Override SHARED_PATH and SYSTEM_PATH for this command to point to the actual locations
+        const actualSystemPath = workDirPath('habitat', 'system');
+        const installCommand = `SHARED_PATH=${actualSharedPath} SYSTEM_PATH=${actualSystemPath} ${actualSystemPath}/tools/bin/install-gitconfig`;
+        await dockerExec(ctx.containerId, installCommand, { user, ...timeoutOptions });
+        
+        // Test if the credential helper setup worked by checking git config
+        const credHelperCheck = await dockerExec(ctx.containerId, `git config --global credential.'https://github.com'.helper`, { user, ...timeoutOptions });
+        console.log(`✅ Git credential helper configured: ${credHelperCheck.trim()}`);
+      }
+    } catch (err) {
+      // Git not available or setup failed, continue without error
+      // This allows containers without git to still build successfully
+    }
     
     return ctx;
   },

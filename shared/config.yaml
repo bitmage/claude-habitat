@@ -16,9 +16,6 @@ env:
   - GITHUB_APP_ID=1357221
   - GITHUB_APP_PEM_FILE=${SHARED_PATH}/behold-the-power-of-claude.2025-06-04.private-key.pem
 
-# Container settings (will be overridden by habitat-specific config)
-container: {}
-
 # Structured file operations - copy files to specific locations with permissions
 files:
   - src: ./shared/gitconfig
@@ -42,6 +39,8 @@ scripts:
   - run_as: ${USER}
     commands:
       - |
+        set -e
+
         # Configure git for container user using centralized script
         ${SYSTEM_PATH}/tools/bin/install-gitconfig
 

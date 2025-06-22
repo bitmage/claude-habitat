@@ -20,9 +20,19 @@ if [ -f "${GITCONFIG_SOURCE}" ]; then
     echo "   Source: ${GITCONFIG_SOURCE}"
     echo "   Target: ~/.gitconfig"
     
+    # Configure git credential helper for GitHub authentication
+    CREDENTIAL_HELPER="${SYSTEM_PATH:-/habitat/system}/tools/bin/git-credential-helper"
+    if [ -f "$CREDENTIAL_HELPER" ]; then
+        git config --global credential."https://github.com".helper "$CREDENTIAL_HELPER"
+        echo "✅ Git credential helper configured for GitHub"
+    else
+        echo "⚠️  Warning: Git credential helper not found at $CREDENTIAL_HELPER"
+    fi
+    
     # Show what was configured
     echo "   User: $(git config --global user.name 2>/dev/null || echo 'Not set')"
     echo "   Email: $(git config --global user.email 2>/dev/null || echo 'Not set')"
+    echo "   GitHub credential helper: $(git config --global credential.'https://github.com'.helper 2>/dev/null || echo 'Not set')"
 else
     echo "⚠️  Warning: No gitconfig found at ${GITCONFIG_SOURCE}"
     echo "   Create shared/gitconfig to enable git configuration"

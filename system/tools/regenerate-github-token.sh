@@ -1,8 +1,18 @@
 #!/bin/bash
 # Token regeneration script for Claude to use when authentication fails
 # This ensures habitats never get stuck unable to push code
+# Only regenerates token if current one expires in < 15 minutes
 
 set -e
+
+# Check if we need to regenerate token
+if [ -n "$GITHUB_TOKEN_EXPIRES" ] && [ -n "$GITHUB_TOKEN" ]; then
+    current_time=$(date +%s)
+    if [ "$GITHUB_TOKEN_EXPIRES" -gt $((current_time + 900)) ]; then
+        # Token expires in > 15 minutes, no need to regenerate
+        return 0 2>/dev/null || exit 0
+    fi
+fi
 
 echo "🔄 Regenerating GitHub App token..."
 
@@ -76,10 +86,18 @@ fi
 
 echo "✅ New token generated: ${token:0:20}..."
 
-# Update git credential store
-echo "🔧 Updating git credential store..."
-echo "https://x-access-token:$token@github.com" > ~/.git-credentials
-echo "https://x-access-token:$token@github.com" > /root/.git-credentials 2>/dev/null || true
+# Extract expiration time from token response
+token_expires_at=$(echo "$token_response" | jq -r '.expires_at' 2>/dev/null || echo "")
+if [ -n "$token_expires_at" ]; then
+    # Convert to Unix timestamp
+    token_expires_timestamp=$(date -d "$token_expires_at" +%s 2>/dev/null || echo "")
+    if [ -n "$token_expires_timestamp" ]; then
+        export GITHUB_TOKEN_EXPIRES=$token_expires_timestamp
+        echo "✅ Token expires at: $token_expires_at ($token_expires_timestamp)"
+    fi
+fi
+
+export GITHUB_TOKEN=$token
 
 # Test the new token
 echo "🧪 Testing new token..."

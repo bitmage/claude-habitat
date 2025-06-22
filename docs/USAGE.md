@@ -110,12 +110,8 @@ env:
   - SHARED_PATH=${HABITAT_PATH}/shared
   - LOCAL_PATH=${HABITAT_PATH}/local
 
-container:
-  work_dir: /workspace
-  user: node
+entry:
   startup_delay: 10
-
-claude:
   command: claude
 ```
 

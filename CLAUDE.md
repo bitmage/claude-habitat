@@ -86,12 +86,14 @@ Claude Habitat uses **contextual documentation** - information is located where 
 - **Purpose**: Manages Claude Habitat itself - maintenance, creating habitats, troubleshooting
 - **Access**: Full Claude Habitat installation
 - **Instructions**: [src/scenes/maintenance.scene.js](src/scenes/maintenance.scene.js) for role and available tasks
+- **Authentication**: Authentication for github and other endpoints is handled by host.
 
 ### "Habitat" Claude (In containers)
 - **Where**: Runs inside isolated Docker containers
 - **Purpose**: Works on actual development projects  
 - **Access**: Only project workspace and development environment
 - **Instructions**: Assembled from system/shared/habitat configurations
+- **Authentication**: A .pem key exists in the shared folder.  This is used for `gh` access and to generate `GITHUB_TOKEN` which is then used for github https operations.  `GITHUB_TOKEN` should be generated when the habitat is first started, and can be regenerated with `source system/tools/regenerate-github-token.sh`.
 
 ## Interactive-First Architecture
 

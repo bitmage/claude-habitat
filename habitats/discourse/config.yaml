@@ -22,9 +22,6 @@ env:
   - NO_EMBER_CLI=1
   - QUNIT_RAILS_ENV=test
   # GitHub App authentication
-  - GITHUB_APP_ID=1357221
-  - GITHUB_APP_NAME=Behold the power of Claude
-  - GITHUB_APP_PRIVATE_KEY_FILE=/habitat/shared/behold-the-power-of-claude.2025-06-04.private-key.pem
 
 # Git repositories to clone
 repos:
@@ -53,32 +50,9 @@ scripts:
   - run_as: root
     commands:
       - |
-        # Install Claude Code globally
-        npm install -g @anthropic-ai/claude-code
-        
         # Install basic tools needed for downloading and extracting static binaries
         apt update && apt install -y curl wget unzip
         apt clean && rm -rf /var/lib/apt/lists/*
-        
-        # Set up Claude Habitat tools directory structure
-        mkdir -p /claude-habitat/shared/tools/bin
-        
-        # Add tools to PATH for all users
-        echo 'export PATH="/claude-habitat/shared/tools/bin:$PATH"' >> /etc/profile
-        echo 'export PATH="/claude-habitat/shared/tools/bin:$PATH"' >> /etc/bash.bashrc
-        
-        # Pre-configure git to trust /src directory
-        git config --global --add safe.directory /src
-        
-        # Set up Claude Code Bot as default git user
-        git config --global user.name "Claude Code Bot"
-        git config --global user.email "claude-code@anthropic.com"
-        
-        # Create /habitat directory structure
-        echo "Creating /habitat directory structure..."
-        mkdir -p /habitat
-        chown discourse:discourse /habitat
-        chmod 755 /habitat
   - run_as: root
     commands:
       - |
@@ -89,16 +63,6 @@ scripts:
         # Create test database
         sudo -u postgres createuser discourse 2>/dev/null || true
         sudo -u postgres createdb discourse_test -O discourse 2>/dev/null || true
-
-        # Git safe directory
-        git config --global --add safe.directory /discourse
-
-        # Export GitHub App private key if file is mounted
-        if [ -f /tmp/github-app-key.pem ]; then
-          echo "export GITHUB_APP_PRIVATE_KEY=\"\$(cat /tmp/github-app-key.pem)\"" >> /etc/profile.d/github-app.sh
-          chmod +x /etc/profile.d/github-app.sh
-        fi
-
   - run_as: discourse
     commands:
       - |

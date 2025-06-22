@@ -104,9 +104,17 @@ async function dockerRun(args, dockerClient = execDockerCommand) {
 /**
  * Execute a command inside a running container
  */
-async function dockerExec(container, command, user = null, dockerClient = execDockerCommand) {
+async function dockerExec(container, command, options = {}) {
+  const { 
+    user = null, 
+    dockerClient = execDockerCommand, 
+    timeoutMs, 
+    phaseName 
+  } = options;
+  
   const args = buildDockerExecArgs(container, command, user);
-  return dockerClient(args);
+  const execOptions = timeoutMs ? { timeoutMs, phaseName } : {};
+  return dockerClient(args, execOptions);
 }
 
 /**
