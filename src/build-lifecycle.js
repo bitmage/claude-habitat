@@ -344,14 +344,15 @@ const CORE_PHASE_HANDLERS = {
     if (!isBypassHabitat) {
       const workDirPath = createWorkDirPath(workdir);
       
-      // Copy system, shared, and local files
-      for (const [dirName, srcPath] of [
-        ['system', rel('system')],
-        ['shared', rel('shared')],
-        ['local', path.dirname(config._configPath)]
-      ]) {
+      // Copy system, shared, and local files to their environment variable paths
+      const habitatDirs = [
+        ['system', rel('system'), env.SYSTEM_PATH || '/habitat/system'],
+        ['shared', rel('shared'), env.SHARED_PATH || '/habitat/shared'],
+        ['local', path.dirname(config._configPath), env.LOCAL_PATH || '/habitat/local']
+      ];
+      
+      for (const [dirName, srcPath, containerPath] of habitatDirs) {
         if (await fileExists(srcPath)) {
-          const containerPath = workDirPath('habitat', dirName);
           await dockerExec(ctx.containerId, `mkdir -p ${containerPath}`, 'root');
           await copyDirectoryToContainer(ctx.containerId, srcPath, containerPath);
         }
@@ -366,15 +367,12 @@ const CORE_PHASE_HANDLERS = {
     try {
       await dockerExec(ctx.containerId, 'which git', { user, ...timeoutOptions });
       // Check if gitconfig exists (copied by files phase) and run install-gitconfig
-      // Use the actual path where files are copied, not the env variable path
-      const workDirPath = createWorkDirPath(workdir);
-      const actualSharedPath = workDirPath('habitat', 'shared');
-      const gitconfigPath = `${actualSharedPath}/gitconfig`;
+      const sharedPath = env.SHARED_PATH || '/habitat/shared';
+      const systemPath = env.SYSTEM_PATH || '/habitat/system';
+      const gitconfigPath = `${sharedPath}/gitconfig`;
       const gitconfigCheck = await dockerExec(ctx.containerId, `test -f ${gitconfigPath} && echo "exists" || echo "missing"`, { user, ...timeoutOptions });
       if (gitconfigCheck.includes('exists')) {
-        // Override SHARED_PATH and SYSTEM_PATH for this command to point to the actual locations
-        const actualSystemPath = workDirPath('habitat', 'system');
-        const installCommand = `SHARED_PATH=${actualSharedPath} SYSTEM_PATH=${actualSystemPath} ${actualSystemPath}/tools/bin/install-gitconfig`;
+        const installCommand = `${systemPath}/tools/bin/install-gitconfig`;
         await dockerExec(ctx.containerId, installCommand, { user, ...timeoutOptions });
         
         // Test if the credential helper setup worked by checking git config

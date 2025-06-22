@@ -8,11 +8,6 @@ tests:
 
 # Shared environment variables (add to system PATH)
 env:
-  - USER=root
-  - WORKDIR=/workspace
-  - SHARED_PATH=/habitat/shared
-  - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
-  - PATH=${PATH}:${SHARED_TOOLS_PATH}
   - GITHUB_APP_ID=1357221
   - GITHUB_APP_PEM_FILE=${SHARED_PATH}/behold-the-power-of-claude.2025-06-04.private-key.pem
 
@@ -22,17 +17,11 @@ files:
     dest: /etc/gitconfig
     mode: 644
     description: "System-wide git configuration"
-    
-  - src: ./shared/gitconfig  
+
+  - src: ./shared/gitconfig
     dest: /root/.gitconfig
     mode: 644
     description: "Git configuration for root user"
-    
-  # Future example: user aliases
-  # - src: aliases.sh
-  #   dest: /etc/profile.d/user-aliases.sh
-  #   mode: 755
-  #   description: "User command aliases"
 
 # Setup commands that run after file operations
 scripts:
@@ -53,4 +42,4 @@ verify-fs:
     # Infrastructure files
     - "${SHARED_PATH}/config.yaml"
     - "${SHARED_PATH}/gitconfig"
-    # Note: CLAUDE.md files are excluded by .habignore
+    # Note: CLAUDE.md files are excluded by .habignore but are "coalesced" from (system, shared, local)

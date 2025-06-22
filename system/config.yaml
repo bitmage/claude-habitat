@@ -8,9 +8,10 @@ env:
   - WORKDIR=/workspace
   - SYSTEM_PATH=/habitat/system
   - SHARED_PATH=/habitat/shared
+  - SHARED_TOOLS_PATH=${SHARED_PATH}/tools/bin
   - LOCAL_PATH=/habitat/local
   - SYSTEM_TOOLS_PATH=${SYSTEM_PATH}/tools/bin
-  - PATH=${PATH}:${SYSTEM_TOOLS_PATH}
+  - PATH=${PATH}:${SYSTEM_TOOLS_PATH}:${SHARED_TOOLS_PATH}
 
 # Container settings for system setup
 container: {}
@@ -37,11 +38,6 @@ files:
     dest: /CLAUDE.md
     mode: 644
     description: "Claude instructions at root"
-  # Future examples:
-  # - src: bashrc-additions
-  #   dest: /etc/bash.bashrc.d/claude-habitat
-  #   mode: 644
-  #   description: "System bash configuration additions"
 
 # System setup commands
 scripts:
