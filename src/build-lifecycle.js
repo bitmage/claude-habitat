@@ -288,7 +288,7 @@ const CORE_PHASE_HANDLERS = {
       .map(([key, value]) => `export ${key}="${value}"`)
       .join('\n');
     
-    const envScript = `#!/bin/bash\n# Habitat environment variables\n${envEntries}\n# Source GitHub token regeneration script for lazy token management\nsource "\${SYSTEM_PATH:-/habitat/system}/tools/regenerate-github-token.sh" 2>/dev/null || true\n# Set working directory to WORKDIR by default\ncd "$WORKDIR" 2>/dev/null || true\n`;
+    const envScript = `#!/bin/bash\n# Habitat environment variables\n${envEntries}\n# Set working directory to WORKDIR by default\ncd "$WORKDIR" 2>/dev/null || true\n`;
     
     await dockerExec(ctx.containerId, `mkdir -p /etc/profile.d`, 'root');
     await dockerExec(ctx.containerId, `cat > /etc/profile.d/habitat-env.sh << 'EOF'\n${envScript}\nEOF`, 'root');
@@ -346,13 +346,17 @@ const CORE_PHASE_HANDLERS = {
       
       // Copy system, shared, and local files to their environment variable paths
       const habitatDirs = [
-        ['system', rel('system'), env.SYSTEM_PATH || '/habitat/system'],
-        ['shared', rel('shared'), env.SHARED_PATH || '/habitat/shared'],
-        ['local', path.dirname(config._configPath), env.LOCAL_PATH || '/habitat/local']
+        ['system', rel('system'), env.SYSTEM_PATH],
+        ['shared', rel('shared'), env.SHARED_PATH],
+        ['local', path.dirname(config._configPath), env.LOCAL_PATH]
       ];
       
       for (const [dirName, srcPath, containerPath] of habitatDirs) {
         if (await fileExists(srcPath)) {
+          if (!containerPath) {
+            console.error(`❌ ${dirName.toUpperCase()}_PATH is not defined in environment`);
+            continue;
+          }
           await dockerExec(ctx.containerId, `mkdir -p ${containerPath}`, 'root');
           await copyDirectoryToContainer(ctx.containerId, srcPath, containerPath);
         }
@@ -367,19 +371,31 @@ const CORE_PHASE_HANDLERS = {
     try {
       await dockerExec(ctx.containerId, 'which git', { user, ...timeoutOptions });
       // Check if gitconfig exists (copied by files phase) and run install-gitconfig
-      const sharedPath = env.SHARED_PATH || '/habitat/shared';
-      const systemPath = env.SYSTEM_PATH || '/habitat/system';
+      const sharedPath = env.SHARED_PATH;
+      const systemPath = env.SYSTEM_PATH;
       const gitconfigPath = `${sharedPath}/gitconfig`;
       const gitconfigCheck = await dockerExec(ctx.containerId, `test -f ${gitconfigPath} && echo "exists" || echo "missing"`, { user, ...timeoutOptions });
       if (gitconfigCheck.includes('exists')) {
+        console.log(`📝 Installing git configuration from ${gitconfigPath}...`);
         const installCommand = `${systemPath}/tools/bin/install-gitconfig`;
+        
+        // Install for the container user
         await dockerExec(ctx.containerId, installCommand, { user, ...timeoutOptions });
+        
+        // Also install for root user (needed for git clone operations)
+        if (user !== 'root') {
+          console.log(`📝 Also installing git configuration for root user...`);
+          await dockerExec(ctx.containerId, installCommand, { user: 'root', ...timeoutOptions });
+        }
         
         // Test if the credential helper setup worked by checking git config
         const credHelperCheck = await dockerExec(ctx.containerId, `git config --global credential.'https://github.com'.helper`, { user, ...timeoutOptions });
-        console.log(`✅ Git credential helper configured: ${credHelperCheck.trim()}`);
+        console.log(`✅ Git credential helper configured for ${user}: ${credHelperCheck.trim()}`);
+      } else {
+        console.log(`⚠️  Git config not found at ${gitconfigPath}, skipping git credential setup`);
       }
     } catch (err) {
+      console.log(`⚠️  Git credential helper setup failed: ${err.message}`);
       // Git not available or setup failed, continue without error
       // This allows containers without git to still build successfully
     }

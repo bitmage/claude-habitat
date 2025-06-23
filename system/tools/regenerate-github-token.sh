@@ -27,8 +27,7 @@ fi
 log "🔄 Regenerating GitHub App token..."
 
 # Find the most recent PEM file by timestamp in filename
-# Use SHARED_PATH environment variable or default to /habitat/shared
-SHARED_PATH=${SHARED_PATH:-/habitat/shared}
+# Use SHARED_PATH environment variable
 
 if [ -d "$SHARED_PATH" ]; then
     pem_file=$(find "$SHARED_PATH" -name "*.pem" -type f | sort -r | head -1)
